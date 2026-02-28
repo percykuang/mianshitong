@@ -1,0 +1,46 @@
+{
+  "name": "mianshitong",
+  "private": true,
+  "packageManager": "pnpm@10.18.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:web": "pnpm -C apps/web dev",
+    "dev:admin": "pnpm -C apps/admin dev",
+    "build": "pnpm -r --if-present build",
+    "start:web": "pnpm -C apps/web start",
+    "start:admin": "pnpm -C apps/admin start",
+    "lint": "pnpm -r --if-present lint",
+    "format": "prettier -w .",
+    "format:check": "prettier -c .",
+    "spellcheck": "cspell lint --no-progress .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "commitlint": "commitlint",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@mianshitong/config": "workspace:*",
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
+    "@eslint/js": "^9.39.3",
+    "@vitest/coverage-v8": "^4.0.7",
+    "cspell": "^9.1.0",
+    "eslint": "^9.39.3",
+    "eslint-config-prettier": "^10.1.0",
+    "globals": "^15.15.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.7"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs,json,md,yaml,yml}": [
+      "prettier --write"
+    ]
+  }
+}

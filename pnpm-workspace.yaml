@@ -1,0 +1,8 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Avoid postinstall build failures for optional native deps in some environments.
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

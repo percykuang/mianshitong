@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+  "version": "0.2",
+  "language": "en,zh",
+  "allowCompoundWords": true,
+  "useGitignore": true,
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/out/**",
+    "**/coverage/**",
+    "**/pnpm-lock.yaml"
+  ],
+  "words": [
+    "mianshitong",
+    "DeepSeek",
+    "deepseek",
+    "Rubric",
+    "PromptSpec",
+    "commitlint",
+    "lintstaged",
+    "unrs",
+    "SSOT",
+    "isready",
+    "vitest"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@mianshitong/question-bank",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@mianshitong/config": "workspace:*"
+  }
+}
