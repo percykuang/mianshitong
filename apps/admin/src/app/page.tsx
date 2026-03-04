@@ -1,65 +1,37 @@
-import Image from 'next/image';
 import styles from './page.module.css';
 
 export default function Home() {
+  const cards = [
+    { label: '会话总量', value: 'MVP 阶段内存态' },
+    { label: '题库状态', value: '12 道初始题 + 可扩展' },
+    { label: '模型接入', value: 'Mock Provider / DeepSeek 待接入' },
+  ] as const;
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{' '}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{' '}
-            or the{' '}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{' '}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        <section className={styles.header}>
+          <h1>面试通后台（Admin）</h1>
+          <p>用于后续管理题库、会话记录、模型配置。当前阶段先提供管理壳，确保架构可扩展。</p>
+        </section>
+
+        <section className={styles.grid}>
+          {cards.map((card) => (
+            <article key={card.label} className={styles.card}>
+              <h2>{card.label}</h2>
+              <p>{card.value}</p>
+            </article>
+          ))}
+        </section>
+
+        <section className={styles.roadmap}>
+          <h2>下一步计划</h2>
+          <ol>
+            <li>接入 PostgreSQL + Prisma 持久化会话与题库。</li>
+            <li>补充题库 CRUD、标签筛选、难度分级。</li>
+            <li>支持 DeepSeek Provider 配置与可观测指标面板。</li>
+          </ol>
+        </section>
       </main>
     </div>
   );

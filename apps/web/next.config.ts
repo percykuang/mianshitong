@@ -6,7 +6,12 @@ const nextConfig: NextConfig = {
   // Monorepo: make file tracing aware of workspace root.
   outputFileTracingRoot: path.join(__dirname, '../../'),
   // Local workspace packages that need transpilation can be listed here.
-  transpilePackages: ['@mianshitong/shared'],
+  transpilePackages: [
+    '@mianshitong/interview-engine',
+    '@mianshitong/llm',
+    '@mianshitong/question-bank',
+    '@mianshitong/shared',
+  ],
 };
 
 export default nextConfig;

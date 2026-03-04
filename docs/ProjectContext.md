@@ -68,3 +68,53 @@
 - 协作约定（上下文优先）：开始任何实现/改动前，必须先阅读 `docs/ProjectContext.md`，作为项目单一事实来源（SSOT）之一，用于快速了解当前架构与迭代状态。
 - 部署方向（Docker）：采用 Next.js `output: 'standalone'` 作为生产构建形态；用 Docker Compose 编排 `web`、`admin`、`db(PostgreSQL)` 多容器（当前阶段先暴露端口直连，后续可加 Nginx 反代）。
 - 配置复用（收敛）：新增 `packages/config` 作为共享配置包（当前先共享 tsconfig 模板），减少 apps/packages 重复配置，降低后续维护漂移风险。
+
+### 2026-02-28
+
+- 你确认要在当前项目架构内实现统一的产品化 UI 与核心交互体验，并先以 `apps/web` 完成闭环验证。
+- 实现策略采用“先 Web 闭环、再真实模型与持久化”：先完成 `apps/web` 首页 + `/chat` + BFF API，再接入 DeepSeek 与数据库。
+- 已落地的闭环能力：
+  - `apps/web`：Landing 页、Chat 页（会话侧栏、New Chat、Private、快捷提问、模型切换、消息流）；
+  - API：`/api/chat/sessions` + `.../[sessionId]` + `.../messages`；
+  - `packages/interview-engine`：会话状态机、追问、评分与报告；
+  - `packages/llm`：`LlmProvider` 抽象 + `MockLlmProvider`。
+- 当前约束（已明确）：会话存储仍为内存态（重启即清空），属于 MVP 阶段可接受实现；下一步再接 Prisma + PostgreSQL。
+- 工程同步调整：为 monorepo 的 TS 包补齐 ESLint TypeScript 解析（`typescript-eslint`），避免 packages 下 `.ts` lint 解析失败。
+- UI 优化进展（第二轮）：已对 `apps/web` 的 Landing 与 `/chat` 进行高保真样式重构（布局、色值、间距、组件形态、侧栏折叠逻辑），从“基础可用”提升到“结构细节更完整”。
+
+### 2026-03-02
+
+- 你确认继续做 Web 端“像素级打磨”，并明确允许使用 `shadcn ui + tailwind css` 作为主要实现方案。
+- 打磨方案选择为“先结构统一，再细节微调”：
+  - 先统一首页与聊天页布局层级、组件语义和视觉 token；
+  - 再在现有业务逻辑不变的前提下调整间距、尺寸、色板与响应式行为。
+- `apps/web` 已进入 Tailwind + shadcn 主导的 UI 体系：
+  - 首页与聊天页完成统一风格重构；
+  - 新增 shadcn `sidebar/sheet/tooltip/skeleton` 等组件支撑侧栏与交互一致性；
+  - 全局主题 token（`globals.css`）完成语义变量收敛。
+- 当前阶段仍保持 MVP 约束不变：会话存储继续使用内存态，后续迭代再接 Prisma/PostgreSQL 持久化。
+- 你确认移除仓库中与外部网站相关的命名、链接与描述，统一以“面试通”作为唯一品牌表达。
+- 已完成清理范围包括：页面文案、外链入口、迭代文档叙述与拼写词典配置。
+- 聊天页已完成第四轮微调：侧栏改为统一 off-canvas 过渡（含桌面端）、主区域高度与顶部层级边界进一步收敛。
+- 聊天页已完成第五轮微调：快捷问题按钮与会话列表视觉密度进一步收敛，输入区控件简化为主链路操作。
+- `/chat` 发送消息后的严重布局错乱已修复：消息区改为独立滚动容器，输入区固定在底部，避免输入卡片上浮到顶部。
+- 聊天页已完成第六轮对齐：桌面侧栏默认展开，顶栏操作收敛，消息气泡/助手回复区改为更统一的双列形态，并通过 Playwright 再次确认“发送前后布局稳定”。
+- 已接入本地 Ollama + SSE 流式聊天：`/chat` 发送消息后可增量渲染模型输出，服务端通过 Route Handler 把 Ollama NDJSON 转为 SSE 事件流，后续可按 Provider 抽象切换到付费 API。
+- 已支持通过 `LLM_PROVIDER` 环境变量切换 `ollama/deepseek`：前端 SSE 协议保持不变，服务端按 provider 动态路由，便于本地联调与线上付费模型切换。
+- 环境配置已进一步收敛为统一变量名方案：代码仅读取 `LLM_PROVIDER`、`OLLAMA_*`、`DEEPSEEK_*`，本地用 `.env.local`，线上由部署平台注入同名变量，降低维护复杂度。
+
+### 2026-03-04
+
+- 你确认继续推进“可维护性优先”的重构，要求在合理前提下将超长文件拆分（尽量单文件不超过 200 行）。
+- 已完成 `apps/web/src/app/chat` 模块化重构：
+  - `ChatClient` 拆分为 `components/hooks/lib` 多文件；
+  - 发送链路与 SSE 解析从视图层抽离，降低组件耦合度。
+- 聊天交互增强已落地：
+  - 支持 `Enter` 发送、`Shift+Enter` 换行，并处理输入法组合输入；
+  - 对话区支持自动滚动到底部（含流式增量输出过程）。
+- 消息渲染已支持 Markdown 与代码高亮：
+  - 使用 `react-markdown + remark-gfm + react-syntax-highlighter`；
+  - 支持标题/列表/行内代码/代码块高亮等常见内容形态。
+- 包级别拆分同步完成：
+  - `packages/interview-engine` 拆分为流程、评分、辅助模块；
+  - `packages/shared` 与 `packages/question-bank` 按职责拆分，减小单文件规模并保持现有导出兼容。

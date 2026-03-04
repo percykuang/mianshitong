@@ -1,66 +1,200 @@
-import Image from 'next/image';
-import styles from './page.module.css';
+import Link from 'next/link';
+import { ArrowRight, CircleCheck, Code2, FileText, MessageSquare, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+
+const highlights = ['专注前端开发领域', '基于最新技术栈', 'AI 智能分析', '即时反馈建议'] as const;
+
+const features = [
+  {
+    title: '简历优化',
+    description: '专业的简历分析和优化建议，帮你打造脱颖而出的简历',
+    icon: FileText,
+  },
+  {
+    title: '模拟面试',
+    description: '真实的面试场景模拟，提供即时反馈和改进建议',
+    icon: MessageSquare,
+  },
+  {
+    title: '面试题解答',
+    description: '涵盖前端、算法、系统设计等各类编程面试题详解',
+    icon: Code2,
+  },
+] as const;
+
+const demos = [
+  {
+    title: '简历智能分析',
+    description: '上传简历，AI 自动分析并提供优化建议',
+  },
+  {
+    title: '模拟面试场景',
+    description: '真实面试对话，实时反馈和评分',
+  },
+  {
+    title: '面试题详解',
+    description: '前端经典面试题目，详细解答和思路分析',
+  },
+] as const;
 
 export default function Home() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{' '}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-semibold text-blue-600">面试通</span>
+          </div>
+          <Button variant="outline" size="sm" className="h-8 px-3">
+            Guest
+          </Button>
+        </div>
+      </header>
+
+      <section className="container mx-auto px-4 py-16 md:py-24">
+        <div className="mx-auto max-w-4xl space-y-6 text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-accent px-3 py-1 text-sm text-accent-foreground">
+            <Sparkles className="size-4" />
+            <span>由 AI 驱动的智能面试助手</span>
+          </div>
+          <h1 className="text-4xl font-bold tracking-tight text-balance md:text-6xl">
+            你的专属<span className="text-blue-600"> AI Agent</span> 面试官
+          </h1>
+          <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground md:text-xl">
+            专注编程领域，尤其前端开发。提供简历优化、模拟面试、面试题解答等全方位面试辅导服务
+          </p>
+          <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
+            <Button
+              asChild
+              className="h-11 w-full cursor-pointer rounded-md bg-blue-600 px-8 text-white hover:bg-blue-700 sm:w-auto"
             >
-              Templates
-            </a>{' '}
-            or the{' '}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
+              <Link href="/chat">
+                立即开始
+                <ArrowRight className="ml-2 size-4" />
+              </Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="h-11 w-full cursor-pointer rounded-md px-8 sm:w-auto"
             >
-              Learning
-            </a>{' '}
-            center.
+              <a href="#features">
+                查看功能
+                <ArrowRight className="ml-2 size-4" />
+              </a>
+            </Button>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-8 md:gap-6">
+            {highlights.map((item) => (
+              <div key={item} className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CircleCheck className="size-4 text-primary" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="features" className="container mx-auto px-4 py-16 md:py-24">
+        <div className="mb-12 space-y-4 text-center">
+          <h2 className="text-3xl font-bold text-balance md:text-4xl">核心功能</h2>
+          <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground">
+            全方位的面试准备解决方案
           </p>
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
+          {features.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Card
+                key={item.title}
+                className="space-y-4 rounded-lg border p-6 shadow-sm transition-colors hover:border-primary"
+              >
+                <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
+                  <Icon className="size-6 text-primary" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-semibold">{item.title}</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {item.description}
+                  </p>
+                </div>
+              </Card>
+            );
+          })}
         </div>
-      </main>
+      </section>
+
+      <section className="bg-muted/30 px-4 py-16 md:py-24">
+        <div className="container mx-auto">
+          <div className="mb-12 space-y-4 text-center">
+            <h2 className="text-3xl font-bold text-balance md:text-4xl">功能演示</h2>
+            <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground">
+              看看 AI 面试官如何帮助你准备面试
+            </p>
+          </div>
+          <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-3">
+            {demos.map((item) => (
+              <Card key={item.title} className="overflow-hidden rounded-lg border-2 shadow-sm">
+                <div className="flex aspect-[16/9] items-center justify-center bg-muted" />
+                <div className="space-y-2 p-6">
+                  <h3 className="text-2xl font-semibold">{item.title}</h3>
+                  <p className="leading-relaxed text-muted-foreground">{item.description}</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="container mx-auto px-4 py-16 md:py-24">
+        <div className="mx-auto max-w-4xl space-y-6 rounded-lg border-0 bg-primary p-8 text-center text-primary-foreground shadow-sm md:p-12">
+          <h2 className="text-3xl font-bold text-balance md:text-4xl">
+            准备好开始你的面试准备了吗？
+          </h2>
+          <p className="mx-auto max-w-2xl text-balance text-lg text-primary-foreground/90">
+            立即与 AI 面试官对话，获取专业的面试指导和建议
+          </p>
+          <div className="pt-4">
+            <Button
+              asChild
+              variant="secondary"
+              className="h-11 w-full rounded-md px-8 text-secondary-foreground sm:w-auto"
+            >
+              <Link href="/chat">
+                开始对话
+                <ArrowRight className="ml-2 size-4" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-border">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+            <div className="flex items-center gap-2">
+              <div className="flex size-6 items-center justify-center rounded bg-primary">
+                <Sparkles className="size-4 text-primary-foreground" />
+              </div>
+              <span className="text-sm text-muted-foreground">© 2026 面试通</span>
+            </div>
+            <div className="flex items-center gap-6 text-sm text-muted-foreground">
+              {[
+                ['产品介绍', '#'],
+                ['更新日志', '#'],
+                ['用户协议', '#'],
+                ['隐私政策', '#'],
+              ].map(([label, href]) => (
+                <a key={label} href={href} className="transition-colors hover:text-foreground">
+                  {label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

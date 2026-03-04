@@ -9,6 +9,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@mianshitong/shared": "workspace:*"
+  },
   "devDependencies": {
     "@mianshitong/config": "workspace:*"
   }
