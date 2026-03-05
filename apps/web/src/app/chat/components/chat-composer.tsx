@@ -1,6 +1,6 @@
 import { MODEL_OPTIONS, type ModelId } from '@mianshitong/shared';
 import { Send } from 'lucide-react';
-import { type FormEvent, type KeyboardEvent, useState } from 'react';
+import { type FormEvent, type KeyboardEvent, type RefObject, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -18,6 +18,7 @@ interface ChatComposerProps {
   selectedModelId: ModelId;
   sending: boolean;
   loading: boolean;
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
   onInputChange: (value: string) => void;
   onSubmit: () => Promise<void>;
   onQuickPrompt: (prompt: string) => Promise<void>;
@@ -31,6 +32,7 @@ export function ChatComposer({
   selectedModelId,
   sending,
   loading,
+  inputRef,
   onInputChange,
   onSubmit,
   onQuickPrompt,
@@ -62,7 +64,7 @@ export function ChatComposer({
                 key={prompt}
                 type="button"
                 variant="outline"
-                className="h-auto w-full cursor-pointer justify-start whitespace-normal rounded-full p-3 text-left leading-relaxed"
+                className="flex h-auto w-full cursor-pointer justify-center rounded-full p-3 text-left leading-relaxed whitespace-normal"
                 onClick={() => void onQuickPrompt(prompt)}
               >
                 {prompt}
@@ -77,6 +79,7 @@ export function ChatComposer({
         >
           <div className="flex flex-row items-start gap-1 sm:gap-2">
             <Textarea
+              ref={inputRef}
               name="message"
               value={inputValue}
               onChange={(event) => onInputChange(event.target.value)}
@@ -85,7 +88,7 @@ export function ChatComposer({
               onCompositionEnd={() => setIsComposing(false)}
               placeholder="Send a message..."
               data-testid="multimodal-input"
-              className="field-sizing-fixed min-h-[80px] w-full grow resize-none rounded-none !border-none bg-transparent p-2 text-sm shadow-none outline-hidden ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
+              className="field-sizing-fixed min-h-20 w-full grow resize-none rounded-none !border-none bg-transparent p-2 text-sm shadow-none ring-0 outline-hidden [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none [&::-webkit-scrollbar]:hidden"
             />
           </div>
 

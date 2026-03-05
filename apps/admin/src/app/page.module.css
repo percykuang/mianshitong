@@ -72,7 +72,7 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .grid {
     grid-template-columns: 1fr;
   }

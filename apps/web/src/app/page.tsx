@@ -60,13 +60,13 @@ export default function Home() {
           <h1 className="text-4xl font-bold tracking-tight text-balance md:text-6xl">
             你的专属<span className="text-blue-600"> AI Agent</span> 面试官
           </h1>
-          <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground md:text-xl">
+          <p className="mx-auto max-w-2xl text-lg text-balance text-muted-foreground md:text-xl">
             专注编程领域，尤其前端开发。提供简历优化、模拟面试、面试题解答等全方位面试辅导服务
           </p>
           <div className="flex flex-col items-center justify-center gap-4 pt-4 sm:flex-row">
             <Button
               asChild
-              className="h-11 !w-fit shrink-0 cursor-pointer rounded-md bg-blue-600 !px-8 text-white hover:bg-blue-700 has-[>svg]:!px-8"
+              className="h-11 w-fit! shrink-0 cursor-pointer rounded-md bg-blue-600 px-8! text-white hover:bg-blue-700 has-[>svg]:px-8!"
             >
               <Link href="/chat">
                 立即开始
@@ -88,7 +88,7 @@ export default function Home() {
       <section id="features" className="container mx-auto px-4 py-16 md:py-24">
         <div className="mb-12 space-y-4 text-center">
           <h2 className="text-3xl font-bold text-balance md:text-4xl">核心功能</h2>
-          <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground">
+          <p className="mx-auto max-w-2xl text-lg text-balance text-muted-foreground">
             全方位的面试准备解决方案
           </p>
         </div>
@@ -119,14 +119,14 @@ export default function Home() {
         <div className="container mx-auto">
           <div className="mb-12 space-y-4 text-center">
             <h2 className="text-3xl font-bold text-balance md:text-4xl">功能演示</h2>
-            <p className="mx-auto max-w-2xl text-balance text-lg text-muted-foreground">
+            <p className="mx-auto max-w-2xl text-lg text-balance text-muted-foreground">
               看看 AI 面试官如何帮助你准备面试
             </p>
           </div>
           <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-3">
             {demos.map((item) => (
               <Card key={item.title} className="overflow-hidden rounded-lg border-2 shadow-sm">
-                <div className="flex aspect-[16/9] items-center justify-center bg-muted" />
+                <div className="flex aspect-video items-center justify-center bg-muted" />
                 <div className="space-y-2 p-6">
                   <h3 className="text-2xl font-semibold">{item.title}</h3>
                   <p className="leading-relaxed text-muted-foreground">{item.description}</p>
@@ -138,18 +138,18 @@ export default function Home() {
       </section>
 
       <section className="container mx-auto px-4 py-16 md:py-24">
-        <div className="flex flex-col mx-auto max-w-4xl space-y-6 rounded-lg border-0 bg-primary p-8 text-center text-primary-foreground shadow-sm md:p-12">
+        <div className="mx-auto flex max-w-4xl flex-col space-y-6 rounded-lg border-0 bg-primary p-8 text-center text-primary-foreground shadow-sm md:p-12">
           <h2 className="text-3xl font-bold text-balance md:text-4xl">
             准备好开始你的面试准备了吗？
           </h2>
-          <p className="mx-auto max-w-2xl text-balance text-lg text-primary-foreground/90">
+          <p className="mx-auto max-w-2xl text-lg text-balance text-primary-foreground/90">
             立即与 AI 面试官对话，获取专业的面试指导和建议
           </p>
-          <div className="pt-4 flex">
+          <div className="flex pt-4">
             <Button
               asChild
               variant="secondary"
-              className="flex-1 h-11 !w-fit shrink-0 rounded-md px-8 text-secondary-foreground"
+              className="h-11 w-fit! flex-1 shrink-0 rounded-md px-8 text-secondary-foreground"
             >
               <Link href="/chat">
                 开始对话
@@ -168,18 +168,6 @@ export default function Home() {
                 <Sparkles className="size-4 text-primary-foreground" />
               </div>
               <span className="text-sm text-muted-foreground">© 2026 面试通</span>
-            </div>
-            <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              {[
-                ['产品介绍', '#'],
-                ['更新日志', '#'],
-                ['用户协议', '#'],
-                ['隐私政策', '#'],
-              ].map(([label, href]) => (
-                <a key={label} href={href} className="transition-colors hover:text-foreground">
-                  {label}
-                </a>
-              ))}
             </div>
           </div>
         </div>

@@ -14,7 +14,7 @@ export function ChatLoadingIndicator({ className }: ChatLoadingIndicatorProps) {
         {DOT_DELAY.map((delay) => (
           <span
             key={delay}
-            className="size-1.5 rounded-full bg-current animate-pulse"
+            className="size-1.5 animate-pulse rounded-full bg-current"
             style={{ animationDelay: delay }}
           />
         ))}

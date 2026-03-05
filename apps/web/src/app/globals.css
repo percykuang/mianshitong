@@ -4,11 +4,11 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #ffffff;
+  --background: #fff;
   --foreground: #09090b;
-  --card: #ffffff;
+  --card: #fff;
   --card-foreground: #09090b;
-  --popover: #ffffff;
+  --popover: #fff;
   --popover-foreground: #09090b;
   --primary: #18181b;
   --primary-foreground: #fafafa;
@@ -68,7 +68,7 @@
   --sidebar-background: #18181b;
   --sidebar-foreground: #f4f4f5;
   --sidebar-primary: #1d4ed8;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-foreground: #fff;
   --sidebar-accent: #27272a;
   --sidebar-accent-foreground: #f4f4f5;
   --sidebar-border: #27272a;
@@ -126,7 +126,7 @@ body {
   position: relative;
   overflow-x: hidden;
   font-family:
-    'Inter',
+    Inter,
     -apple-system,
     BlinkMacSystemFont,
     'PingFang SC',
@@ -140,6 +140,7 @@ body {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }

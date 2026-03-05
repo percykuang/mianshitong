@@ -58,6 +58,28 @@ export async function openStreamRequest(sessionId: string, content: string): Pro
   return response;
 }
 
+export async function openEditStreamRequest(
+  sessionId: string,
+  messageId: string,
+  content: string,
+): Promise<Response> {
+  const response = await fetch(
+    `/api/chat/sessions/${sessionId}/messages/${messageId}/edit/stream`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content }),
+    },
+  );
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || '编辑失败，请稍后重试');
+  }
+
+  return response;
+}
+
 export async function readSseStream(response: Response, onEvent: SseEventHandler): Promise<void> {
   if (!response.body) {
     throw new Error('流式响应为空');

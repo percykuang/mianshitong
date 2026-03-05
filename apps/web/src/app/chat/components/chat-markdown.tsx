@@ -53,7 +53,7 @@ export function ChatMarkdown({ content, className }: ChatMarkdownProps) {
   return (
     <div
       className={cn(
-        'max-w-none break-words text-sm leading-6 text-foreground',
+        'max-w-none text-sm leading-6 break-words text-foreground',
         '[&_p]:mb-2 [&_p:last-child]:mb-0',
         '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6',
         '[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6',

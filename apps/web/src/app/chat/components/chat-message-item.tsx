@@ -1,6 +1,7 @@
 import type { ChatMessage } from '@mianshitong/shared';
 import { Copy, Pencil, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { ChatLoadingIndicator } from './chat-loading-indicator';
 import { ChatMarkdown } from './chat-markdown';
@@ -8,20 +9,34 @@ import { ChatMarkdown } from './chat-markdown';
 interface ChatMessageItemProps {
   message: ChatMessage;
   isLoading: boolean;
+  isEditing: boolean;
+  editingValue: string;
+  sending: boolean;
   onCopy: (content: string) => Promise<void>;
-  onEditUserMessage: (content: string) => void;
+  onStartEditUserMessage: (messageId: string, content: string) => void;
+  onEditingValueChange: (value: string) => void;
+  onCancelEditUserMessage: () => void;
+  onSubmitEditUserMessage: () => Promise<void>;
   onNotice: (content: string) => void;
 }
 
 export function ChatMessageItem({
   message,
   isLoading,
+  isEditing,
+  editingValue,
+  sending,
   onCopy,
-  onEditUserMessage,
+  onStartEditUserMessage,
+  onEditingValueChange,
+  onCancelEditUserMessage,
+  onSubmitEditUserMessage,
   onNotice,
 }: ChatMessageItemProps) {
+  const isEditableUserMessage = message.role === 'user' && !isLoading;
+
   return (
-    <article className="group/message w-full animate-in fade-in duration-200">
+    <article className="group/message w-full animate-in duration-200 fade-in">
       <div
         className={cn(
           'flex w-full items-start gap-2 md:gap-3',
@@ -38,20 +53,51 @@ export function ChatMessageItem({
           className={cn(
             'flex flex-col gap-2 md:gap-3',
             message.role === 'user'
-              ? 'max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)]'
+              ? isEditing
+                ? 'ml-auto w-full max-w-xl'
+                : 'max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)]'
               : 'w-full',
           )}
         >
           <div
             className={cn(
               'flex flex-col gap-2 overflow-hidden text-sm',
-              message.role === 'user'
-                ? 'w-fit rounded-2xl bg-primary px-3 py-2 text-right text-primary-foreground'
-                : 'bg-transparent px-0 py-0 text-left text-foreground',
+              message.role === 'user' && !isEditing
+                ? 'w-fit rounded-2xl bg-blue-600 px-3 py-2 text-right text-primary-foreground'
+                : message.role === 'user'
+                  ? 'w-full max-w-xl rounded-2xl border border-border bg-background p-2 text-left text-foreground'
+                  : 'bg-transparent px-0 py-0 text-left text-foreground',
             )}
           >
             {isLoading ? (
               <ChatLoadingIndicator />
+            ) : isEditing ? (
+              <div className="flex flex-col gap-2">
+                <Textarea
+                  value={editingValue}
+                  onChange={(event) => onEditingValueChange(event.target.value)}
+                  className="min-h-20 resize-none border-0 bg-transparent p-2 text-sm shadow-none focus-visible:ring-0"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onCancelEditUserMessage}
+                    disabled={sending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void onSubmitEditUserMessage()}
+                    disabled={sending || !editingValue.trim()}
+                  >
+                    Send
+                  </Button>
+                </div>
+              </div>
             ) : (
               <ChatMarkdown
                 content={message.content}
@@ -60,21 +106,21 @@ export function ChatMessageItem({
             )}
           </div>
 
-          {!isLoading ? (
+          {!isLoading && !isEditing ? (
             <div
               className={cn(
                 'flex items-center gap-1 text-muted-foreground',
                 message.role === 'user' ? 'justify-end' : 'justify-start',
               )}
             >
-              {message.role === 'user' ? (
+              {isEditableUserMessage ? (
                 <>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
                     aria-label="编辑消息"
-                    onClick={() => onEditUserMessage(message.content)}
+                    onClick={() => onStartEditUserMessage(message.id, message.content)}
                   >
                     <Pencil className="size-3.5" />
                   </Button>

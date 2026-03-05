@@ -109,7 +109,12 @@ export function GuestMenu({
     <div ref={containerRef} className={cn('relative', className)}>
       <button
         type="button"
-        className={cn(sharedButtonClassName, defaultButtonClassName, buttonClassName)}
+        className={cn(
+          sharedButtonClassName,
+          defaultButtonClassName,
+          'cursor-pointer',
+          buttonClassName,
+        )}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         data-testid="user-nav-button"

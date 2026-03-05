@@ -6,9 +6,14 @@ interface ChatMessageListProps {
   messages: ChatMessage[];
   hasConversation: boolean;
   sending: boolean;
+  editingMessageId: string | null;
+  editingValue: string;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   onCopy: (content: string) => Promise<void>;
-  onEditUserMessage: (content: string) => void;
+  onStartEditUserMessage: (messageId: string, content: string) => void;
+  onEditingValueChange: (value: string) => void;
+  onCancelEditUserMessage: () => void;
+  onSubmitEditUserMessage: () => Promise<void>;
   onNotice: (content: string) => void;
 }
 
@@ -27,14 +32,19 @@ export function ChatMessageList({
   messages,
   hasConversation,
   sending,
+  editingMessageId,
+  editingValue,
   scrollContainerRef,
   onCopy,
-  onEditUserMessage,
+  onStartEditUserMessage,
+  onEditingValueChange,
+  onCancelEditUserMessage,
+  onSubmitEditUserMessage,
   onNotice,
 }: ChatMessageListProps) {
   return (
     <div ref={scrollContainerRef} className="min-h-0 flex-1 touch-pan-y overflow-y-auto">
-      <div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
+      <div className="mx-auto flex max-w-4xl min-w-0 flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
         {!hasConversation ? <EmptyConversationState /> : null}
 
         {messages.map((message, index) => (
@@ -47,8 +57,14 @@ export function ChatMessageList({
               message.role === 'assistant' &&
               !message.content.trim()
             }
+            isEditing={message.id === editingMessageId}
+            editingValue={editingValue}
+            sending={sending}
             onCopy={onCopy}
-            onEditUserMessage={onEditUserMessage}
+            onStartEditUserMessage={onStartEditUserMessage}
+            onEditingValueChange={onEditingValueChange}
+            onCancelEditUserMessage={onCancelEditUserMessage}
+            onSubmitEditUserMessage={onSubmitEditUserMessage}
             onNotice={onNotice}
           />
         ))}

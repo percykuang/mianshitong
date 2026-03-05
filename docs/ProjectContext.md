@@ -145,3 +145,55 @@
   - “开始对话”已从 `Link` 包裹按钮改为 `Button onClick + router.push('/chat')`，以满足交互实现要求。
 - 首页底部 CTA 跳转方式已回退：
   - 按最新确认，“开始对话”恢复为 `Button asChild + Link` 导航实现。
+- 工程规范补齐（保存/提交一致性）：
+  - 已接入 `prettier-plugin-tailwindcss`，支持 Tailwind 类名自动排序（含 `cn(...)`）；
+  - 已新增 Stylelint 及 `lint:css`，并在 `lint-staged` 中对 `*.css` 执行 `prettier + stylelint --fix`；
+  - 已提供 VS Code 工作区设置，默认保存时使用 Prettier 自动格式化。
+- 样式检查能力补充：
+  - 已新增 `lint:style` / `lint:style:fix`（严格 Stylelint 配置）用于集中发现并收敛 CSS 告警项；
+  - 默认 `lint` 仍保持兼容现状的 `lint:css`，避免一次性放大量历史样式告警阻断日常提交流程。
+- 严格样式告警已完成一轮收敛：
+  - 通过 `pnpm lint:style:fix` 修复了当前 CSS 报告项（admin/web 的字体、媒体查询、import 与颜色写法等）；
+  - `pnpm lint:style` 当前可通过。
+- VS Code Tailwind 语法提示收敛：
+  - 工作区设置已将 `*.css` 关联为 `tailwindcss` 语言模式；
+  - 已设置 `css.lint.unknownAtRules: ignore`，减少 Tailwind v4 自定义 at-rule 的误报噪音。
+- 拼写词典同步：
+  - 已补充 `Segoe` 到 `cspell.json`，避免 `Segoe UI` 字体名在编辑器中误报 unknown。
+- 首页 Tailwind 类名规范补齐：
+  - `apps/web/src/app/page.tsx` 已按 canonical 写法收敛（`px-8!`、`w-fit!`、`aspect-video`）；
+  - 同步移除底部 CTA 的 `flex-1`，与 `w-fit!` 宽度策略保持一致。
+- Tailwind CSS 导入兼容性修复：
+  - `apps/web/src/app/globals.css` 已恢复为 `@import 'tailwindcss'` / `@import 'tw-animate-css'`；
+  - 严格样式配置已禁用 `import-notation`，避免自动修复将包导入改为 `url(...)` 后触发模块解析错误。
+- 聊天区用户消息操作补齐：
+  - “编辑”已支持回填到输入框并自动聚焦到末尾，便于二次改写后重发；
+  - “复制”已增加非安全上下文回退复制逻辑（`execCommand`），降低点击复制无反馈问题。
+- 基于 Playwright 对参考 chat 页的实测，聊天区“编辑/复制”已进一步对齐：
+  - 用户消息“编辑”改为气泡内就地编辑（`Cancel/Send`），并在发送后截断被编辑消息后的历史，按新内容重新流式生成后续回复；
+  - “复制”反馈改为顶部短时 toast（`Copied to clipboard!`），与参考交互节奏保持一致。
+- 聊天页状态管理已开始从本地 `useState` 收敛到 `zustand`：
+  - 新增 chat store 统一管理会话、输入、发送态、提示态、侧栏态和编辑态；
+  - `use-chat-controller` 已迁移为基于 selector 的状态读取，降低后续多入口 UI 扩展时的状态分散风险。
+- 按“职责边界分离”进一步细化 chat 状态层：
+  - 已从单体 chat store 拆分为 `session/ui/edit` 三个 store，避免状态容器过粗；
+  - `use-chat-controller` 进一步拆为 `store/effects/actions` 组合层，关键文件已回到 200 行约束内。
+
+### 2026-03-05
+
+- 你反馈 `/chat` 出现 hydration mismatch（SSR HTML 与客户端属性不一致）。
+- 已按 zustand 最新 Next.js 建议完成 SSR 安全改造：
+  - `chat-session/chat-ui/chat-edit` 三个 store 从模块级 `create(...)` 改为 `createStore` 工厂（vanilla store）；
+  - `use-chat-controller-store` 改为组件实例级 store 初始化（`useState` 懒初始化 + `useStore(storeApi, selector)`），避免跨请求/跨渲染共享模块状态导致的水合不一致。
+- 该修复保持了既有“多 store 拆分”结构与 200 行文件约束，不回退为单体 store。
+- 你继续反馈发送消息后出现编译/页面持续刷新与请求死循环问题。
+- 已修复 `use-chat-controller` 中 effects 入参的非稳定函数引用（去除包装函数，直接传递 store setter），初始化 effect 不再因依赖抖动反复触发。
+- 已用 Playwright 回归“发送一条消息”场景，确认请求链路恢复正常，不再出现 `/api/chat/sessions` 无限请求；同时清理了 `format:check` 的 12 个存量文件并恢复通过。
+- 你提出补齐可点击元素的鼠标指针反馈；已采用“全局 + 局部兜底”方案：
+  - 在通用 `Button` 基类统一添加 `cursor-pointer`；
+  - 对 `guest-menu` 与 `chat-sidebar` 的原生 `<button onClick>` 补齐 `cursor-pointer`，确保图标按钮与会话项点击反馈一致。
+- 你进一步确认“局部状态优先使用 `useState`，仅跨路由/跨层级共享场景才使用全局状态管理”。
+- 已按该原则收敛 chat 模块状态层：
+  - 保留 `session` 域使用 `zustand`；
+  - `ui/edit` 两个域回退为 `useState`（输入、提示、toast、侧栏开关、消息编辑态等）；
+  - 删除 `chat-ui-store.ts` 与 `chat-edit-store.ts`，减少不必要的全局状态复杂度。

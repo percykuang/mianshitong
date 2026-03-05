@@ -9,6 +9,411 @@
 
 ---
 
+## Iteration 2.39（2026-03-05）：回退 chat 局部 UI/编辑状态到 `useState`
+
+### 目标
+
+- 按“仅跨路由/跨层级共享状态才用全局状态”的约束，清理 chat 模块中不必要的 `zustand` 使用。
+
+### 主要改动
+
+- 保留会话域全局状态：
+  - `apps/web/src/app/chat/stores/chat-session-store.ts` 继续使用 `zustand` 管理会话主状态（session/model/sending/loading）。
+- 回退局部状态到组件内：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts` 新增本地 `useState` 管理 `inputValue/notice/toast/sidebarOpen/editingMessageId/editingValue`；
+  - `apps/web/src/app/chat/hooks/use-chat-controller-store.ts` 收敛为仅聚合 `session` store，不再混入 UI/编辑域。
+- 删除不再需要的 store：
+  - 删除 `apps/web/src/app/chat/stores/chat-ui-store.ts`；
+  - 删除 `apps/web/src/app/chat/stores/chat-edit-store.ts`。
+
+### 迁移/破坏性变更
+
+- 无接口破坏；仅状态管理实现方式调整（局部状态从 zustand 回退为 React 本地状态）。
+
+### 下一步
+
+- 若后续 chat 页面再次出现跨多个分支组件共享局部状态的场景，可优先考虑“局部 context + reducer”，再评估是否上升为 store。
+
+## Iteration 2.38（2026-03-05）：补齐可点击图标/按钮的 `cursor-pointer`
+
+### 目标
+
+- 统一可点击元素的鼠标指针反馈，避免“可点但光标不提示”的交互不一致问题。
+
+### 主要改动
+
+- 全局按钮收敛：
+  - `apps/web/src/components/ui/button.tsx` 的 `buttonVariants` 基类新增 `cursor-pointer`，覆盖绝大部分图标按钮与普通按钮。
+- 原生按钮补齐：
+  - `apps/web/src/components/guest-menu.tsx`：用户菜单触发按钮新增 `cursor-pointer`；
+  - `apps/web/src/app/chat/components/chat-sidebar.tsx`：
+    - 移动端侧栏遮罩关闭按钮新增 `cursor-pointer`；
+    - 会话列表项按钮新增 `cursor-pointer`。
+
+### 迁移/破坏性变更
+
+- 无；仅样式交互提示增强。
+
+### 下一步
+
+- 若你希望范围扩大到 `apps/admin`，可按同样策略补齐后台可点击元素。
+
+## Iteration 2.37（2026-03-05）：清理仓库根目录调试 PNG 截图
+
+### 目标
+
+- 清理未被项目引用的临时截图文件，减少仓库噪音。
+
+### 主要改动
+
+- 删除仓库根目录 3 个未引用的 PNG 文件：
+  - `chat-after-send.png`
+  - `chat-fixed-after-send.png`
+  - `chat-fixed-before-send.png`
+- 通过全局搜索确认当前仓库无 `.png` 文件残留，也无代码/文档引用这些截图。
+
+### 迁移/破坏性变更
+
+- 无；仅删除调试产物文件。
+
+### 下一步
+
+- 若后续仍会频繁产出调试截图，可考虑补充 `.gitignore` 规则（例如仅忽略约定命名的截图文件）。
+
+## Iteration 2.36（2026-03-05）：修复发送后会话请求死循环并完成格式化清理
+
+### 目标
+
+- 解决 `/chat` 发送消息后出现“编译/页面持续刷新、请求死循环”的问题，并清理当前 Prettier 存量文件。
+
+### 主要改动
+
+- 死循环根因修复：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts` 中，传给 `useChatControllerEffects` 的 setter 由包装函数改为直接传递稳定引用（移除 render 期新建函数）；
+  - 避免 `useChatControllerEffects` 初始化 effect 因依赖引用变化被重复触发，导致 `fetchSessions` 循环调用。
+- 回归验证（Playwright）：
+  - 打开 `/chat` 并发送一条消息后，网络请求恢复为预期链路（创建会话、拉会话、流式消息），未再出现 `/api/chat/sessions` 无限请求；
+  - 页面未出现持续刷新现象。
+- 格式化清理：
+  - 已对此前 `format:check` 提示的 12 个文件执行 `prettier --write`；
+  - `pnpm format:check` 已恢复通过。
+
+### 迁移/破坏性变更
+
+- 无接口破坏；仅修复 hooks 依赖稳定性与代码格式。
+
+### 下一步
+
+- 可继续补一条端到端用例（发送消息后断言不会重复请求会话列表）防止回归。
+
+## Iteration 2.35（2026-03-05）：修复 chat 页 hydration mismatch（SSR 安全的 zustand 实例化）
+
+### 目标
+
+- 解决 `/chat` 页面出现的 hydration mismatch（服务端 HTML 属性与客户端初始属性不一致）报错。
+
+### 主要改动
+
+- 按 zustand 最新 Next.js 指南，把 chat 三个 store 从模块级全局 `create(...)` 改为实例工厂：
+  - `apps/web/src/app/chat/stores/chat-session-store.ts`
+  - `apps/web/src/app/chat/stores/chat-ui-store.ts`
+  - `apps/web/src/app/chat/stores/chat-edit-store.ts`
+  - 三个文件统一改为 `createStore`（`zustand/vanilla`）并导出 `*StoreApi` 类型。
+- `apps/web/src/app/chat/hooks/use-chat-controller-store.ts` 改为组件实例级初始化：
+  - 使用 `useState` 懒初始化 3 个 store API（每个 `ChatClient` 实例独立）；
+  - 使用 `useStore(storeApi, selector)` 订阅状态，保留原有 selector 拆分与行为。
+- 保持既有“多 store 拆分”结构，不回退到单体 store；关键文件仍控制在 200 行以内。
+
+### 迁移/破坏性变更
+
+- 无接口破坏；仅 store 初始化策略从“模块级共享”改为“组件实例级隔离”。
+
+### 下一步
+
+- 建议在本地启动 `apps/web` 后手动回归 `/chat` 的首屏与路由往返，确认 hydration 报错不再出现。
+
+## Iteration 2.34（2026-03-05）：拆分 chat store 并收敛文件行数（<=200）
+
+### 目标
+
+- 解决“单一 chat store 过粗”和 `use-chat-controller.ts` 超 200 行的问题，按职责拆分状态管理并保持行为不变。
+
+### 主要改动
+
+- store 按职责拆分：
+  - 新增 `apps/web/src/app/chat/stores/chat-session-store.ts`：会话域状态（session/model/sending/loading）；
+  - 新增 `apps/web/src/app/chat/stores/chat-ui-store.ts`：UI 域状态（input/notice/toast/sidebar）；
+  - 新增 `apps/web/src/app/chat/stores/chat-edit-store.ts`：编辑域状态（editingMessageId/editingValue）；
+  - 新增 `apps/web/src/app/chat/stores/types.ts`（共享 `Updater` 类型）；
+  - 删除旧的单体 `chat-store.ts`。
+- 控制器继续模块化：
+  - 新增 `apps/web/src/app/chat/hooks/use-chat-controller-store.ts` 统一聚合多 store selector；
+  - 新增 `apps/web/src/app/chat/hooks/use-chat-controller-effects.ts` 管理初始化/响应式副作用；
+  - 新增 `apps/web/src/app/chat/hooks/use-chat-controller-actions.ts` 管理事件处理器；
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts` 收敛为组装层（153 行）。
+- 行数约束结果：
+  - `use-chat-controller.ts` 与新增模块文件均控制在 200 行以内，符合 AGENTS 约束。
+
+### 迁移/破坏性变更
+
+- 无接口破坏；仅状态管理结构调整（单 store -> 多 store）。
+
+### 下一步
+
+- 可继续按同样方式把 chat 子组件中的 props 进一步收敛，逐步减少跨层参数传递。
+
+## Iteration 2.33（2026-03-05）：聊天页状态迁移到 zustand（全局状态收敛）
+
+### 目标
+
+- 在不改变现有业务行为的前提下，把聊天页分散的本地状态收敛为统一的全局状态管理，降低后续扩展成本。
+
+### 主要改动
+
+- 引入 zustand：
+  - `apps/web/package.json` 新增依赖 `zustand`；
+  - `apps/web/src/app/chat/stores/chat-store.ts` 新增 chat store，统一管理会话、输入、发送态、提示态、侧栏态、编辑态。
+- 控制器改造：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts` 从 `useState` 迁移为基于 zustand 的 selector + actions（`useShallow`）；
+  - 保留原有发送/编辑/复制业务逻辑，仅替换状态读写来源。
+- 编辑态进一步收敛：
+  - `apps/web/src/app/chat/ChatClient.tsx` 移除本地编辑状态，改为由 controller（底层 store）统一提供；
+  - 新增 `start/cancel/submit` 编辑动作，避免页面层散落状态逻辑。
+- 类型同步：
+  - `apps/web/src/app/chat/hooks/chat-controller.types.ts` 补充编辑态与编辑动作类型，保证组件侧类型约束一致。
+
+### 迁移/破坏性变更
+
+- 无接口破坏；前端行为保持一致，仅状态管理实现方式从 React 本地状态改为 zustand。
+
+### 下一步
+
+- 可继续把 `ChatComposer` / `ChatMessageList` 逐步改为直接按 selector 读取 store，进一步减少 props drilling。
+
+## Iteration 2.32（2026-03-05）：消息“就地编辑 + 复制 Toast”对齐参考交互
+
+### 目标
+
+- 使用 Playwright 对比参考 chat 页后，将用户消息“编辑/复制”行为对齐为更接近目标站点的交互体验。
+
+### 主要改动
+
+- 编辑交互改为“消息气泡内就地编辑”：
+  - `apps/web/src/app/chat/components/chat-message-item.tsx` 新增编辑态（输入框 + `Cancel/Send`）；
+  - `apps/web/src/app/chat/ChatClient.tsx` 增加编辑态管理；
+  - `apps/web/src/app/chat/hooks/use-edit-message.ts` 新增编辑发送链路（流式）。
+- 编辑后重生成能力补齐：
+  - 新增 API：`apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`；
+  - `apps/web/src/lib/server/chat-store.ts` 新增 `truncateSessionFromUserMessage`，用于从被编辑消息处截断会话，再基于新内容重生成后续回复。
+- 流式能力复用与收敛：
+  - 新增 `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`，抽离 provider 选择、SSE 事件格式化等通用逻辑；
+  - 新增 `apps/web/src/app/chat/hooks/stream-event-handler.ts`，统一前端 SSE 事件处理。
+- 复制反馈对齐：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts` 增加短暂 toast 状态；
+  - 复制成功/失败改为顶部短时 toast（`Copied to clipboard!` / `Copy failed...`），不再依赖底部文案提示。
+
+### 迁移/破坏性变更
+
+- 新增编辑流式接口路径：`/api/chat/sessions/:sessionId/messages/:messageId/edit/stream`。
+- 旧的“编辑后回填到底部输入框”交互已替换为“消息气泡内就地编辑”。
+
+### 下一步
+
+- 可继续补齐“编辑中键盘快捷键（Enter 提交 / Shift+Enter 换行）”与操作按钮 hover 动效，以进一步贴近参考站点细节。
+
+## Iteration 2.31（2026-03-05）：补齐用户消息“编辑/复制”交互
+
+### 目标
+
+- 修复聊天区用户消息的“编辑/复制”交互不可用或体验不一致问题，并向目标站点交互靠齐。
+
+### 主要改动
+
+- 编辑能力补齐：
+  - `apps/web/src/app/chat/ChatClient.tsx` 新增输入框 ref；
+  - 点击用户消息“编辑”后会把原文填入输入框，并自动聚焦到输入框末尾，便于直接改写重发。
+- 复制能力增强：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts` 增加 `copyToClipboard`；
+  - 优先使用 `navigator.clipboard`，在非安全上下文下自动回退到 `document.execCommand('copy')`，减少“点击复制无效果”问题。
+- 组件能力补齐：
+  - `apps/web/src/components/ui/textarea.tsx` 改为 `forwardRef`，支持从父组件进行聚焦与光标控制；
+  - `apps/web/src/app/chat/components/chat-composer.tsx` 支持透传 `inputRef`。
+
+### 迁移/破坏性变更
+
+- 无；仅交互增强与兼容性修复。
+
+### 下一步
+
+- 可继续对齐“消息操作区”的 hover/显隐动画与反馈样式（例如 toast 样式与持续时间）。
+
+## Iteration 2.30（2026-03-05）：修复 `tw-animate-css` 模块解析失败
+
+### 目标
+
+- 解决 `pnpm dev:web` 报错 `Module not found: Can't resolve 'tw-animate-css'`。
+
+### 主要改动
+
+- 根因修复：
+  - `apps/web/src/app/globals.css` 的导入被自动改成 `@import url(...)` 后，包级 CSS 导入解析异常；
+  - 已回退为 Tailwind v4 推荐写法：
+    - `@import 'tailwindcss';`
+    - `@import 'tw-animate-css';`
+- 规则收敛：
+  - `stylelint.strict.config.mjs` 将 `import-notation` 设为 `null`，避免严格修复再次把上述导入改坏。
+- 验证：
+  - 本地首页可正常返回 200，样式可编译输出（不再出现该模块找不到错误）。
+
+### 迁移/破坏性变更
+
+- 无；仅 CSS 导入写法与样式规则兼容性修复。
+
+### 下一步
+
+- 若后续继续做样式自动修复，优先保留 Tailwind v4 官方导入语法，避免与通用 CSS 规则冲突。
+
+## Iteration 2.29（2026-03-05）：修复首页 `suggestCanonicalClasses` 提示
+
+### 目标
+
+- 清理 `apps/web/src/app/page.tsx` 中 Tailwind IntelliSense 的 canonical class 提示，保持类名写法规范一致。
+
+### 主要改动
+
+- `apps/web/src/app/page.tsx`：
+  - 将 `!px-8` 改为 `px-8!`；
+  - 将 `!w-fit` 改为 `w-fit!`；
+  - 将 `aspect-[16/9]` 改为语义等价的 `aspect-video`。
+- 同步收敛：
+  - 底部“开始对话”按钮移除 `flex-1`，避免与 `w-fit!` 产生宽度策略冲突。
+
+### 迁移/破坏性变更
+
+- 无；仅样式类名规范化与轻微布局收敛。
+
+### 下一步
+
+- 若继续提示 canonical class，可在其他页面按同一规则批量收敛。
+
+## Iteration 2.28（2026-03-05）：补充 cSpell 词典词条（Segoe）
+
+### 目标
+
+- 消除编辑器中 `Segoe` 的拼写误报，统一 CLI 与 VS Code 体验。
+
+### 主要改动
+
+- 更新 `cspell.json` 词典：
+  - 新增 `Segoe` 到 `words` 列表，避免 `Segoe UI` 字体名被标记为 unknown。
+
+### 迁移/破坏性变更
+
+- 无；仅拼写词典增强。
+
+### 下一步
+
+- 若后续出现其他字体/品牌词误报，按同样方式补充到词典即可。
+
+## Iteration 2.27（2026-03-05）：VS Code Tailwind 语法提示噪音收敛
+
+### 目标
+
+- 解决 VS Code 中 `Unknown at rule @custom-variant css(unknownAtRules)` 的编辑器提示噪音。
+
+### 主要改动
+
+- 更新 `.vscode/settings.json`：
+  - 新增 `files.associations`：`*.css -> tailwindcss`；
+  - 新增 `css.lint.unknownAtRules: ignore`，避免内置 CSS 校验误报 Tailwind v4 at-rule。
+
+### 迁移/破坏性变更
+
+- 无；仅编辑器工作区体验优化。
+
+### 下一步
+
+- 若个别成员仍有提示噪音，建议确认已安装并启用 Tailwind CSS IntelliSense 扩展。
+
+## Iteration 2.26（2026-03-05）：修复当前 CSS 严格检查告警（lint:style）
+
+### 目标
+
+- 先把 `lint:style` 当前报出的样式告警清掉，确保严格检查可通过。
+
+### 主要改动
+
+- 执行 `pnpm lint:style:fix` 并落地修复：
+  - `apps/web/src/app/globals.css`：规范 `@import` 写法、hex 长度、font-family 引号与空行规则；
+  - `apps/admin/src/app/globals.css`：修复 `font-family-name-quotes`；
+  - `apps/admin/src/app/page.module.css`：媒体查询改为区间语法（`width <= 900px`）。
+- 验证：
+  - `pnpm lint:style` 现已通过（0 报错）。
+
+### 迁移/破坏性变更
+
+- 无；仅样式规范修复，不涉及业务逻辑。
+
+### 下一步
+
+- 后续可将 `lint:style` 纳入 CI 非阻断检查，持续收敛样式规范。
+
+## Iteration 2.25（2026-03-05）：新增 `lint:style` 严格样式检查命令
+
+### 目标
+
+- 提供一个可单独执行的样式检查命令，用于集中发现当前 CSS 规范问题（包括你提到的 warning/告警项）。
+
+### 主要改动
+
+- 新增严格 Stylelint 配置：
+  - `stylelint.strict.config.mjs`（基于 `stylelint-config-standard`）；
+  - 保留 Tailwind 自定义 at-rule 白名单，避免误报。
+- 新增脚本命令：
+  - `pnpm lint:style`：使用严格配置扫描 `**/*.css`；
+  - `pnpm lint:style:fix`：在严格配置下尝试自动修复可修复问题。
+- 保持现有流程不变：
+  - `lint:css` 继续走当前“兼容现状”的配置，用于日常提交流程稳定性。
+
+### 迁移/破坏性变更
+
+- 无；新增命令，不影响原有命令行为。
+
+### 下一步
+
+- 可按 `lint:style` 报告逐步收敛规则，再决定是否把严格检查并入默认 `lint`。
+
+## Iteration 2.24（2026-03-05）：补齐 CSS 格式化/Lint 与 Tailwind 类名自动排序
+
+### 目标
+
+- 支持 CSS 的 Prettier 与 lint，并让 Tailwind 类名在保存和提交时自动按规范顺序整理。
+
+### 主要改动
+
+- Prettier（根配置）：
+  - `/.prettierrc.cjs` 接入 `prettier-plugin-tailwindcss`；
+  - 配置 `tailwindFunctions: ['cn']`，支持 `cn(...)` 内 class 排序；
+  - 配置 Tailwind v4 样式入口 `tailwindStylesheet: './apps/web/src/app/globals.css'`。
+- CSS lint：
+  - 新增 `stylelint.config.mjs`（基于 `stylelint-config-standard`）；
+  - 对 Tailwind 自定义 at-rule（如 `@theme`、`@custom-variant`、`@apply`）做白名单兼容。
+- 脚本与提交流程：
+  - `package.json` 新增 `lint:css` / `lint:css:fix`；
+  - 根 `lint` 串联 `pnpm lint:css`；
+  - `lint-staged` 新增 `*.css`：`prettier --write` + `stylelint --fix`，提交时自动修复。
+- 保存即格式化（VS Code）：
+  - 新增 `.vscode/settings.json`，开启 `formatOnSave` 并默认使用 Prettier；
+  - 新增 `.vscode/extensions.json` 推荐 Prettier 与 Tailwind CSS 插件。
+
+### 迁移/破坏性变更
+
+- 无 API 变更；仅工程配置增强。
+
+### 下一步
+
+- 可选：若你希望提交前同时跑 CSS 检查，可把 `pnpm lint` 挂到 CI 必跑链路。
+
 ## Iteration 2.23（2026-03-05）：回退“开始对话”为 Link 跳转实现
 
 ### 目标

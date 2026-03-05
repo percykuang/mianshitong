@@ -127,3 +127,36 @@ export function appendChatExchange(
   store.set(sessionId, session);
   return session;
 }
+
+export function truncateSessionFromUserMessage(
+  sessionId: string,
+  messageId: string,
+): ChatSession | undefined {
+  const session = store.get(sessionId);
+  if (!session) {
+    return undefined;
+  }
+
+  const targetIndex = session.messages.findIndex((item) => item.id === messageId);
+  if (targetIndex < 0) {
+    return undefined;
+  }
+
+  const targetMessage = session.messages[targetIndex];
+  if (!targetMessage || targetMessage.role !== 'user') {
+    return undefined;
+  }
+
+  const firstUserIndex = session.messages.findIndex((item) => item.role === 'user');
+  session.messages = session.messages.slice(0, targetIndex);
+
+  if (targetIndex === firstUserIndex) {
+    session.title = '新的对话';
+  }
+
+  session.status = 'idle';
+  session.report = null;
+  session.updatedAt = new Date().toISOString();
+  store.set(sessionId, session);
+  return session;
+}

@@ -37,7 +37,7 @@ export function ChatSidebar({
       {sidebarOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-30 bg-black/20 md:hidden"
+          className="fixed inset-0 z-30 cursor-pointer bg-black/20 md:hidden"
           aria-label="关闭侧栏"
           onClick={onCloseSidebar}
         />
@@ -93,7 +93,7 @@ export function ChatSidebar({
                     type="button"
                     onClick={() => void onSelectSession(item.id)}
                     className={cn(
-                      'flex h-10 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-sidebar-accent',
+                      'flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-sidebar-accent',
                       item.id === activeSessionId
                         ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
                         : 'text-sidebar-foreground',

@@ -1,20 +1,24 @@
 import type { StreamChatProvider } from '@mianshitong/llm';
-import { appendChatExchange, getSession } from '@/lib/server/chat-store';
+import {
+  appendChatExchange,
+  getSession,
+  truncateSessionFromUserMessage,
+} from '@/lib/server/chat-store';
 import {
   createStreamProvider,
   formatSseEvent,
   isRecord,
   resolveErrorMessage,
   toChatTurns,
-} from './stream-utils';
+} from '../../../stream/stream-utils';
 
 export const runtime = 'nodejs';
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ sessionId: string }> },
+  context: { params: Promise<{ sessionId: string; messageId: string }> },
 ): Promise<Response> {
-  const { sessionId } = await context.params;
+  const { sessionId, messageId } = await context.params;
   const body = await request.json().catch(() => ({}));
   const input = isRecord(body) ? body : {};
   const content = typeof input.content === 'string' ? input.content.trim() : '';
@@ -23,22 +27,27 @@ export async function POST(
     return Response.json({ message: 'content is required' }, { status: 400 });
   }
 
-  const session = getSession(sessionId);
-  if (!session) {
+  const currentSession = getSession(sessionId);
+  if (!currentSession) {
     return Response.json({ message: 'Session not found' }, { status: 404 });
+  }
+
+  const truncatedSession = truncateSessionFromUserMessage(sessionId, messageId);
+  if (!truncatedSession) {
+    return Response.json({ message: 'User message not found' }, { status: 404 });
   }
 
   let provider: StreamChatProvider;
   let model: string;
   try {
-    const result = createStreamProvider(session.modelId);
+    const result = createStreamProvider(currentSession.modelId);
     provider = result.provider;
     model = result.model;
   } catch (error) {
     return Response.json({ message: resolveErrorMessage(error) }, { status: 400 });
   }
 
-  const turns = toChatTurns(session, content);
+  const turns = toChatTurns(truncatedSession, content);
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {

@@ -11,7 +11,11 @@
     "build": "pnpm -r --if-present build",
     "start:web": "pnpm -C apps/web start",
     "start:admin": "pnpm -C apps/admin start",
-    "lint": "pnpm -r --if-present lint",
+    "lint": "pnpm -r --if-present lint && pnpm lint:css",
+    "lint:css": "stylelint \"**/*.css\"",
+    "lint:css:fix": "stylelint \"**/*.css\" --fix",
+    "lint:style": "stylelint \"**/*.css\" --config stylelint.strict.config.mjs",
+    "lint:style:fix": "stylelint \"**/*.css\" --config stylelint.strict.config.mjs --fix",
     "format": "prettier -w .",
     "format:check": "prettier -c .",
     "spellcheck": "cspell lint --no-progress .",
@@ -35,6 +39,9 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.1.0",
     "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.7.2",
+    "stylelint": "^17.4.0",
+    "stylelint-config-standard": "^40.0.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "8.46.3",
     "vitest": "^4.0.7"
@@ -42,6 +49,10 @@
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs,json,md,yaml,yml}": [
       "prettier --write"
+    ],
+    "*.css": [
+      "prettier --write",
+      "stylelint --fix"
     ]
   }
 }

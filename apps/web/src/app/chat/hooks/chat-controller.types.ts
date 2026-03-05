@@ -10,7 +10,10 @@ export interface ChatController {
   sending: boolean;
   loading: boolean;
   notice: string | null;
+  toast: string | null;
   sidebarOpen: boolean;
+  editingMessageId: string | null;
+  editingValue: string;
   quickPrompts: string[];
   setInputValue: (value: string) => void;
   setSelectedModelId: (value: ModelId) => void;
@@ -20,6 +23,11 @@ export interface ChatController {
   handleNewChat: () => Promise<void>;
   handleQuickPrompt: (prompt: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
+  editUserMessage: (messageId: string, content: string) => Promise<boolean>;
+  startEditingUserMessage: (messageId: string, content: string) => void;
+  cancelEditingUserMessage: () => void;
+  submitEditingUserMessage: () => Promise<boolean>;
+  setEditingValue: (value: string) => void;
   handleCopy: (content: string) => Promise<void>;
   showNotice: (content: string) => void;
 }

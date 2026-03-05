@@ -1,31 +1,37 @@
-import {
-  type ChatSession,
-  type ModelId,
-  QUICK_PROMPTS,
-  type SessionSummary,
-} from '@mianshitong/shared';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ChatSession, QUICK_PROMPTS, type SessionSummary } from '@mianshitong/shared';
+import { useCallback, useMemo, useState } from 'react';
 import { createSessionRequest, fetchSessionById, fetchSessions } from '../lib/chat-api';
 import type { ChatController } from './chat-controller.types';
+import { useChatControllerActions } from './use-chat-controller-actions';
+import { useChatControllerEffects } from './use-chat-controller-effects';
+import { useChatControllerStore } from './use-chat-controller-store';
+import { useEditMessage } from './use-edit-message';
 import { useSendMessage } from './use-send-message';
 
-function closeSidebarOnMobile(setSidebarOpen: (open: boolean) => void): void {
-  if (window.innerWidth < 768) {
-    setSidebarOpen(false);
-  }
-}
-
 export function useChatController(): ChatController {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  const {
+    sessions,
+    activeSessionId,
+    activeSession,
+    selectedModelId,
+    privateMode,
+    sending,
+    loading,
+    setSessions,
+    setActiveSessionId,
+    setActiveSession,
+    setSelectedModelId,
+    setPrivateMode,
+    setSending,
+    setLoading,
+  } = useChatControllerStore();
+
   const [inputValue, setInputValue] = useState('');
-  const [selectedModelId, setSelectedModelId] = useState<ModelId>('deepseek-chat');
-  const [privateMode, setPrivateMode] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
 
   const quickPrompts = useMemo(() => [...QUICK_PROMPTS], []);
 
@@ -33,7 +39,7 @@ export function useChatController(): ChatController {
     const next = await fetchSessions();
     setSessions(next);
     return next;
-  }, []);
+  }, [setSessions]);
 
   const createSession = useCallback(async (): Promise<ChatSession> => {
     const session = await createSessionRequest({
@@ -44,7 +50,7 @@ export function useChatController(): ChatController {
     setActiveSessionId(session.id);
     await refreshSessions();
     return session;
-  }, [privateMode, refreshSessions, selectedModelId]);
+  }, [selectedModelId, privateMode, setActiveSession, setActiveSessionId, refreshSessions]);
 
   const ensureSession = useCallback(async (): Promise<ChatSession> => {
     if (activeSession) {
@@ -65,82 +71,47 @@ export function useChatController(): ChatController {
     setActiveSessionId,
   });
 
-  const handlePickSession = useCallback(async (sessionId: string) => {
-    try {
-      const session = await fetchSessionById(sessionId);
-      setActiveSession(session);
-      setActiveSessionId(session.id);
-      setSelectedModelId(session.modelId);
-      setPrivateMode(session.isPrivate);
-      closeSidebarOnMobile(setSidebarOpen);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : '读取会话失败');
-    }
-  }, []);
+  const editUserMessage = useEditMessage({
+    activeSession,
+    sending,
+    refreshSessions,
+    setSending,
+    setNotice,
+    setActiveSession,
+    setActiveSessionId,
+  });
 
-  const handleNewChat = useCallback(async () => {
-    try {
-      await createSession();
-      setInputValue('');
-      closeSidebarOnMobile(setSidebarOpen);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : '创建会话失败');
-    }
-  }, [createSession]);
+  useChatControllerEffects({
+    toast,
+    refreshSessions,
+    setToast,
+    setSidebarOpen,
+    setActiveSession,
+    setActiveSessionId,
+    setSelectedModelId,
+    setPrivateMode,
+    setNotice,
+    setLoading,
+    fetchSessionById,
+  });
 
-  const handleQuickPrompt = useCallback(
-    async (prompt: string) => {
-      setInputValue(prompt);
-      await sendMessage(prompt);
-    },
-    [sendMessage],
-  );
-
-  const handleCopy = useCallback(async (content: string) => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setNotice('已复制到剪贴板');
-    } catch {
-      setNotice('复制失败，请手动复制');
-    }
-  }, []);
-
-  const showNotice = useCallback((content: string) => {
-    setNotice(content);
-  }, []);
-
-  const togglePrivateMode = useCallback(() => {
-    setPrivateMode((previous) => !previous);
-  }, []);
-
-  useEffect(() => {
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const bootstrap = async () => {
-      try {
-        const latest = await refreshSessions();
-        if (latest.length === 0) {
-          return;
-        }
-
-        const session = await fetchSessionById(latest[0].id);
-        setActiveSession(session);
-        setActiveSessionId(session.id);
-        setSelectedModelId(session.modelId);
-        setPrivateMode(session.isPrivate);
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : '初始化失败');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    void bootstrap();
-  }, [refreshSessions]);
+  const actions = useChatControllerActions({
+    createSession,
+    sendMessage,
+    editUserMessage,
+    editingMessageId,
+    editingValue,
+    setInputValue,
+    setSelectedModelId,
+    setPrivateMode,
+    setNotice,
+    setToast,
+    setSidebarOpen,
+    setActiveSession,
+    setActiveSessionId,
+    setEditingMessageId,
+    setEditingValue,
+  });
 
   return {
     sessions,
@@ -152,17 +123,25 @@ export function useChatController(): ChatController {
     sending,
     loading,
     notice,
+    toast,
     sidebarOpen,
+    editingMessageId,
+    editingValue,
     quickPrompts,
     setInputValue,
     setSelectedModelId,
     setSidebarOpen,
-    togglePrivateMode,
-    handlePickSession,
-    handleNewChat,
-    handleQuickPrompt,
+    handlePickSession: actions.handlePickSession,
+    handleNewChat: actions.handleNewChat,
+    handleQuickPrompt: actions.handleQuickPrompt,
     sendMessage,
-    handleCopy,
-    showNotice,
+    editUserMessage,
+    startEditingUserMessage: actions.startEditingUserMessage,
+    cancelEditingUserMessage: actions.cancelEditingUserMessage,
+    submitEditingUserMessage: actions.submitEditingUserMessage,
+    setEditingValue,
+    handleCopy: actions.handleCopy,
+    showNotice: actions.showNotice,
+    togglePrivateMode: actions.togglePrivateMode,
   };
 }
