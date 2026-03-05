@@ -1,5 +1,4 @@
-import { Book, ChevronDown, ChevronLeft, Lock, Menu } from 'lucide-react';
-import Link from 'next/link';
+import { ChevronDown, ChevronLeft, Lock, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -30,7 +29,7 @@ export function ChatHeader({
       <Button
         variant="outline"
         className={cn(
-          'hidden h-8 w-fit px-4 py-2 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground md:flex md:h-fit md:px-2',
+          'hidden h-8 w-fit px-4 py-2 data-[state=open]:bg-accent data-[state=open]:text-accent-foreground md:ml-auto md:flex md:h-fit md:px-2',
           privateMode ? 'border-blue-200 text-blue-600' : '',
         )}
         data-testid="visibility-selector"
@@ -40,14 +39,6 @@ export function ChatHeader({
         <span className="md:sr-only">Private</span>
         <ChevronDown className="size-4" />
       </Button>
-
-      <Link
-        className="order-3 hidden h-10 items-center justify-center gap-2 rounded-md bg-zinc-900 px-2 py-2 text-sm font-medium whitespace-nowrap text-zinc-50 transition-colors hover:bg-zinc-800 md:ml-auto md:flex md:h-fit"
-        href="/"
-      >
-        <Book className="size-4" />
-        使用指南
-      </Link>
     </header>
   );
 }

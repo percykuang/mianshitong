@@ -9,6 +9,259 @@
 
 ---
 
+## Iteration 2.23（2026-03-05）：回退“开始对话”为 Link 跳转实现
+
+### 目标
+
+- 按最新确认，撤回 `Button onClick` 跳转方案，恢复为 `Link` 导航实现。
+
+### 主要改动
+
+- `apps/web/src/app/page.tsx`：
+  - 底部 CTA 从 `<StartChatButton />` 回退为 `Button asChild + Link`；
+  - 保持现有样式（`!w-fit + shrink-0 + px-8`）不变，仅回退跳转方式。
+- 删除不再需要的组件：
+  - `apps/web/src/components/start-chat-button.tsx`。
+
+### 迁移/破坏性变更
+
+- 无；仅页面跳转实现方式回退。
+
+### 下一步
+
+- 如需继续定位宽度展示异常，建议在本地清理旧进程后做一次浏览器无缓存验证。
+
+## Iteration 2.22（2026-03-05）：首页“开始对话”改为 Button onClick 跳转
+
+### 目标
+
+- 按最新交互要求，移除“开始对话”按钮内的 `Link`，改为 `Button` 直接 `onClick` 跳转。
+
+### 主要改动
+
+- 新增客户端组件 `apps/web/src/components/start-chat-button.tsx`：
+  - 使用 `useRouter`（`next/navigation`）实现 `onClick => router.push('/chat')`；
+  - 保持 `secondary` 视觉样式与 `!w-fit + px-8` 宽度/内边距策略。
+- `apps/web/src/app/page.tsx`：
+  - 底部 CTA 区由 `Button asChild + Link` 改为 `<StartChatButton />`。
+
+### 迁移/破坏性变更
+
+- 无；仅按钮跳转实现方式调整。
+
+### 下一步
+
+- Playwright MCP 恢复后补首页按钮点击跳转与宽度样式的自动化回归。
+
+## Iteration 2.21（2026-03-05）：首页 CTA 宽度改为强制 `!w-fit`
+
+### 目标
+
+- 继续收敛首页 CTA 宽度问题，避免任何潜在宽度类覆盖导致按钮看起来仍为整行宽度。
+
+### 主要改动
+
+- `apps/web/src/app/page.tsx`：
+  - 将两个 CTA 的 `w-fit` 升级为 `!w-fit`（高优先级）；
+  - 保持 `shrink-0` 与 `px-8`，确保按钮按内容宽度渲染且左右内边距稳定。
+
+### 迁移/破坏性变更
+
+- 无；仅样式优先级增强。
+
+### 下一步
+
+- Playwright MCP 可用后，补首页 CTA 的截图与像素对比验收。
+
+## Iteration 2.20（2026-03-05）：显式固定首页 CTA 为 `w-fit` 规避按钮宽度歧义
+
+### 目标
+
+- 在“去掉固定宽度”基础上，进一步显式约束首页两个 CTA 为内容宽度，避免样式继承或布局上下文导致误解。
+
+### 主要改动
+
+- `apps/web/src/app/page.tsx`：
+  - Hero 区“立即开始”按钮增加 `w-fit shrink-0`；
+  - 底部“开始对话”按钮增加 `w-fit shrink-0`；
+  - 两者均保留 `px-8`（32px）与现有视觉样式。
+- 验证方式：
+  - 通过本地渲染 HTML 确认两个按钮 class 已包含 `w-fit` 且不再含 `w-full/sm:w-auto`。
+
+### 迁移/破坏性变更
+
+- 无；仅样式行为收敛。
+
+### 下一步
+
+- 若需严格像素验收，可在 Playwright MCP 恢复后补一组首页 CTA 的截图回归。
+
+## Iteration 2.19（2026-03-04）：首页主 CTA 宽度改为内容自适应
+
+### 目标
+
+- 修复首页主按钮“立即开始”仍然占满容器宽度的问题，改为自适应内容宽度。
+
+### 主要改动
+
+- `apps/web/src/app/page.tsx`：
+  - 移除 Hero 区“立即开始”按钮上的 `w-full` 与 `sm:w-auto`；
+  - 保留 `!px-8 + has-[>svg]:!px-8`，确保按钮宽度由内容与内边距共同决定。
+
+### 迁移/破坏性变更
+
+- 无；仅样式行为修复。
+
+### 下一步
+
+- 若后续希望首页 CTA 行为统一，可继续明确“主按钮/次按钮在移动端是否都保持内容宽度”规范。
+
+## Iteration 2.18（2026-03-04）：首页“开始对话”按钮宽度改为内容自适应
+
+### 目标
+
+- 修复首页“开始对话”按钮宽度不符合预期的问题，改为不指定固定宽度，随内容自动伸展。
+
+### 主要改动
+
+- `apps/web/src/app/page.tsx`：
+  - 移除底部 CTA “开始对话”按钮的 `w-full` 与 `sm:w-auto`；
+  - 保留 `h-11` 与 `px-8`，按钮宽度改为组件默认 auto 行为（随内容自适应）。
+
+### 迁移/破坏性变更
+
+- 无；仅样式调整。
+
+### 下一步
+
+- 若需要同一视觉规范，可继续统一首页两个 CTA 的宽度策略（都内容自适应或都容器对齐）。
+
+## Iteration 2.17（2026-03-04）：修复首页主 CTA padding 被按钮基类覆盖
+
+### 目标
+
+- 解决“立即开始”按钮设置 `px-8` 后视觉仍未生效的问题，确保左右内边距稳定为 32px。
+
+### 主要改动
+
+- 根因定位：
+  - `Button` 默认尺寸样式包含 `has-[>svg]:px-3`，而“立即开始”按钮内含 `ArrowRight` 图标，导致原 `px-8` 被覆盖。
+- 修复：
+  - 在 `apps/web/src/app/page.tsx` 为该按钮增加强制覆盖类：
+    - `!px-8`
+    - `has-[>svg]:!px-8`
+  - 这样无论是否包含图标，横向内边距都固定为 32px。
+
+### 迁移/破坏性变更
+
+- 无；仅首页按钮样式修复。
+
+### 下一步
+
+- 如需全站统一，可评估是否调整 `Button` 基类的 `has-[>svg]:px-*` 策略，避免类似覆盖问题重复出现。
+
+## Iteration 2.16（2026-03-04）：首页主 CTA 横向内边距调整为 32px
+
+### 目标
+
+- 按设计要求把首页“立即开始”按钮左右内边距统一为 32px。
+
+### 主要改动
+
+- `apps/web/src/app/page.tsx`：
+  - 将 Hero 区“立即开始”按钮 class 从 `px-10 sm:px-12` 调整为 `px-8`（即 32px）。
+
+### 迁移/破坏性变更
+
+- 无；仅样式调整。
+
+### 下一步
+
+- 如需继续视觉对齐，可再微调按钮高度、字重与图标间距。
+
+## Iteration 2.15（2026-03-04）：首页 Guest 菜单补齐主题切换与登录入口
+
+### 目标
+
+- 让首页右上角 Guest 入口与聊天页保持一致，支持主题切换和登录跳转，统一用户入口体验。
+
+### 主要改动
+
+- 抽离并复用 Guest 菜单组件：
+  - 新增 `apps/web/src/components/guest-menu.tsx`；
+  - 支持 `menuPlacement`（上弹/下弹）以适配侧栏与首页头部两种布局。
+- 首页头部接入 Guest 下拉菜单：
+  - `apps/web/src/app/page.tsx` 右上角由静态按钮改为可交互菜单；
+  - 支持 `Toggle light/dark mode` 与 `Login to your account`（跳转 `/login`）。
+- 聊天页侧栏改为使用共享 Guest 组件：
+  - `apps/web/src/app/chat/components/chat-sidebar.tsx` 改为引用 `@/components/guest-menu`；
+  - 删除原聊天目录下重复实现，减少维护分叉。
+
+### 迁移/破坏性变更
+
+- 无 API 变更；仅前端组件复用与交互增强。
+
+### 下一步
+
+- 真实认证接入后，为 Guest 菜单补充登录态头像、用户信息与 Sign out 分支。
+
+## Iteration 2.14（2026-03-04）：按钮精简与 Guest 菜单二次对齐
+
+### 目标
+
+- 继续收敛页面入口与交互，移除冗余按钮，并把侧栏 Guest 菜单进一步对齐到目标样式与行为。
+
+### 主要改动
+
+- 聊天页顶部精简：
+  - 移除 `/chat` 顶部“使用指南”按钮及对应入口，保留核心聊天操作链路。
+- Guest 菜单二次对齐（`apps/web/src/app/chat/components/guest-menu.tsx`）：
+  - 按目标站结构调整为：用户入口按钮 + 下拉菜单；
+  - 菜单项改为 `Toggle light/dark mode` 单项切换；
+  - 增加认证动作入口 `Login to your account`（跳转 `/login`）；
+  - 增加访客状态加载占位（头像/文本 pulse + spinner）。
+- 首页 CTA 精简与视觉优化：
+  - 移除 Hero 区“查看功能”按钮；
+  - “立即开始”按钮左右内边距加大（`px-10 / sm:px-12`）以提升视觉平衡。
+- 新增登录占位页：
+  - `apps/web/src/app/login/page.tsx`，避免 Guest 菜单登录入口落入 404。
+
+### 迁移/破坏性变更
+
+- 无 API 变更；仅页面结构与入口调整。
+
+### 下一步
+
+- 若后续接入真实认证（如 Auth.js），可直接复用当前 Guest 菜单结构替换登录/登出动作。
+
+## Iteration 2.13（2026-03-04）：主题切换与助手回复 Loading 体验补齐
+
+### 目标
+
+- 对齐聊天页的体验细节：补齐访客菜单内主题切换能力、补齐 AI 首段回复前的 loading 态。
+
+### 主要改动
+
+- 主题系统：
+  - `apps/web/src/app/layout.tsx` 接入全局 `ThemeProvider`，支持 `light/dark/system`；
+  - 新增 `apps/web/src/components/theme-provider.tsx`（基于 `next-themes`）；
+  - 聊天侧栏访客菜单新增主题切换入口：`apps/web/src/app/chat/components/guest-menu.tsx`；
+  - `Guest` 按钮点击后弹出菜单，可切换浅色 / 深色 / 跟随系统。
+- 回复 loading：
+  - 新增 `apps/web/src/app/chat/components/chat-loading-indicator.tsx`；
+  - 当发送后助手占位消息还未收到首个 token 时，显示“思考中”动态 loading；
+  - 一旦收到流式内容，自动切换为正常 Markdown 消息渲染。
+- 依赖：
+  - `apps/web/package.json` 新增 `next-themes`。
+
+### 迁移/破坏性变更
+
+- 无外部 API 变更；仅前端展示与主题管理增强。
+
+### 下一步
+
+- 可选：把主题切换入口同步到首页头部，保证全站入口一致。
+
 ## Iteration 2.12（2026-03-04）：聊天页模块化重构 + 输入/滚动/Markdown 体验增强
 
 ### 目标

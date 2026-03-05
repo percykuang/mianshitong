@@ -51,6 +51,7 @@ export function ChatClient() {
             <ChatMessageList
               messages={latestMessages}
               hasConversation={hasConversation}
+              sending={controller.sending}
               scrollContainerRef={scrollContainerRef}
               onCopy={controller.handleCopy}
               onEditUserMessage={controller.setInputValue}

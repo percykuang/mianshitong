@@ -1,6 +1,7 @@
 import type { SessionSummary } from '@mianshitong/shared';
-import { ChevronLeft, ChevronRight, Plus, Settings } from 'lucide-react';
+import { ChevronLeft, Plus, Settings } from 'lucide-react';
 import Link from 'next/link';
+import { GuestMenu } from '@/components/guest-menu';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -107,18 +108,7 @@ export function ChatSidebar({
         </div>
 
         <div className="flex flex-col gap-2 p-2" data-sidebar="footer">
-          <button
-            type="button"
-            className="flex h-10 w-full items-center justify-between rounded-md bg-background p-2 text-sm hover:bg-sidebar-accent"
-          >
-            <div className="flex flex-row gap-2">
-              <span className="inline-flex size-6 items-center justify-center rounded-full bg-zinc-500/30 text-xs font-medium text-zinc-700">
-                G
-              </span>
-              <span>Guest</span>
-            </div>
-            <ChevronRight className="size-4 text-zinc-500" />
-          </button>
+          <GuestMenu />
         </div>
       </aside>
     </>

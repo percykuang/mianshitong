@@ -5,6 +5,7 @@ import { ChatMessageItem } from './chat-message-item';
 interface ChatMessageListProps {
   messages: ChatMessage[];
   hasConversation: boolean;
+  sending: boolean;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   onCopy: (content: string) => Promise<void>;
   onEditUserMessage: (content: string) => void;
@@ -25,6 +26,7 @@ function EmptyConversationState() {
 export function ChatMessageList({
   messages,
   hasConversation,
+  sending,
   scrollContainerRef,
   onCopy,
   onEditUserMessage,
@@ -35,10 +37,16 @@ export function ChatMessageList({
       <div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
         {!hasConversation ? <EmptyConversationState /> : null}
 
-        {messages.map((message) => (
+        {messages.map((message, index) => (
           <ChatMessageItem
             key={message.id}
             message={message}
+            isLoading={
+              sending &&
+              index === messages.length - 1 &&
+              message.role === 'assistant' &&
+              !message.content.trim()
+            }
             onCopy={onCopy}
             onEditUserMessage={onEditUserMessage}
             onNotice={onNotice}
