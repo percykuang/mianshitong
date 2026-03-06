@@ -1,3 +1,4 @@
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
@@ -24,12 +25,10 @@ function resolveDatabaseUrl(): string {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
+    adapter: new PrismaPg({
+      connectionString: resolveDatabaseUrl(),
+    }),
     log: ['error'],
-    datasources: {
-      db: {
-        url: resolveDatabaseUrl(),
-      },
-    },
   });
 
 globalForPrisma.prisma = prisma;

@@ -239,3 +239,8 @@
   - 服务端 `session callback` 增加用户存在性校验（用户不存在则清空 `session.user`）；
   - 客户端检测到“authenticated 但 user 为空”时自动 `signOut + refresh`；
   - 实测删除用户后刷新页面已自动恢复 `Guest`。
+- 你反馈 `schema.prisma` 提示 `datasource.url` 不再支持；已对齐 Prisma 7 配置规范：
+  - `packages/db` 升级到 Prisma 7.4.2；
+  - 新增 `packages/db/prisma.config.ts` 承载 `datasource.url`；
+  - `schema.prisma` 中移除 `datasource.url`；
+  - Prisma Client 改为 `@prisma/adapter-pg` 注入连接串，兼容 Prisma 7 的客户端配置方式。

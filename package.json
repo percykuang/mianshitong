@@ -14,7 +14,7 @@
     "db:status": "docker compose ps db",
     "db:logs": "docker compose logs -f --tail=200 db",
     "db:psql": "docker compose exec db psql -U mianshitong -d mianshitong",
-    "db:studio": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma studio --schema prisma/schema.prisma",
+    "db:studio": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma studio --port \"${PRISMA_STUDIO_PORT:-5555}\"",
     "db:migrate": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma migrate dev --schema prisma/schema.prisma",
     "db:reset": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma migrate reset --schema prisma/schema.prisma --force --skip-seed",
     "db:users": "docker compose exec -T db psql -U mianshitong -d mianshitong -c 'SELECT \"id\", \"email\", \"createdAt\" FROM \"AuthUser\" ORDER BY \"createdAt\" DESC LIMIT 50;'",

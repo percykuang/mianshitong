@@ -9,6 +9,35 @@
 
 ---
 
+## Iteration 2.46（2026-03-06）：修复 `schema.prisma` 的 Prisma 7 配置报错
+
+### 目标
+
+- 消除 `schema.prisma` 中 `datasource.url` 的 Prisma 7 报错，并保持现有 PostgreSQL 认证链路可用。
+
+### 主要改动
+
+- Prisma 升级到 v7：
+  - `packages/db` 升级为 `prisma@7.4.2`、`@prisma/client@7.4.2`；
+  - 新增 `@prisma/adapter-pg@7.4.2` 与 `pg@8.16.3`。
+- 配置迁移到 `prisma.config.ts`：
+  - 新增 `packages/db/prisma.config.ts`，在配置文件中声明 `datasource.url`；
+  - `packages/db/prisma/schema.prisma` 的 `datasource db` 移除 `url` 字段，仅保留 `provider`。
+- Prisma Client 初始化方式调整：
+  - `packages/db/src/client.ts` 从 `datasources.db.url` 切换为 `PrismaPg adapter` 注入连接串；
+  - 保留既有开发默认连接串与生产环境显式配置校验逻辑。
+- 回归验证：
+  - `pnpm db:migrate` 在 PostgreSQL 下可正常执行（`Already in sync`）；
+  - `packages/db` 与 `apps/web` typecheck 均通过。
+
+### 迁移/破坏性变更
+
+- Prisma 运行时模型从“schema 内 `datasource.url` + Client datasources”迁移为“`prisma.config.ts` + `adapter`”。
+
+### 下一步
+
+- 若你希望进一步收敛，可以把 `packages/db` 内部 `prisma:*` 脚本也统一改为走根 `db:*` 包装脚本，减少入口分散。
+
 ## Iteration 2.45（2026-03-06）：修复“数据库删用户后仍保持登录态”问题
 
 ### 目标
