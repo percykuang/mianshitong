@@ -21,6 +21,33 @@ pnpm dev:admin
 - web: 3000（绑定 127.0.0.1）
 - admin: 3001（绑定 127.0.0.1）
 
+## 数据库快捷命令（PostgreSQL）
+
+```bash
+# 启动/停止/状态
+pnpm db:up
+pnpm db:down
+pnpm db:status
+
+# 查看日志
+pnpm db:logs
+
+# 进入 psql
+pnpm db:psql
+
+# 图形化查看数据（Prisma Studio）
+pnpm db:studio
+
+# 按迁移更新数据库结构（开发）
+pnpm db:migrate
+
+# 清空数据库并按迁移重建（危险操作）
+pnpm db:reset
+
+# 快速查看最近 50 条 AuthUser
+pnpm db:users
+```
+
 ## Docker（生产形态）
 
 本仓库使用 Next.js `output: 'standalone'` 构建最小运行产物，并用 Docker Compose 编排多个容器（web/admin/db）。

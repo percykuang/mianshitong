@@ -9,6 +9,183 @@
 
 ---
 
+## Iteration 2.45（2026-03-06）：修复“数据库删用户后仍保持登录态”问题
+
+### 目标
+
+- 当用户记录被删除后，刷新页面应自动退出登录，避免前端仍显示已登录态。
+
+### 主要改动
+
+- 服务端会话校验增强：
+  - `apps/web/src/lib/server/auth-user-repository.ts` 新增 `findUserById`；
+  - `apps/web/src/lib/server/auth-options.ts` 的 `session callback` 改为每次读取会话时校验 `token.sub` 对应用户是否仍存在；
+  - 若用户不存在，清空 `session.user`，避免继续向客户端暴露已失效用户信息。
+- 客户端自动清理会话 cookie：
+  - `apps/web/src/components/guest-menu.tsx` 新增 effect：
+    - 当 `status === 'authenticated'` 但 `session.user` 已为空时，自动执行 `signOut({ redirect: false })` 并 `router.refresh()`；
+    - 保障前端状态与服务端真实用户状态一致。
+- 回归验证：
+  - 登录后手动删除 `AuthUser` 记录并刷新页面，已自动回到 `Guest`。
+
+### 迁移/破坏性变更
+
+- 无接口变化；仅会话有效性校验逻辑增强。
+
+### 下一步
+
+- 若后续需要减少每次 `session` 读取的数据库查询，可引入“短周期校验缓存”策略（例如 token 中记录最近校验时间）。
+
+## Iteration 2.44（2026-03-06）：补齐 `db:migrate` / `db:reset` 数据库脚本
+
+### 目标
+
+- 在已有 `db:*` 基础上补齐“迁移更新”和“清库重建”能力，降低数据库维护门槛。
+
+### 主要改动
+
+- 根脚本增强：
+  - 新增 `db:migrate`：执行 `prisma migrate dev`（按迁移更新数据库结构）；
+  - 新增 `db:reset`：执行 `prisma migrate reset --force --skip-seed`（清空并按迁移重建）；
+  - `db:studio` 改为“优先读取外部 `DATABASE_URL`，未配置时回退本地默认 PG URL”，提升环境兼容性。
+- 文档更新：
+  - `README.md` 新增 `db:migrate` / `db:reset` 使用说明与风险提示（`db:reset` 为危险操作）。
+- 脚本验证：
+  - `pnpm db:migrate` 已验证通过（当前提示 `Already in sync`）。
+
+### 迁移/破坏性变更
+
+- `db:reset` 会删除当前数据库数据，请仅在确认需要清库时使用。
+
+### 下一步
+
+- 若你需要，我可以再补一个 `db:seed` 和 `db:reset:seed` 脚本，把“重建 + 初始化测试账号”串成一条命令。
+
+## Iteration 2.43（2026-03-06）：新增数据库一键脚本（启动/连接/查看数据）
+
+### 目标
+
+- 提供统一、低记忆成本的数据库操作入口，支持“快速启动 PostgreSQL 与查看当前数据”。
+
+### 主要改动
+
+- 在仓库根 `package.json` 新增 `db:*` 脚本：
+  - `db:up`：启动 `compose` 中的 `db` 服务；
+  - `db:down`：停止 `db` 服务；
+  - `db:restart`：重启 `db`；
+  - `db:status`：查看 `db` 容器状态；
+  - `db:logs`：跟踪数据库日志；
+  - `db:psql`：进入 PostgreSQL 命令行；
+  - `db:studio`：启动 Prisma Studio；
+  - `db:users`：快速查看最近 50 条 `AuthUser`。
+- `README.md` 新增“数据库快捷命令（PostgreSQL）”章节，统一说明启动与查看数据方式。
+- 已实测新脚本：
+  - `pnpm db:status` 可正常返回容器健康状态；
+  - `pnpm db:users` 可正常查询到当前用户数据。
+
+### 迁移/破坏性变更
+
+- 无破坏性变更；仅新增开发辅助命令。
+
+### 下一步
+
+- 若你希望进一步降低手工操作，可追加 `db:reset`（重建库）与 `db:migrate`（显式执行迁移）脚本。
+
+## Iteration 2.42（2026-03-06）：认证数据层从 SQLite 切回 PostgreSQL
+
+### 目标
+
+- 按项目既定技术栈，把认证数据层从 SQLite 过渡实现切回 PostgreSQL，统一本地与后续线上环境形态。
+
+### 主要改动
+
+- Prisma 数据源切换：
+  - `packages/db/prisma/schema.prisma` 的 `datasource db.provider` 从 `sqlite` 改为 `postgresql`；
+  - `env.example` 的 `DATABASE_URL` 改为本地 compose 对应连接串：
+    - `postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public`
+- Prisma 客户端连接策略收敛：
+  - `packages/db/src/client.ts` 移除 SQLite 文件路径探测逻辑；
+  - 统一优先读取 `DATABASE_URL`，开发环境无显式配置时回退到本地 PostgreSQL 默认连接串；
+  - 非开发环境缺失 `DATABASE_URL` 时显式抛错，避免静默连错库。
+- 迁移历史重建（Provider 切换要求）：
+  - 清理旧的 SQLite 迁移历史与 `dev.db`；
+  - 新建并应用 PostgreSQL 初始迁移：
+    - `packages/db/prisma/migrations/20260306015753_init_auth_postgres/migration.sql`
+  - `migration_lock.toml` 已更新为 `provider = "postgresql"`。
+
+### 迁移/破坏性变更
+
+- 本地开发需启动 PostgreSQL（可用 `compose.yaml` 的 `db` 服务）。
+- 旧 SQLite 数据文件不再使用；若有历史测试数据，需按需导入到 PostgreSQL。
+
+### 下一步
+
+- 建议补一条认证 E2E（注册/登录/退出）在 PostgreSQL 环境下执行，防止回归。
+
+## Iteration 2.41（2026-03-06）：修复首页/聊天页用户菜单潜在 hydration mismatch
+
+### 目标
+
+- 消除 `pnpm dev:web` 下偶发的 React hydration warning（SSR HTML 与客户端属性不一致）。
+
+### 主要改动
+
+- 定位并收敛 `GuestMenu` 的水合风险点：
+  - `apps/web/src/components/guest-menu.tsx` 移除基于主题切换头像 `src` 的分支渲染；
+  - 头像改为固定 `src` + `dark:invert` 样式，避免服务端与客户端首帧属性差异；
+  - 保留主题切换逻辑，仅在菜单展开后读取 `resolvedTheme/theme` 计算目标主题。
+- 参考 `next-themes` 文档“避免 hydration mismatch”的建议，统一采用“首帧不依赖不稳定主题属性”的渲染策略。
+- Playwright 回归：
+  - 首页与 `/chat` 首屏加载；
+  - 强制深色媒体模式下再次加载；
+  - 控制台均未出现 hydration warning。
+
+### 迁移/破坏性变更
+
+- 无接口变化，仅前端渲染细节调整。
+
+### 下一步
+
+- 若你本机浏览器仍提示 hydration mismatch，建议提供完整报错堆栈（含组件路径），我会继续定点清理其余触发源。
+
+## Iteration 2.40（2026-03-06）：对齐 zhitalk 的注册/登录闭环并修复本地会话漂移
+
+### 目标
+
+- 参考 `zhitalk.chat` 落地 Email + Password 的注册/登录/退出流程，并保证本地开发（`127.0.0.1`）会话稳定。
+
+### 主要改动
+
+- 认证能力落地（Web + DB）：
+  - `apps/web` 新增 NextAuth Credentials 配置与路由；
+  - 新增 `/login`、`/register` 页面及复用认证卡片组件；
+  - 新增 `/api/auth/register` 注册接口（`zod` 校验 + `bcryptjs` 哈希）；
+  - `guest-menu` 接入真实会话状态，已登录显示邮箱并支持退出登录。
+- 数据层落地（Prisma）：
+  - `packages/db/prisma/schema.prisma` 新增 `AuthUser` 模型；
+  - 新增 Prisma client 导出与迁移脚本，完成初始迁移。
+- 本地稳定性修复：
+  - 修复 `signIn/signOut` 在 `127.0.0.1` 与 `localhost` 间的回跳漂移，统一使用安全相对路径跳转；
+  - `auth-options` 补充 `AUTH_SECRET` 读取与开发环境默认值，避免 `NO_SECRET/JWT_SESSION_ERROR`；
+  - `env.example` 补充 `NEXTAUTH_URL`；
+  - `cspell.json` 补充 `cuid`，恢复拼写检查通过。
+- 回归验证（Playwright）：
+  - 注册成功后自动登录并回首页；
+  - 顶部菜单显示登录邮箱；
+  - 退出后恢复 `Guest`；
+  - 错误密码登录显示错误提示。
+
+### 迁移/破坏性变更
+
+- 新增认证相关环境变量：
+  - `AUTH_SECRET`
+  - `NEXTAUTH_URL`
+  - `DATABASE_URL`
+
+### 下一步
+
+- 若要完全对齐线上部署，建议将 SQLite 切回项目既定 PostgreSQL，并补充认证 E2E 用例（注册/登录/退出/错误分支）。
+
 ## Iteration 2.39（2026-03-05）：回退 chat 局部 UI/编辑状态到 `useState`
 
 ### 目标

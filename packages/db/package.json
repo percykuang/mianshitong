@@ -6,10 +6,18 @@
   "main": "./src/index.ts",
   "scripts": {
     "lint": "eslint .",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "prisma:push": "prisma db push --schema prisma/schema.prisma",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },
   "devDependencies": {
-    "@mianshitong/config": "workspace:*"
+    "@mianshitong/config": "workspace:*",
+    "@types/node": "^20.19.35",
+    "prisma": "^6.19.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2"
   }
 }

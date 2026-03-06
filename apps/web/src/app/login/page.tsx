@@ -1,24 +1,59 @@
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+'use client';
+
+import { useState } from 'react';
+import { signIn } from 'next-auth/react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AuthCard } from '@/components/auth/auth-card';
+import { toSafeCallbackPath } from '@/lib/auth-redirect';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    const callbackPath = toSafeCallbackPath(
+      searchParams.get('callbackUrl'),
+      window.location.origin,
+    );
+    setPending(true);
+    setError(null);
+
+    const result = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
+      callbackUrl: callbackPath,
+    });
+
+    setPending(false);
+    if (result?.error) {
+      setError('邮箱或密码错误');
+      return;
+    }
+
+    router.push(callbackPath);
+    router.refresh();
+  };
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-4 py-8">
-      <section className="w-full rounded-xl border border-border bg-card p-8 text-card-foreground shadow-sm">
-        <h1 className="text-2xl font-semibold">登录功能开发中</h1>
-        <p className="mt-3 text-sm text-muted-foreground">
-          当前版本尚未接入账户体系。你可以先以 Guest 模式继续使用面试通。
-        </p>
-        <div className="mt-6">
-          <Button asChild variant="outline" className="h-9 px-4">
-            <Link href="/chat">
-              <ArrowLeft className="size-4" />
-              返回聊天
-            </Link>
-          </Button>
-        </div>
-      </section>
-    </main>
+    <AuthCard
+      title="Sign In"
+      description="Use your email and password to sign in"
+      submitLabel="Sign in"
+      email={email}
+      password={password}
+      error={error}
+      pending={pending}
+      footerText="Don't have an account?"
+      footerLinkText="Sign up"
+      footerLinkHref="/register"
+      onEmailChange={setEmail}
+      onPasswordChange={setPassword}
+      onSubmit={handleSubmit}
+    />
   );
 }

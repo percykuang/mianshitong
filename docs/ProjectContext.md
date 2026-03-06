@@ -197,3 +197,45 @@
   - 保留 `session` 域使用 `zustand`；
   - `ui/edit` 两个域回退为 `useState`（输入、提示、toast、侧栏开关、消息编辑态等）；
   - 删除 `chat-ui-store.ts` 与 `chat-edit-store.ts`，减少不必要的全局状态复杂度。
+
+### 2026-03-06
+
+- 你要求参照 `zhitalk.chat` 在当前项目实现注册/登录功能，并允许先用 Playwright 调研后复刻。
+- 方案结论采用 `NextAuth Credentials + Prisma(AuthUser)`：
+  - 相比自建 JWT，复用成熟会话与 CSRF 机制，安全边界更清晰；
+  - 相比外部托管认证，保持数据与认证逻辑在仓库内，便于后续按业务扩展。
+- 已落地认证闭环：
+  - 页面：`/login`、`/register`；
+  - 接口：`/api/auth/register`、`/api/auth/[...nextauth]`；
+  - 数据：`packages/db` 新增 `AuthUser` 模型与 Prisma 迁移；
+  - UI：`guest-menu` 已按会话态显示邮箱/Guest，并支持退出登录。
+- 本地联调中发现并修复了 host 漂移问题：
+  - `signIn/signOut` 返回 URL 会在 `localhost` 与 `127.0.0.1` 间漂移，导致“注册成功但看起来仍是 Guest”；
+  - 已改为安全相对路径跳转，确保当前 host 下会话连续性。
+- 认证稳定性增强：
+  - `auth-options` 统一读取 `AUTH_SECRET`（兼容 `NEXTAUTH_SECRET`），开发环境提供稳定默认 secret，生产环境缺失 secret 时显式报错；
+  - `env.example` 新增 `NEXTAUTH_URL=http://127.0.0.1:3000` 建议值。
+- 通过 Playwright 回归确认：注册自动登录、退出回 Guest、登录成功与错误密码提示均符合预期。
+- 你随后反馈 `pnpm dev:web` 出现 hydration mismatch 提示；已对 `GuestMenu` 做渲染收敛：
+  - 移除基于主题切换头像 `src` 的分支首帧渲染，改为固定 `src + dark:invert`；
+  - 目标是确保 SSR 与客户端首帧属性一致，降低因主题解析时序导致的属性不匹配风险。
+- 已在浅色/深色媒体模式下用 Playwright 回归首页与 `/chat`，未再看到 hydration warning。
+- 你确认“切回 PostgreSQL”；已完成认证数据层切换：
+  - Prisma datasource 从 `sqlite` 改为 `postgresql`；
+  - `env.example` 的 `DATABASE_URL` 已改为 compose 对应本地连接串；
+  - 依据 Prisma provider 切换要求，已清理旧 SQLite 迁移并重建 PostgreSQL 迁移历史（`init_auth_postgres`）。
+- 认证模块当前数据库基线：
+  - 本地开发默认走 PostgreSQL（`compose.yaml` 的 `db` 服务）；
+  - 认证表 `AuthUser` 已在 PostgreSQL 建表并通过迁移管理。
+- 你要求“方便启动数据库并查看数据”；已在仓库根新增统一 `db:*` 脚本：
+  - `db:up/down/restart/status/logs/psql/studio/users`；
+  - 统一通过 `pnpm db:...` 调用，减少命令记忆成本。
+- `README.md` 已新增数据库快捷命令章节，并实测 `db:status` 与 `db:users` 可正常执行。
+- 你继续要求支持“清库”；已补齐数据库维护脚本：
+  - 新增 `db:migrate`（`prisma migrate dev`）用于结构变更落库；
+  - 新增 `db:reset`（`prisma migrate reset --force --skip-seed`）用于清空并按迁移重建；
+  - `db:studio` 调整为“优先使用外部 `DATABASE_URL`，否则回退本地默认 PG URL”，兼容更多环境。
+- 你反馈“删除数据库中的当前登录用户后，刷新仍保持登录态”；已完成一致性修复：
+  - 服务端 `session callback` 增加用户存在性校验（用户不存在则清空 `session.user`）；
+  - 客户端检测到“authenticated 但 user 为空”时自动 `signOut + refresh`；
+  - 实测删除用户后刷新页面已自动恢复 `Guest`。

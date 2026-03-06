@@ -1,4 +1,7 @@
 {
   "extends": "@mianshitong/config/tsconfig/package.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
   "include": ["src/**/*.ts", "src/**/*.test.ts"]
 }

@@ -3,13 +3,12 @@
 import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
+import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
-const GUEST_AVATAR_DARK =
-  'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmNWY1ZjUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjAgMjF2LTJhNCA0IDAgMCAwLTQtNEg4YTQgNCAwIDAgMC00IDR2MiIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iNyIgcj0iNCIvPjwvc3ZnPg==';
-const GUEST_AVATAR_LIGHT =
+const GUEST_AVATAR =
   'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxYTFhMWEiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjAgMjF2LTJhNCA0IDAgMCAwLTQtNEg4YTQgNCAwIDAgMC00IDR2MiIvPjxjaXJjbGUgY3g9IjEyIiBjeT0iNyIgcj0iNCIvPjwvc3ZnPg==';
 
 type MenuPlacement = 'up' | 'down';
@@ -21,49 +20,33 @@ interface GuestMenuProps {
   menuPlacement?: MenuPlacement;
 }
 
-function useMounted(): boolean {
-  return useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
-}
-
 export function GuestMenu({
   className,
   buttonClassName,
   menuClassName,
   menuPlacement = 'up',
 }: GuestMenuProps) {
-  const mounted = useMounted();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
-  const [authStatus, setAuthStatus] = useState<'loading' | 'guest'>('loading');
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const currentTheme = useMemo<'dark' | 'light'>(() => {
-    if (!mounted) {
-      return 'light';
-    }
-
-    const nextTheme = resolvedTheme ?? theme;
-    return nextTheme === 'dark' ? 'dark' : 'light';
-  }, [mounted, resolvedTheme, theme]);
-
+  const currentTheme = (resolvedTheme ?? theme) === 'dark' ? 'dark' : 'light';
   const toggleTarget = currentTheme === 'dark' ? 'light' : 'dark';
-  const avatarSrc = currentTheme === 'dark' ? GUEST_AVATAR_DARK : GUEST_AVATAR_LIGHT;
   const ChevronIcon = menuPlacement === 'up' ? ChevronUp : ChevronDown;
+  const userEmail = session?.user?.email ?? null;
+  const isAuthenticated = Boolean(userEmail);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setAuthStatus('guest');
-    }, 220);
+    if (status !== 'authenticated' || isAuthenticated) {
+      return;
+    }
 
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, []);
+    void signOut({ redirect: false }).then(() => {
+      router.refresh();
+    });
+  }, [status, isAuthenticated, router]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -91,7 +74,7 @@ export function GuestMenu({
       ? 'right-0 bottom-12 w-full'
       : 'right-0 top-[calc(100%+0.25rem)] min-w-52';
 
-  if (authStatus === 'loading') {
+  if (status === 'loading') {
     return (
       <button
         type="button"
@@ -120,14 +103,14 @@ export function GuestMenu({
         data-testid="user-nav-button"
       >
         <Image
-          src={avatarSrc}
+          src={GUEST_AVATAR}
           alt="User Avatar"
           width={24}
           height={24}
-          className="rounded-full"
+          className="rounded-full dark:invert"
           unoptimized
         />
-        <span className="truncate">Guest</span>
+        <span className="truncate">{isAuthenticated ? userEmail : 'Guest'}</span>
         <ChevronIcon className="ml-auto size-4" />
       </button>
 
@@ -158,12 +141,19 @@ export function GuestMenu({
             type="button"
             className="w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
             data-testid="user-nav-item-auth"
-            onClick={() => {
+            onClick={async () => {
               setOpen(false);
+              if (isAuthenticated) {
+                await signOut({ redirect: false });
+                router.push('/');
+                router.refresh();
+                return;
+              }
+
               router.push('/login');
             }}
           >
-            Login to your account
+            {isAuthenticated ? '退出登录' : 'Login to your account'}
           </button>
         </div>
       ) : null}
