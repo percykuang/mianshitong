@@ -9,6 +9,69 @@
 
 ---
 
+## Iteration 2.48（2026-03-06）：聊天页对齐 zhitalk（删除交互 + 游客本地存储 + 登录态 DB 存储）
+
+### 目标
+
+- 对齐聊天页交互：
+  - 去掉右上角锁图标与私有切换能力；
+  - 侧栏支持“删除全部会话”和“单条会话删除”；
+  - 游客会话落浏览器 IndexDB，登录用户会话落 PostgreSQL。
+
+### 主要改动
+
+- 聊天页 UI 与交互调整：
+  - 移除 `ChatHeader` 的锁图标按钮及对应切换逻辑；
+  - 侧栏头部将设置图标替换为删除图标（`title/aria-label: 删除所有聊天记录`），点击执行全部删除；
+  - 侧栏会话项改为 hover 显示右侧删除图标，支持单条删除。
+- 游客本地会话存储（IndexDB）：
+  - 新增本地会话仓库：`chat-local-storage.ts`（`list/get/save/delete/clear`）；
+  - 新增本地会话构建与流式上下文工具：`chat-local-session.ts`；
+  - 新增游客发送/编辑流式 hooks：`use-local-send-message.ts`、`use-local-edit-message.ts`；
+  - 游客模式下刷新页面后，会话可从本地恢复。
+- 登录用户数据库会话存储（PostgreSQL + Prisma）：
+  - Prisma 新增 `ChatSessionRecord` 模型，并关联 `AuthUser`；
+  - 新增迁移：`20260306035454_add_chat_session_record`；
+  - 聊天 API 路由改为鉴权后读写 DB（含列表、详情、单删、全删、流式发送、流式编辑）。
+- 新增游客无状态流式接口：
+  - `POST /api/chat/stream`，接收游客本地上下文 `messages`，仅做模型流式返回，不落库。
+- 水合稳定性修复：
+  - 为聊天页模型选择器增加 SSR 安全渲染策略，清除登录态下 Radix Select 的 hydration warning。
+
+### 迁移/破坏性变更
+
+- `GET/POST/DELETE /api/chat/sessions` 及相关子路由现在要求登录态（未登录返回 `401`）。
+- 游客模式不再依赖服务端会话列表接口，改为浏览器 IndexDB 本地持久化。
+
+### 下一步
+
+- 如需更完整对齐 zhitalk，可继续补“删除确认弹窗”和“游客登录后本地会话一键导入账号”。
+
+## Iteration 2.47（2026-03-06）：修复聊天页误显示 system 欢迎语
+
+### 目标
+
+- 修复 `/chat` 点击快捷提问后，消息列表额外显示“欢迎语”导致的对话内容错位问题。
+
+### 主要改动
+
+- 前端消息渲染层增加可见消息过滤：
+  - `apps/web/src/app/chat/components/chat-message-list.tsx` 新增 `visibleMessages`；
+  - 对 `role === 'system'` 或 `kind === 'system'` 的消息不再渲染到对话区。
+- 加载态判断同步对齐：
+  - `isLoading` 的末条消息判断改为基于 `visibleMessages`，避免隐藏消息干扰 loading 气泡定位。
+- 回归验证：
+  - `pnpm -C apps/web lint`、`pnpm -C apps/web typecheck` 通过；
+  - Playwright 实测点击“可以帮我优化简历吗？”后，仅显示用户消息与 AI 回复，不再出现 system 欢迎语。
+
+### 迁移/破坏性变更
+
+- 无接口变化；仅调整前端展示层消息过滤逻辑。
+
+### 下一步
+
+- 若你希望侧边栏会话摘要也隐藏 system 内容，可进一步在 summary 计算处过滤首条 system 消息。
+
 ## Iteration 2.46（2026-03-06）：修复 `schema.prisma` 的 Prisma 7 配置报错
 
 ### 目标

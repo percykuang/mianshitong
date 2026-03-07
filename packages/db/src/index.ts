@@ -1,2 +1,3 @@
 export { prisma } from './client';
-export type { AuthUser, Prisma } from '@prisma/client';
+export { Prisma } from '@prisma/client';
+export type { AuthUser, ChatSessionRecord } from '@prisma/client';

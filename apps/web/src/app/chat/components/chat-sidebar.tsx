@@ -1,5 +1,5 @@
 import type { SessionSummary } from '@mianshitong/shared';
-import { ChevronLeft, Plus, Settings } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { GuestMenu } from '@/components/guest-menu';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ interface ChatSidebarProps {
   activeSessionId: string | null;
   sidebarOpen: boolean;
   onSelectSession: (sessionId: string) => Promise<void>;
+  onDeleteSession: (sessionId: string) => Promise<void>;
+  onDeleteAllSessions: () => Promise<void>;
   onNewChat: () => Promise<void>;
   onCloseSidebar: () => void;
 }
@@ -29,6 +31,8 @@ export function ChatSidebar({
   activeSessionId,
   sidebarOpen,
   onSelectSession,
+  onDeleteSession,
+  onDeleteAllSessions,
   onNewChat,
   onCloseSidebar,
 }: ChatSidebarProps) {
@@ -57,8 +61,14 @@ export function ChatSidebar({
               </span>
             </Link>
             <div className="flex flex-row gap-1">
-              <Button variant="ghost" className="h-8 p-1 md:h-fit md:p-2">
-                <Settings className="size-4" />
+              <Button
+                variant="ghost"
+                className="h-8 p-1 md:h-fit md:p-2"
+                title="删除所有聊天记录"
+                aria-label="删除所有聊天记录"
+                onClick={() => void onDeleteAllSessions()}
+              >
+                <Trash2 className="size-4" />
               </Button>
               <Button
                 variant="ghost"
@@ -88,19 +98,35 @@ export function ChatSidebar({
                 ) : null}
 
                 {sessions.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => void onSelectSession(item.id)}
                     className={cn(
-                      'flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-sidebar-accent',
+                      'group/item flex h-10 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-sidebar-accent',
                       item.id === activeSessionId
                         ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
                         : 'text-sidebar-foreground',
                     )}
                   >
-                    <span className="line-clamp-1 flex-1">{item.title}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => void onSelectSession(item.id)}
+                      className="line-clamp-1 flex flex-1 cursor-pointer items-center text-left"
+                    >
+                      {item.title}
+                    </button>
+                    <button
+                      type="button"
+                      title="删除当前会话"
+                      aria-label="删除当前会话"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onDeleteSession(item.id);
+                      }}
+                      className="flex size-6 cursor-pointer items-center justify-center rounded-md text-sidebar-foreground/60 opacity-0 transition-opacity group-hover/item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

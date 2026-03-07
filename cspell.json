@@ -33,6 +33,7 @@
     "Segoe",
     "cuid",
     "pkey",
+    "fkey",
     "psql"
   ]
 }

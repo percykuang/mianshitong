@@ -244,3 +244,16 @@
   - 新增 `packages/db/prisma.config.ts` 承载 `datasource.url`；
   - `schema.prisma` 中移除 `datasource.url`；
   - Prisma Client 改为 `@prisma/adapter-pg` 注入连接串，兼容 Prisma 7 的客户端配置方式。
+- 你反馈聊天页发送快捷问题后会多出一条欢迎语；已按“保留 system 上下文、前端不展示”的策略修复：
+  - `ChatMessageList` 仅渲染非 `system` 消息（过滤 `role/kind === system`）；
+  - loading 末条判断改为基于可见消息集合，避免隐藏消息影响渲染；
+  - Playwright 回归“点击 `可以帮我优化简历吗？`”已确认对话区不再出现该欢迎语。
+- 你提出聊天页对齐需求（移除锁图标、侧栏删除全部/单条删除、游客 IndexDB、登录用户 DB）；已完成落地：
+  - 顶部锁图标与私有切换逻辑已移除；
+  - 侧栏头部改为删除全部入口，会话行支持 hover 显示删除图标并删除当前会话；
+  - 游客会话改为浏览器 IndexDB 本地持久化（刷新可恢复）；
+  - 登录用户会话改为 PostgreSQL 持久化（Prisma 新增 `ChatSessionRecord` + 迁移）。
+- 聊天数据访问层已按身份拆分：
+  - 登录态：`/api/chat/sessions*` 路由统一鉴权并读写数据库；
+  - 游客态：前端读写本地仓库 + 调用无状态流式接口 `POST /api/chat/stream`。
+- 登录态回归时发现并修复了聊天页模型选择器的 hydration warning（Radix Select id mismatch）；当前 Playwright 控制台未再出现该报错。

@@ -1,17 +1,21 @@
-import type { ChatSession, ModelId } from '@mianshitong/shared';
+import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
 import { useCallback } from 'react';
-import { fetchSessionById } from '../lib/chat-api';
 import { closeSidebarOnMobile, copyToClipboard } from './chat-controller-helpers';
+import { useChatDeleteActions } from './use-chat-delete-actions';
 
 interface UseChatControllerActionsInput {
   createSession: () => Promise<ChatSession>;
+  fetchSessionById: (sessionId: string) => Promise<ChatSession>;
+  refreshSessions: () => Promise<SessionSummary[]>;
+  deleteSessionById: (sessionId: string) => Promise<void>;
+  deleteAllSessions: () => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   editUserMessage: (messageId: string, content: string) => Promise<boolean>;
+  activeSessionId: string | null;
   editingMessageId: string | null;
   editingValue: string;
   setInputValue: (value: string) => void;
   setSelectedModelId: (value: ModelId) => void;
-  setPrivateMode: (value: boolean | ((previous: boolean) => boolean)) => void;
   setNotice: (value: string | null) => void;
   setToast: (value: string | null) => void;
   setSidebarOpen: (value: boolean | ((previous: boolean) => boolean)) => void;
@@ -24,13 +28,17 @@ interface UseChatControllerActionsInput {
 export function useChatControllerActions(input: UseChatControllerActionsInput) {
   const {
     createSession,
+    fetchSessionById,
+    refreshSessions,
+    deleteSessionById,
+    deleteAllSessions,
     sendMessage,
     editUserMessage,
+    activeSessionId,
     editingMessageId,
     editingValue,
     setInputValue,
     setSelectedModelId,
-    setPrivateMode,
     setNotice,
     setToast,
     setSidebarOpen,
@@ -40,6 +48,21 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     setEditingValue,
   } = input;
 
+  const deleteActions = useChatDeleteActions({
+    activeSessionId,
+    fetchSessionById,
+    refreshSessions,
+    deleteSessionById,
+    deleteAllSessions,
+    setInputValue,
+    setSelectedModelId,
+    setNotice,
+    setActiveSession,
+    setActiveSessionId,
+    setEditingMessageId,
+    setEditingValue,
+  });
+
   const handlePickSession = useCallback(
     async (sessionId: string) => {
       try {
@@ -47,7 +70,6 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
         setActiveSession(session);
         setActiveSessionId(session.id);
         setSelectedModelId(session.modelId);
-        setPrivateMode(session.isPrivate);
         setEditingMessageId(null);
         setEditingValue('');
         closeSidebarOnMobile((open) => setSidebarOpen(open));
@@ -56,10 +78,10 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
       }
     },
     [
+      fetchSessionById,
       setActiveSession,
       setActiveSessionId,
       setSelectedModelId,
-      setPrivateMode,
       setEditingMessageId,
       setEditingValue,
       setSidebarOpen,
@@ -113,10 +135,6 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     [setNotice],
   );
 
-  const togglePrivateMode = useCallback(() => {
-    setPrivateMode((previous) => !previous);
-  }, [setPrivateMode]);
-
   const startEditingUserMessage = useCallback(
     (messageId: string, content: string) => {
       setEditingMessageId(messageId);
@@ -148,10 +166,11 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
   return {
     handlePickSession,
     handleNewChat,
+    handleDeleteSession: deleteActions.handleDeleteSession,
+    handleDeleteAllSessions: deleteActions.handleDeleteAllSessions,
     handleQuickPrompt,
     handleCopy,
     showNotice,
-    togglePrivateMode,
     startEditingUserMessage,
     cancelEditingUserMessage,
     submitEditingUserMessage,

@@ -42,18 +42,22 @@ export function ChatMessageList({
   onSubmitEditUserMessage,
   onNotice,
 }: ChatMessageListProps) {
+  const visibleMessages = messages.filter(
+    (message) => message.role !== 'system' && message.kind !== 'system',
+  );
+
   return (
     <div ref={scrollContainerRef} className="min-h-0 flex-1 touch-pan-y overflow-y-auto">
       <div className="mx-auto flex max-w-4xl min-w-0 flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
         {!hasConversation ? <EmptyConversationState /> : null}
 
-        {messages.map((message, index) => (
+        {visibleMessages.map((message, index) => (
           <ChatMessageItem
             key={message.id}
             message={message}
             isLoading={
               sending &&
-              index === messages.length - 1 &&
+              index === visibleMessages.length - 1 &&
               message.role === 'assistant' &&
               !message.content.trim()
             }

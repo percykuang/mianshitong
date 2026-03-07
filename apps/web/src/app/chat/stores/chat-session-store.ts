@@ -7,7 +7,6 @@ export interface ChatSessionStoreState {
   activeSessionId: string | null;
   activeSession: ChatSession | null;
   selectedModelId: ModelId;
-  privateMode: boolean;
   sending: boolean;
   loading: boolean;
 }
@@ -17,7 +16,6 @@ export interface ChatSessionStoreActions {
   setActiveSessionId: (value: string | null) => void;
   setActiveSession: (value: Updater<ChatSession | null>) => void;
   setSelectedModelId: (value: ModelId) => void;
-  setPrivateMode: (value: boolean | ((previous: boolean) => boolean)) => void;
   setSending: (value: boolean) => void;
   setLoading: (value: boolean) => void;
 }
@@ -29,7 +27,6 @@ const defaultState: ChatSessionStoreState = {
   activeSessionId: null,
   activeSession: null,
   selectedModelId: 'deepseek-chat',
-  privateMode: true,
   sending: false,
   loading: true,
 };
@@ -50,11 +47,6 @@ export const createChatSessionStore = (initialState: ChatSessionStoreState = def
     },
     setSelectedModelId: (value) => {
       set({ selectedModelId: value });
-    },
-    setPrivateMode: (value) => {
-      set((state) => ({
-        privateMode: typeof value === 'function' ? value(state.privateMode) : value,
-      }));
     },
     setSending: (value) => {
       set({ sending: value });

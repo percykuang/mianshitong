@@ -1,5 +1,6 @@
 import type { StreamChatProvider } from '@mianshitong/llm';
-import { appendChatExchange, getSession } from '@/lib/server/chat-store';
+import { getCurrentUserId } from '@/lib/server/auth-session';
+import { appendUserSessionExchange, getUserSession } from '@/lib/server/chat-session-repository';
 import {
   createStreamProvider,
   formatSseEvent,
@@ -14,6 +15,11 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ): Promise<Response> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
   const { sessionId } = await context.params;
   const body = await request.json().catch(() => ({}));
   const input = isRecord(body) ? body : {};
@@ -23,7 +29,7 @@ export async function POST(
     return Response.json({ message: 'content is required' }, { status: 400 });
   }
 
-  const session = getSession(sessionId);
+  const session = await getUserSession(userId, sessionId);
   if (!session) {
     return Response.json({ message: 'Session not found' }, { status: 404 });
   }
@@ -63,7 +69,7 @@ export async function POST(
             throw new Error('模型没有返回可用内容');
           }
 
-          const updatedSession = appendChatExchange(sessionId, {
+          const updatedSession = await appendUserSessionExchange(userId, sessionId, {
             userContent: content,
             assistantContent: normalizedAssistantText,
           });
@@ -75,7 +81,7 @@ export async function POST(
         } catch (error) {
           hasError = true;
           if (assistantText.trim()) {
-            appendChatExchange(sessionId, {
+            await appendUserSessionExchange(userId, sessionId, {
               userContent: content,
               assistantContent: assistantText.trim(),
             });

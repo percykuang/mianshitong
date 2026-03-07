@@ -1,9 +1,10 @@
 import type { StreamChatProvider } from '@mianshitong/llm';
+import { getCurrentUserId } from '@/lib/server/auth-session';
 import {
-  appendChatExchange,
-  getSession,
-  truncateSessionFromUserMessage,
-} from '@/lib/server/chat-store';
+  appendUserSessionExchange,
+  getUserSession,
+  truncateUserSessionForEdit,
+} from '@/lib/server/chat-session-repository';
 import {
   createStreamProvider,
   formatSseEvent,
@@ -18,6 +19,11 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ sessionId: string; messageId: string }> },
 ): Promise<Response> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
   const { sessionId, messageId } = await context.params;
   const body = await request.json().catch(() => ({}));
   const input = isRecord(body) ? body : {};
@@ -27,12 +33,12 @@ export async function POST(
     return Response.json({ message: 'content is required' }, { status: 400 });
   }
 
-  const currentSession = getSession(sessionId);
+  const currentSession = await getUserSession(userId, sessionId);
   if (!currentSession) {
     return Response.json({ message: 'Session not found' }, { status: 404 });
   }
 
-  const truncatedSession = truncateSessionFromUserMessage(sessionId, messageId);
+  const truncatedSession = await truncateUserSessionForEdit(userId, sessionId, messageId);
   if (!truncatedSession) {
     return Response.json({ message: 'User message not found' }, { status: 404 });
   }
@@ -72,7 +78,7 @@ export async function POST(
             throw new Error('模型没有返回可用内容');
           }
 
-          const updatedSession = appendChatExchange(sessionId, {
+          const updatedSession = await appendUserSessionExchange(userId, sessionId, {
             userContent: content,
             assistantContent: normalizedAssistantText,
           });
@@ -84,7 +90,7 @@ export async function POST(
         } catch (error) {
           hasError = true;
           if (assistantText.trim()) {
-            appendChatExchange(sessionId, {
+            await appendUserSessionExchange(userId, sessionId, {
               userContent: content,
               assistantContent: assistantText.trim(),
             });

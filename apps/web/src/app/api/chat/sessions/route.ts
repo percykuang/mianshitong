@@ -4,7 +4,12 @@ import {
   type ChatSessionsResponse,
   type CreateSessionInput,
 } from '@mianshitong/shared';
-import { createSession, listSessionSummaries } from '@/lib/server/chat-store';
+import { getCurrentUserId } from '@/lib/server/auth-session';
+import {
+  createUserSession,
+  deleteAllUserSessions,
+  listUserSessionSummaries,
+} from '@/lib/server/chat-session-repository';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -15,17 +20,27 @@ function isModelId(value: unknown): value is (typeof MODEL_OPTIONS)[number]['id'
 }
 
 export async function GET(): Promise<Response> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
   const payload: ChatSessionsResponse = {
-    sessions: listSessionSummaries(),
+    sessions: await listUserSessionSummaries(userId),
   };
 
   return Response.json(payload);
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await request.json().catch(() => ({}));
   const input = isRecord(body) ? body : {};
-  const session = createSession({
+  const session = await createUserSession(userId, {
     title: typeof input.title === 'string' ? input.title : undefined,
     modelId: isModelId(input.modelId) ? input.modelId : undefined,
     isPrivate: typeof input.isPrivate === 'boolean' ? input.isPrivate : undefined,
@@ -34,4 +49,14 @@ export async function POST(request: Request): Promise<Response> {
 
   const payload: ChatSessionResponse = { session };
   return Response.json(payload, { status: 201 });
+}
+
+export async function DELETE(): Promise<Response> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  const deletedCount = await deleteAllUserSessions(userId);
+  return Response.json({ ok: true, deletedCount });
 }

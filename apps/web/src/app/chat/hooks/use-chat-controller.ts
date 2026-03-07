@@ -1,57 +1,64 @@
 import { type ChatSession, QUICK_PROMPTS, type SessionSummary } from '@mianshitong/shared';
 import { useCallback, useMemo, useState } from 'react';
-import { createSessionRequest, fetchSessionById, fetchSessions } from '../lib/chat-api';
 import type { ChatController } from './chat-controller.types';
 import { useChatControllerActions } from './use-chat-controller-actions';
 import { useChatControllerEffects } from './use-chat-controller-effects';
 import { useChatControllerStore } from './use-chat-controller-store';
+import { useChatStorage } from './use-chat-storage';
 import { useEditMessage } from './use-edit-message';
+import { useLocalEditMessage } from './use-local-edit-message';
+import { useLocalSendMessage } from './use-local-send-message';
 import { useSendMessage } from './use-send-message';
-
 export function useChatController(): ChatController {
   const {
     sessions,
     activeSessionId,
     activeSession,
     selectedModelId,
-    privateMode,
     sending,
     loading,
     setSessions,
     setActiveSessionId,
     setActiveSession,
     setSelectedModelId,
-    setPrivateMode,
     setSending,
     setLoading,
   } = useChatControllerStore();
-
+  const {
+    ready,
+    isAuthenticated,
+    fetchSessionList,
+    fetchSessionDetail,
+    createSession: createPersistedSession,
+    deleteSessionById,
+    deleteAllSessions,
+  } = useChatStorage();
   const [inputValue, setInputValue] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
-
   const quickPrompts = useMemo(() => [...QUICK_PROMPTS], []);
 
   const refreshSessions = useCallback(async (): Promise<SessionSummary[]> => {
-    const next = await fetchSessions();
+    const next = await fetchSessionList();
     setSessions(next);
     return next;
-  }, [setSessions]);
-
+  }, [fetchSessionList, setSessions]);
   const createSession = useCallback(async (): Promise<ChatSession> => {
-    const session = await createSessionRequest({
-      modelId: selectedModelId,
-      isPrivate: privateMode,
-    });
+    const session = await createPersistedSession(selectedModelId);
     setActiveSession(session);
     setActiveSessionId(session.id);
     await refreshSessions();
     return session;
-  }, [selectedModelId, privateMode, setActiveSession, setActiveSessionId, refreshSessions]);
-
+  }, [
+    createPersistedSession,
+    selectedModelId,
+    setActiveSession,
+    setActiveSessionId,
+    refreshSessions,
+  ]);
   const ensureSession = useCallback(async (): Promise<ChatSession> => {
     if (activeSession) {
       return activeSession;
@@ -59,8 +66,7 @@ export function useChatController(): ChatController {
 
     return createSession();
   }, [activeSession, createSession]);
-
-  const sendMessage = useSendMessage({
+  const remoteSendMessage = useSendMessage({
     sending,
     ensureSession,
     refreshSessions,
@@ -70,8 +76,28 @@ export function useChatController(): ChatController {
     setActiveSession,
     setActiveSessionId,
   });
+  const localSendMessage = useLocalSendMessage({
+    sending,
+    ensureSession,
+    refreshSessions,
+    setSending,
+    setNotice,
+    setInputValue,
+    setActiveSession,
+    setActiveSessionId,
+  });
+  const sendMessage = useCallback(
+    async (content: string) => {
+      if (isAuthenticated) {
+        await remoteSendMessage(content);
+        return;
+      }
 
-  const editUserMessage = useEditMessage({
+      await localSendMessage(content);
+    },
+    [isAuthenticated, remoteSendMessage, localSendMessage],
+  );
+  const remoteEditMessage = useEditMessage({
     activeSession,
     sending,
     refreshSessions,
@@ -80,8 +106,27 @@ export function useChatController(): ChatController {
     setActiveSession,
     setActiveSessionId,
   });
+  const localEditMessage = useLocalEditMessage({
+    activeSession,
+    sending,
+    refreshSessions,
+    setSending,
+    setNotice,
+    setActiveSession,
+    setActiveSessionId,
+  });
+  const editUserMessage = useCallback(
+    async (messageId: string, content: string): Promise<boolean> => {
+      if (isAuthenticated) {
+        return remoteEditMessage(messageId, content);
+      }
 
+      return localEditMessage(messageId, content);
+    },
+    [isAuthenticated, remoteEditMessage, localEditMessage],
+  );
   useChatControllerEffects({
+    ready,
     toast,
     refreshSessions,
     setToast,
@@ -89,21 +134,23 @@ export function useChatController(): ChatController {
     setActiveSession,
     setActiveSessionId,
     setSelectedModelId,
-    setPrivateMode,
     setNotice,
     setLoading,
-    fetchSessionById,
+    fetchSessionById: fetchSessionDetail,
   });
-
   const actions = useChatControllerActions({
     createSession,
+    fetchSessionById: fetchSessionDetail,
+    refreshSessions,
+    deleteSessionById,
+    deleteAllSessions,
     sendMessage,
     editUserMessage,
+    activeSessionId,
     editingMessageId,
     editingValue,
     setInputValue,
     setSelectedModelId,
-    setPrivateMode,
     setNotice,
     setToast,
     setSidebarOpen,
@@ -112,14 +159,12 @@ export function useChatController(): ChatController {
     setEditingMessageId,
     setEditingValue,
   });
-
   return {
     sessions,
     activeSessionId,
     activeSession,
     inputValue,
     selectedModelId,
-    privateMode,
     sending,
     loading,
     notice,
@@ -133,6 +178,8 @@ export function useChatController(): ChatController {
     setSidebarOpen,
     handlePickSession: actions.handlePickSession,
     handleNewChat: actions.handleNewChat,
+    handleDeleteSession: actions.handleDeleteSession,
+    handleDeleteAllSessions: actions.handleDeleteAllSessions,
     handleQuickPrompt: actions.handleQuickPrompt,
     sendMessage,
     editUserMessage,
@@ -142,6 +189,5 @@ export function useChatController(): ChatController {
     setEditingValue,
     handleCopy: actions.handleCopy,
     showNotice: actions.showNotice,
-    togglePrivateMode: actions.togglePrivateMode,
   };
 }

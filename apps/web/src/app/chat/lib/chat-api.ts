@@ -5,6 +5,7 @@ import type {
   ModelId,
   SessionSummary,
 } from '@mianshitong/shared';
+import type { ChatTurn } from '@mianshitong/llm';
 
 export type SseEventHandler = (eventName: string, payload: string) => void;
 
@@ -31,7 +32,7 @@ export async function fetchSessionById(sessionId: string): Promise<ChatSession> 
 
 export async function createSessionRequest(input: {
   modelId: ModelId;
-  isPrivate: boolean;
+  isPrivate?: boolean;
 }): Promise<ChatSession> {
   const response = await fetch('/api/chat/sessions', {
     method: 'POST',
@@ -43,11 +44,51 @@ export async function createSessionRequest(input: {
   return data.session;
 }
 
+export async function deleteSessionRequest(sessionId: string): Promise<void> {
+  const response = await fetch(`/api/chat/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || '删除会话失败');
+  }
+}
+
+export async function deleteAllSessionsRequest(): Promise<void> {
+  const response = await fetch('/api/chat/sessions', {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || '删除所有会话失败');
+  }
+}
+
 export async function openStreamRequest(sessionId: string, content: string): Promise<Response> {
   const response = await fetch(`/api/chat/sessions/${sessionId}/messages/stream`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ content }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || '发送失败，请稍后重试');
+  }
+
+  return response;
+}
+
+export async function openGuestStreamRequest(input: {
+  modelId: ModelId;
+  messages: ChatTurn[];
+}): Promise<Response> {
+  const response = await fetch('/api/chat/stream', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
   });
 
   if (!response.ok) {

@@ -6,7 +6,6 @@ export interface ChatController {
   activeSession: ChatSession | null;
   inputValue: string;
   selectedModelId: ModelId;
-  privateMode: boolean;
   sending: boolean;
   loading: boolean;
   notice: string | null;
@@ -18,9 +17,10 @@ export interface ChatController {
   setInputValue: (value: string) => void;
   setSelectedModelId: (value: ModelId) => void;
   setSidebarOpen: (value: boolean | ((prev: boolean) => boolean)) => void;
-  togglePrivateMode: () => void;
   handlePickSession: (sessionId: string) => Promise<void>;
   handleNewChat: () => Promise<void>;
+  handleDeleteSession: (sessionId: string) => Promise<void>;
+  handleDeleteAllSessions: () => Promise<void>;
   handleQuickPrompt: (prompt: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   editUserMessage: (messageId: string, content: string) => Promise<boolean>;

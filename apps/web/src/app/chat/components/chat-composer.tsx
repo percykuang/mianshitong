@@ -1,6 +1,12 @@
 import { MODEL_OPTIONS, type ModelId } from '@mianshitong/shared';
 import { Send } from 'lucide-react';
-import { type FormEvent, type KeyboardEvent, type RefObject, useState } from 'react';
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  type RefObject,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -39,6 +45,11 @@ export function ChatComposer({
   onModelChange,
 }: ChatComposerProps) {
   const [isComposing, setIsComposing] = useState(false);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -93,21 +104,25 @@ export function ChatComposer({
           </div>
 
           <div className="flex items-center justify-between border-t-0 p-0 shadow-none">
-            <Select
-              value={selectedModelId}
-              onValueChange={(value) => onModelChange(value as ModelId)}
-            >
-              <SelectTrigger className="h-8 border-0 px-2 shadow-none hover:bg-accent">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODEL_OPTIONS.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {mounted ? (
+              <Select
+                value={selectedModelId}
+                onValueChange={(value) => onModelChange(value as ModelId)}
+              >
+                <SelectTrigger className="h-8 border-0 px-2 shadow-none hover:bg-accent">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MODEL_OPTIONS.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="h-8 w-32" />
+            )}
 
             <Button
               type="submit"

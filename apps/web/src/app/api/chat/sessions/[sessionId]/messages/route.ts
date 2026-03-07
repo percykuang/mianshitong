@@ -1,5 +1,7 @@
+import { processSessionMessage } from '@mianshitong/interview-engine';
 import type { PostMessageResponse } from '@mianshitong/shared';
-import { sendMessage } from '@/lib/server/chat-store';
+import { getCurrentUserId } from '@/lib/server/auth-session';
+import { getUserSession, saveUserSession } from '@/lib/server/chat-session-repository';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -9,6 +11,11 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ): Promise<Response> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
   const { sessionId } = await context.params;
   const body = await request.json().catch(() => ({}));
   const input = isRecord(body) ? body : {};
@@ -18,12 +25,24 @@ export async function POST(
     return Response.json({ message: 'content is required' }, { status: 400 });
   }
 
-  const result = sendMessage(sessionId, content);
-
-  if (!result) {
+  const session = await getUserSession(userId, sessionId);
+  if (!session) {
     return Response.json({ message: 'Session not found' }, { status: 404 });
   }
 
-  const payload: PostMessageResponse = result;
+  const result = processSessionMessage({
+    session,
+    content,
+  });
+
+  const savedSession = await saveUserSession(userId, result.session);
+  if (!savedSession) {
+    return Response.json({ message: 'Session not found' }, { status: 404 });
+  }
+
+  const payload: PostMessageResponse = {
+    session: savedSession,
+    assistantMessages: result.assistantMessages,
+  };
   return Response.json(payload);
 }

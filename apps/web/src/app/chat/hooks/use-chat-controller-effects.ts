@@ -2,6 +2,7 @@ import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
 import { useEffect } from 'react';
 
 interface UseChatControllerEffectsInput {
+  ready: boolean;
   toast: string | null;
   refreshSessions: () => Promise<SessionSummary[]>;
   setToast: (value: string | null) => void;
@@ -9,7 +10,6 @@ interface UseChatControllerEffectsInput {
   setActiveSession: (value: ChatSession | null) => void;
   setActiveSessionId: (value: string | null) => void;
   setSelectedModelId: (value: ModelId) => void;
-  setPrivateMode: (value: boolean) => void;
   setNotice: (value: string | null) => void;
   setLoading: (value: boolean) => void;
   fetchSessionById: (sessionId: string) => Promise<ChatSession>;
@@ -17,6 +17,7 @@ interface UseChatControllerEffectsInput {
 
 export function useChatControllerEffects(input: UseChatControllerEffectsInput): void {
   const {
+    ready,
     toast,
     refreshSessions,
     setToast,
@@ -24,7 +25,6 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
     setActiveSession,
     setActiveSessionId,
     setSelectedModelId,
-    setPrivateMode,
     setNotice,
     setLoading,
     fetchSessionById,
@@ -51,10 +51,17 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
   }, [setSidebarOpen]);
 
   useEffect(() => {
+    if (!ready) {
+      setLoading(true);
+      return;
+    }
+
     const bootstrap = async () => {
       try {
         const latest = await refreshSessions();
         if (latest.length === 0) {
+          setActiveSession(null);
+          setActiveSessionId(null);
           return;
         }
 
@@ -62,7 +69,6 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
         setActiveSession(session);
         setActiveSessionId(session.id);
         setSelectedModelId(session.modelId);
-        setPrivateMode(session.isPrivate);
       } catch (error) {
         setNotice(error instanceof Error ? error.message : '初始化失败');
       } finally {
@@ -72,12 +78,12 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
 
     void bootstrap();
   }, [
+    ready,
     refreshSessions,
     fetchSessionById,
     setActiveSession,
     setActiveSessionId,
     setSelectedModelId,
-    setPrivateMode,
     setNotice,
     setLoading,
   ]);

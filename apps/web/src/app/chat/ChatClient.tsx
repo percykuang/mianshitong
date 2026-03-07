@@ -52,6 +52,8 @@ export function ChatClient() {
         activeSessionId={controller.activeSessionId}
         sidebarOpen={controller.sidebarOpen}
         onSelectSession={controller.handlePickSession}
+        onDeleteSession={controller.handleDeleteSession}
+        onDeleteAllSessions={controller.handleDeleteAllSessions}
         onNewChat={controller.handleNewChat}
         onCloseSidebar={() => controller.setSidebarOpen(false)}
       />
@@ -65,9 +67,7 @@ export function ChatClient() {
         <div className="overscroll-behavior-contain flex h-dvh min-w-0 touch-pan-y flex-col bg-background">
           <ChatHeader
             sidebarOpen={controller.sidebarOpen}
-            privateMode={controller.privateMode}
             onToggleSidebar={() => controller.setSidebarOpen((value) => !value)}
-            onTogglePrivateMode={controller.togglePrivateMode}
           />
 
           <div className="flex min-h-0 flex-1 flex-col">
