@@ -1,47 +1,32 @@
+'use client';
+
 import type { ComponentPropsWithoutRef } from 'react';
-import Markdown from 'react-markdown';
+import Markdown, { type ExtraProps } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { unwrapMarkdownFenceWrapper } from '@/lib/chat-markdown-normalization';
 import { cn } from '@/lib/utils';
+import { ChatCodeBlock, renderInlineCode } from './chat-code-block';
 
-type CodeProps = ComponentPropsWithoutRef<'code'> & {
-  inline?: boolean;
-};
+type CodeComponentProps = ComponentPropsWithoutRef<'code'> & ExtraProps;
 
-function renderCodeBlock({ inline, className, children, ...rest }: CodeProps) {
-  const match = /language-(\w+)/.exec(className ?? '');
-  const code = String(children).replace(/\n$/, '');
+function isBlockCode({ children, className, node }: CodeComponentProps) {
+  const content = String(children);
+  const hasLanguageClass = /language-[\w-]+/.test(className ?? '');
+  const hasMultilineContent = content.includes('\n');
+  const spansMultipleSourceLines =
+    typeof node?.position?.start.line === 'number' &&
+    typeof node.position.end.line === 'number' &&
+    node.position.start.line !== node.position.end.line;
 
-  if (inline || !match) {
-    return (
-      <code className={cn('rounded bg-muted px-1 py-0.5', className)} {...rest}>
-        {children}
-      </code>
-    );
+  return hasLanguageClass || hasMultilineContent || spansMultipleSourceLines;
+}
+
+function renderCode(props: CodeComponentProps) {
+  if (!isBlockCode(props)) {
+    return renderInlineCode(props);
   }
 
-  return (
-    <SyntaxHighlighter
-      PreTag="div"
-      language={match[1]}
-      style={oneDark}
-      customStyle={{
-        margin: 0,
-        borderRadius: 12,
-        padding: '12px 14px',
-        fontSize: '0.8rem',
-      }}
-      codeTagProps={{
-        style: {
-          fontFamily:
-            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace',
-        },
-      }}
-    >
-      {code}
-    </SyntaxHighlighter>
-  );
+  return <ChatCodeBlock {...props} />;
 }
 
 interface ChatMarkdownProps {
@@ -50,6 +35,8 @@ interface ChatMarkdownProps {
 }
 
 export function ChatMarkdown({ content, className }: ChatMarkdownProps) {
+  const normalizedContent = unwrapMarkdownFenceWrapper(content);
+
   return (
     <div
       className={cn(
@@ -57,18 +44,18 @@ export function ChatMarkdown({ content, className }: ChatMarkdownProps) {
         '[&_p]:mb-2 [&_p:last-child]:mb-0',
         '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6',
         '[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6',
-        '[&_pre]:my-2',
+        '[&_pre]:my-0',
         className,
       )}
     >
       <Markdown
         remarkPlugins={[remarkGfm]}
         components={{
-          code: renderCodeBlock,
+          code: renderCode,
           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
         }}
       >
-        {content}
+        {normalizedContent}
       </Markdown>
     </div>
   );

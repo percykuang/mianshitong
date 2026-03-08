@@ -15,7 +15,6 @@ export const TOPIC_ORDER: InterviewTopic[] = [
   'network',
   'security',
   'node',
-  'frontend',
 ];
 
 export const QUESTION_BANK: InterviewQuestion[] = [

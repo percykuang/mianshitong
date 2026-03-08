@@ -1,5 +1,5 @@
 import { MODEL_OPTIONS, type ModelId } from '@mianshitong/shared';
-import { Send } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 interface ChatComposerProps {
   hasConversation: boolean;
+  suppressQuickPrompts: boolean;
   quickPrompts: string[];
   inputValue: string;
   selectedModelId: ModelId;
@@ -27,12 +28,14 @@ interface ChatComposerProps {
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   onInputChange: (value: string) => void;
   onSubmit: () => Promise<void>;
+  onStop: () => void;
   onQuickPrompt: (prompt: string) => Promise<void>;
   onModelChange: (value: ModelId) => void;
 }
 
 export function ChatComposer({
   hasConversation,
+  suppressQuickPrompts,
   quickPrompts,
   inputValue,
   selectedModelId,
@@ -41,6 +44,7 @@ export function ChatComposer({
   inputRef,
   onInputChange,
   onSubmit,
+  onStop,
   onQuickPrompt,
   onModelChange,
 }: ChatComposerProps) {
@@ -50,6 +54,7 @@ export function ChatComposer({
     () => true,
     () => false,
   );
+  const showQuickPrompts = !hasConversation && !suppressQuickPrompts;
 
   const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -68,15 +73,16 @@ export function ChatComposer({
   return (
     <div className="mx-auto w-full max-w-4xl bg-background px-2 pb-3 md:px-4 md:pb-4">
       <div className="relative flex w-full flex-col gap-4">
-        {!hasConversation ? (
+        {showQuickPrompts ? (
           <div className="grid w-full gap-2 sm:grid-cols-2" data-testid="suggested-actions">
             {quickPrompts.map((prompt) => (
               <Button
                 key={prompt}
                 type="button"
                 variant="outline"
-                className="flex h-auto w-full cursor-pointer justify-center rounded-full p-3 text-left leading-relaxed whitespace-normal"
+                className="flex h-auto w-full cursor-pointer justify-center rounded-full p-3 text-left leading-relaxed whitespace-normal disabled:cursor-not-allowed"
                 onClick={() => void onQuickPrompt(prompt)}
+                disabled={loading}
               >
                 {prompt}
               </Button>
@@ -108,6 +114,7 @@ export function ChatComposer({
               <Select
                 value={selectedModelId}
                 onValueChange={(value) => onModelChange(value as ModelId)}
+                disabled={loading}
               >
                 <SelectTrigger className="h-8 border-0 px-2 shadow-none hover:bg-accent">
                   <SelectValue />
@@ -125,12 +132,14 @@ export function ChatComposer({
             )}
 
             <Button
-              type="submit"
+              type={sending ? 'button' : 'submit'}
               className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
               data-testid="send-button"
-              disabled={sending || loading}
+              aria-label={sending ? '停止生成' : '发送消息'}
+              onClick={sending ? onStop : undefined}
+              disabled={loading}
             >
-              <Send className="size-4" />
+              {sending ? <Square className="size-3.5 fill-current" /> : <Send className="size-4" />}
             </Button>
           </div>
         </form>

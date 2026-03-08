@@ -3,8 +3,10 @@ import type { RefObject } from 'react';
 import { ChatMessageItem } from './chat-message-item';
 
 interface ChatMessageListProps {
+  sessionId: string | null;
   messages: ChatMessage[];
   hasConversation: boolean;
+  suppressEmptyState: boolean;
   sending: boolean;
   editingMessageId: string | null;
   editingValue: string;
@@ -29,8 +31,10 @@ function EmptyConversationState() {
 }
 
 export function ChatMessageList({
+  sessionId,
   messages,
   hasConversation,
+  suppressEmptyState,
   sending,
   editingMessageId,
   editingValue,
@@ -45,15 +49,16 @@ export function ChatMessageList({
   const visibleMessages = messages.filter(
     (message) => message.role !== 'system' && message.kind !== 'system',
   );
+  const messageKeyPrefix = sessionId ?? 'empty';
 
   return (
     <div ref={scrollContainerRef} className="min-h-0 flex-1 touch-pan-y overflow-y-auto">
       <div className="mx-auto flex max-w-4xl min-w-0 flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
-        {!hasConversation ? <EmptyConversationState /> : null}
+        {!hasConversation && !suppressEmptyState ? <EmptyConversationState /> : null}
 
         {visibleMessages.map((message, index) => (
           <ChatMessageItem
-            key={message.id}
+            key={`${messageKeyPrefix}:${index}`}
             message={message}
             isLoading={
               sending &&

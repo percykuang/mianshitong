@@ -1,6 +1,10 @@
 import type { ChatTurn, StreamChatProvider } from '@mianshitong/llm';
 import { MODEL_OPTIONS } from '@mianshitong/shared';
 import {
+  normalizeAssistantMarkdown,
+  prependChatReplyFormattingInstruction,
+} from '@/lib/server/chat-response-format';
+import {
   createStreamProvider,
   formatSseEvent,
   isRecord,
@@ -30,10 +34,12 @@ export async function POST(request: Request): Promise<Response> {
   const input = isRecord(body) ? body : {};
   const modelId = isModelId(input.modelId) ? input.modelId : 'deepseek-chat';
   const rawMessages = Array.isArray(input.messages) ? input.messages : [];
-  const messages = rawMessages.filter(isChatTurn).map((item) => ({
-    role: item.role,
-    content: item.content.trim(),
-  }));
+  const messages = prependChatReplyFormattingInstruction(
+    rawMessages.filter(isChatTurn).map((item) => ({
+      role: item.role,
+      content: item.content.trim(),
+    })),
+  );
 
   if (messages.length === 0 || messages.at(-1)?.role !== 'user') {
     return Response.json({ message: 'messages is invalid' }, { status: 400 });
@@ -67,7 +73,7 @@ export async function POST(request: Request): Promise<Response> {
             controller.enqueue(formatSseEvent('delta', { delta }));
           }
 
-          const normalizedAssistantText = assistantText.trim();
+          const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
           if (!normalizedAssistantText) {
             throw new Error('模型没有返回可用内容');
           }

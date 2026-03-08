@@ -5,6 +5,7 @@ import {
   type ChatTurn,
   type StreamChatProvider,
 } from '@mianshitong/llm';
+import { prependChatReplyFormattingInstruction } from '@/lib/server/chat-response-format';
 
 export const encoder = new TextEncoder();
 
@@ -25,11 +26,11 @@ export function toChatTurns(session: ChatSession, nextUserContent: string): Chat
     content: nextUserContent,
   });
 
-  return history;
+  return prependChatReplyFormattingInstruction(history);
 }
 
 function resolveOllamaModel(modelId: ModelId): string {
-  const chatModel = process.env.OLLAMA_MODEL ?? 'llama3.2:latest';
+  const chatModel = process.env.OLLAMA_MODEL ?? 'deepseek-r1:8b';
   const reasonerModel = process.env.OLLAMA_REASONER_MODEL ?? process.env.OLLAMA_MODEL ?? chatModel;
   return modelId === 'deepseek-reasoner' ? reasonerModel : chatModel;
 }

@@ -1,32 +1,40 @@
-import { useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import {
-  createChatSessionStore,
-  type ChatSessionStore,
-  type ChatSessionStoreApi,
-} from '../stores/chat-session-store';
+  chatActiveSessionStore,
+  type ChatActiveSessionStore,
+} from '../stores/chat-active-session-store';
+import { chatSessionListStore, type ChatSessionListStore } from '../stores/chat-session-list-store';
 
 export function useChatControllerStore() {
-  const [sessionStoreApi] = useState<ChatSessionStoreApi>(createChatSessionStore);
-
-  const sessionStore = useStore(
-    sessionStoreApi,
-    useShallow((state: ChatSessionStore) => ({
+  const sessionListStore = useStore(
+    chatSessionListStore,
+    useShallow((state: ChatSessionListStore) => ({
       sessions: state.sessions,
+      sessionsLoading: state.sessionsLoading,
+      setSessions: state.setSessions,
+      setSessionsLoading: state.setSessionsLoading,
+    })),
+  );
+
+  const activeSessionStore = useStore(
+    chatActiveSessionStore,
+    useShallow((state: ChatActiveSessionStore) => ({
       activeSessionId: state.activeSessionId,
       activeSession: state.activeSession,
       selectedModelId: state.selectedModelId,
       sending: state.sending,
-      loading: state.loading,
-      setSessions: state.setSessions,
+      activeSessionLoading: state.activeSessionLoading,
       setActiveSessionId: state.setActiveSessionId,
       setActiveSession: state.setActiveSession,
       setSelectedModelId: state.setSelectedModelId,
       setSending: state.setSending,
-      setLoading: state.setLoading,
+      setActiveSessionLoading: state.setActiveSessionLoading,
     })),
   );
 
-  return sessionStore;
+  return {
+    ...sessionListStore,
+    ...activeSessionStore,
+  };
 }

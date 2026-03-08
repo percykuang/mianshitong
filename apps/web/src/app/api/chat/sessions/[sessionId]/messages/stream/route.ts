@@ -1,6 +1,9 @@
+import { MODEL_OPTIONS, type ModelId } from '@mianshitong/shared';
 import type { StreamChatProvider } from '@mianshitong/llm';
 import { getCurrentUserId } from '@/lib/server/auth-session';
+import { normalizeAssistantMarkdown } from '@/lib/server/chat-response-format';
 import { appendUserSessionExchange, getUserSession } from '@/lib/server/chat-session-repository';
+import { createDraftSession } from '@/lib/server/chat-session-model';
 import {
   createStreamProvider,
   formatSseEvent,
@@ -10,6 +13,10 @@ import {
 } from './stream-utils';
 
 export const runtime = 'nodejs';
+
+function isModelId(value: unknown): value is ModelId {
+  return MODEL_OPTIONS.some((item) => item.id === value);
+}
 
 export async function POST(
   request: Request,
@@ -24,15 +31,15 @@ export async function POST(
   const body = await request.json().catch(() => ({}));
   const input = isRecord(body) ? body : {};
   const content = typeof input.content === 'string' ? input.content.trim() : '';
+  const requestedModelId = isModelId(input.modelId) ? input.modelId : undefined;
 
   if (!content) {
     return Response.json({ message: 'content is required' }, { status: 400 });
   }
 
-  const session = await getUserSession(userId, sessionId);
-  if (!session) {
-    return Response.json({ message: 'Session not found' }, { status: 404 });
-  }
+  const session =
+    (await getUserSession(userId, sessionId)) ??
+    createDraftSession({ modelId: requestedModelId }, sessionId);
 
   let provider: StreamChatProvider;
   let model: string;
@@ -64,7 +71,7 @@ export async function POST(
             controller.enqueue(formatSseEvent('delta', { delta }));
           }
 
-          const normalizedAssistantText = assistantText.trim();
+          const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
           if (!normalizedAssistantText) {
             throw new Error('模型没有返回可用内容');
           }
@@ -72,6 +79,7 @@ export async function POST(
           const updatedSession = await appendUserSessionExchange(userId, sessionId, {
             userContent: content,
             assistantContent: normalizedAssistantText,
+            modelId: session.modelId,
           });
           if (!updatedSession) {
             throw new Error('会话不存在或已失效');
@@ -80,10 +88,12 @@ export async function POST(
           controller.enqueue(formatSseEvent('done', { session: updatedSession }));
         } catch (error) {
           hasError = true;
-          if (assistantText.trim()) {
+          const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
+          if (normalizedAssistantText) {
             await appendUserSessionExchange(userId, sessionId, {
               userContent: content,
-              assistantContent: assistantText.trim(),
+              assistantContent: normalizedAssistantText,
+              modelId: session.modelId,
             });
           }
           controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));

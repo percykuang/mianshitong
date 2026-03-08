@@ -70,7 +70,6 @@ export function useEditMessage({
           createStreamEventHandler({
             optimisticAssistantId: optimisticAssistant.id,
             setActiveSession,
-            setActiveSessionId,
             setNotice,
             setSyncedSession: (nextSession) => {
               syncedSession = nextSession;
@@ -78,12 +77,9 @@ export function useEditMessage({
           }),
         );
 
-        if (!syncedSession) {
-          const latest = await fetchSessionById(session.id);
-          setActiveSession(latest);
-          setActiveSessionId(latest.id);
-        }
-
+        const latest = syncedSession ?? (await fetchSessionById(session.id));
+        setActiveSession(latest);
+        setActiveSessionId(latest.id);
         await refreshSessions();
         return true;
       } catch (error) {

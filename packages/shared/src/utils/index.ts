@@ -1,5 +1,5 @@
-import { DEFAULT_INTERVIEW_CONFIG } from './defaults';
-import type { DimensionScores, InterviewConfig } from './contracts';
+import { DEFAULT_INTERVIEW_CONFIG } from '../defaults';
+import type { DimensionScores, InterviewConfig } from '../types';
 
 export function clamp(value: number, min: number, max: number): number {
   if (value < min) {

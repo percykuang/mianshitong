@@ -63,7 +63,7 @@ export function ChatMessageItem({
             className={cn(
               'flex flex-col gap-2 overflow-hidden text-sm',
               message.role === 'user' && !isEditing
-                ? 'w-fit rounded-2xl bg-blue-600 px-3 py-2 text-right text-primary-foreground'
+                ? 'w-fit rounded-2xl bg-blue-600 px-3 py-2 text-right text-white dark:text-[#fff]'
                 : message.role === 'user'
                   ? 'w-full max-w-xl rounded-2xl border border-border bg-background p-2 text-left text-foreground'
                   : 'bg-transparent px-0 py-0 text-left text-foreground',
@@ -98,11 +98,12 @@ export function ChatMessageItem({
                   </Button>
                 </div>
               </div>
+            ) : message.role === 'user' ? (
+              <p className="break-words whitespace-pre-wrap text-white dark:text-[#fff]">
+                {message.content}
+              </p>
             ) : (
-              <ChatMarkdown
-                content={message.content}
-                className={message.role === 'user' ? 'text-primary-foreground' : 'text-foreground'}
-              />
+              <ChatMarkdown content={message.content} className="text-foreground" />
             )}
           </div>
 

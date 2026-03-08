@@ -11,11 +11,9 @@ export {
   type InterviewQuestion,
   type InterviewReport,
   type InterviewRuntimeState,
-  INTERVIEW_TOPICS,
   type InterviewTopic,
   type MessageKind,
   type MessageRole,
-  MODEL_OPTIONS,
   type ModelId,
   type PostMessageInput,
   type PostMessageResponse,
@@ -23,6 +21,7 @@ export {
   type QuestionAssessment,
   type SessionStatus,
   type SessionSummary,
-} from './contracts';
-export { APP_NAME, APP_SLUG, DEFAULT_INTERVIEW_CONFIG, QUICK_PROMPTS } from './defaults';
+} from './types';
+export { APP_NAME, APP_SLUG, INTERVIEW_TOPICS, MODEL_OPTIONS, QUICK_PROMPTS } from './constants';
+export { DEFAULT_INTERVIEW_CONFIG } from './defaults';
 export { clamp, createEmptyScores, normalizeInterviewConfig } from './utils';

@@ -1,45 +1,23 @@
-export const MODEL_OPTIONS = [
-  {
-    id: 'deepseek-chat',
-    label: 'DeepSeek Chat',
-    description: '通用对话模型，适合常规面试练习与简历优化。',
-  },
-  {
-    id: 'deepseek-reasoner',
-    label: 'DeepSeek Reasoner',
-    description: '更偏推理与结构化分析，适合深挖追问与复盘。',
-  },
-] as const;
-
-export type ModelId = (typeof MODEL_OPTIONS)[number]['id'];
-
-export const INTERVIEW_TOPICS = [
-  'frontend',
-  'javascript',
-  'react',
-  'vue',
-  'engineering',
-  'performance',
-  'network',
-  'security',
-  'node',
-] as const;
-
-export type InterviewTopic = (typeof INTERVIEW_TOPICS)[number];
+export type ModelId = 'deepseek-chat' | 'deepseek-reasoner';
 
 export type InterviewLevel = 'junior' | 'mid' | 'senior';
+export type InterviewTopic =
+  | 'javascript'
+  | 'react'
+  | 'vue'
+  | 'engineering'
+  | 'performance'
+  | 'network'
+  | 'security'
+  | 'node';
 export type FeedbackMode = 'per_question' | 'end_summary';
-export type SessionStatus = 'idle' | 'interviewing' | 'completed';
+export type InterviewReportLevel = 'needs-work' | 'solid' | 'strong';
 
-export type MessageRole = 'assistant' | 'user' | 'system';
-export type MessageKind = 'text' | 'question' | 'feedback' | 'report' | 'system';
-
-export interface DimensionScores {
-  correctness: number;
-  depth: number;
-  communication: number;
-  engineering: number;
-  tradeoffs: number;
+export interface InterviewConfig {
+  level: InterviewLevel;
+  topics: InterviewTopic[];
+  questionCount: number;
+  feedbackMode: FeedbackMode;
 }
 
 export interface InterviewQuestion {
@@ -52,34 +30,47 @@ export interface InterviewQuestion {
   followUps: string[];
 }
 
+export interface AssessmentScores {
+  correctness: number;
+  depth: number;
+  communication: number;
+  engineering: number;
+  tradeoffs: number;
+}
+
+export type DimensionScores = AssessmentScores;
+
 export interface QuestionAssessment {
   questionId: string;
   questionTitle: string;
   topic: InterviewTopic;
-  answer: string;
+  summary: string;
+  scores: AssessmentScores;
   matchedPoints: string[];
   missingPoints: string[];
-  scores: DimensionScores;
-  feedback: string;
 }
 
 export interface InterviewReport {
+  overallSummary: string;
   overallScore: number;
-  level: 'needs-work' | 'solid' | 'strong';
-  summary: string;
+  level: InterviewReportLevel;
+  dimensionSummary: AssessmentScores;
   strengths: string[];
   gaps: string[];
   nextSteps: string[];
-  dimensionSummary: DimensionScores;
   breakdown: QuestionAssessment[];
 }
 
-export interface InterviewConfig {
-  topics: InterviewTopic[];
-  level: InterviewLevel;
-  questionCount: number;
-  feedbackMode: FeedbackMode;
-}
+export type MessageRole = 'system' | 'user' | 'assistant';
+export type MessageKind =
+  | 'text'
+  | 'question'
+  | 'follow_up'
+  | 'evaluation'
+  | 'feedback'
+  | 'report'
+  | 'system';
+export type SessionStatus = 'idle' | 'interviewing' | 'completed';
 
 export interface InterviewRuntimeState {
   questionPlan: InterviewQuestion[];
@@ -109,6 +100,7 @@ export interface ChatSession {
   runtime: InterviewRuntimeState;
   createdAt: string;
   updatedAt: string;
+  pinnedAt: string | null;
 }
 
 export interface SessionSummary {
@@ -117,7 +109,9 @@ export interface SessionSummary {
   modelId: ModelId;
   isPrivate: boolean;
   status: SessionStatus;
+  createdAt: string;
   updatedAt: string;
+  pinnedAt: string | null;
   messageCount: number;
   lastMessagePreview: string;
 }

@@ -33,7 +33,7 @@ function toQuestionFeedback(assessment: QuestionAssessment): string {
     `- 命中要点：${assessment.matchedPoints.length > 0 ? assessment.matchedPoints.join('、') : '暂无'}`,
     `- 待补充：${assessment.missingPoints.length > 0 ? assessment.missingPoints.join('、') : '覆盖完整'}`,
     `- 评分：正确性 ${assessment.scores.correctness} / 深度 ${assessment.scores.depth} / 表达 ${assessment.scores.communication}`,
-    assessment.feedback,
+    assessment.summary,
   ].join('\n');
 }
 
@@ -103,7 +103,7 @@ export class MockLlmProvider implements LlmProvider {
   generateReportMessage(report: InterviewReport): string {
     return [
       `面试结束，总分 ${report.overallScore.toFixed(1)} / 5（${report.level}）。`,
-      report.summary,
+      report.overallSummary,
       `优势：${report.strengths.join('；') || '暂无明显优势'}`,
       `短板：${report.gaps.join('；') || '暂无明显短板'}`,
       `下一步建议：${report.nextSteps.join('；') || '保持高频实战练习'}`,

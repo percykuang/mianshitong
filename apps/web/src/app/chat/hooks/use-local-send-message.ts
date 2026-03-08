@@ -1,36 +1,52 @@
 import type { ChatSession } from '@mianshitong/shared';
 import { useCallback } from 'react';
-import { openGuestStreamRequest, readSseStream } from '../lib/chat-api';
-import {
-  appendUserAssistantMessages,
-  createMessage,
-  toStreamTurns,
-} from '../lib/chat-local-session';
+import { isAbortError, openGuestStreamRequest, readSseStream } from '../lib/chat-api';
+import { clearRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
+import { createMessage, toStreamTurns } from '../lib/chat-local-session';
 import { saveLocalSession } from '../lib/chat-local-storage';
 import { parseSsePayload } from '../lib/chat-helpers';
 
 interface LocalSendMessageDeps {
   sending: boolean;
-  ensureSession: () => Promise<ChatSession>;
+  readActiveSession: () => ChatSession | null;
+  createOptimisticSession: () => ChatSession;
   refreshSessions: () => Promise<unknown>;
   setSending: (value: boolean) => void;
   setNotice: (value: string | null) => void;
   setInputValue: (value: string) => void;
+  readInputValue: () => string;
+  registerAbortController: (controller: AbortController) => void;
+  clearAbortController: (controller: AbortController) => void;
   setActiveSession: (
     value: ChatSession | null | ((prev: ChatSession | null) => ChatSession | null),
   ) => void;
   setActiveSessionId: (value: string | null) => void;
+  replaceSession: (sessionId: string) => void;
+}
+
+function toSessionTitle(content: string): string {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '新的对话';
+  }
+
+  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
 }
 
 export function useLocalSendMessage({
   sending,
-  ensureSession,
+  readActiveSession,
+  createOptimisticSession,
   refreshSessions,
   setSending,
   setNotice,
   setInputValue,
+  readInputValue,
+  registerAbortController,
+  clearAbortController,
   setActiveSession,
   setActiveSessionId,
+  replaceSession,
 }: LocalSendMessageDeps) {
   return useCallback(
     async (content: string) => {
@@ -39,41 +55,104 @@ export function useLocalSendMessage({
         return;
       }
 
+      const abortController = new AbortController();
+      registerAbortController(abortController);
+      setInputValue('');
       setSending(true);
       setNotice(null);
 
+      let session = readActiveSession();
+      let now = new Date().toISOString();
+      let optimisticUser: ReturnType<typeof createMessage> | null = null;
+      let optimisticAssistant: ReturnType<typeof createMessage> | null = null;
+      let assistantContent = '';
+      let sessionIdToClear: string | null = null;
+
+      const buildStoredSession = (): ChatSession | null => {
+        if (!session || !optimisticUser) {
+          return null;
+        }
+
+        const next: ChatSession = {
+          ...session,
+          messages: [
+            ...session.messages,
+            optimisticUser,
+            ...(assistantContent.trim() && optimisticAssistant
+              ? [{ ...optimisticAssistant, content: assistantContent.trim() }]
+              : []),
+          ],
+          updatedAt: now,
+          status: 'idle',
+        };
+
+        const userCount = session.messages.filter((item) => item.role === 'user').length;
+        if (next.title === '新的对话' && userCount === 0) {
+          next.title = toSessionTitle(trimmed);
+        }
+
+        return next;
+      };
+
+      const removeOptimisticExchange = () => {
+        if (!optimisticUser && !optimisticAssistant) {
+          return;
+        }
+
+        setActiveSession((previous) => {
+          if (!previous) {
+            return previous;
+          }
+
+          return {
+            ...previous,
+            status: 'idle',
+            messages: previous.messages.filter(
+              (message) =>
+                message.id !== optimisticUser?.id && message.id !== optimisticAssistant?.id,
+            ),
+          };
+        });
+      };
+
       try {
-        const session = await ensureSession();
-        const now = new Date().toISOString();
-        const optimisticUser = createMessage({
+        session = readActiveSession() ?? createOptimisticSession();
+        sessionIdToClear = session.id;
+        now = new Date().toISOString();
+        optimisticUser = createMessage({
           role: 'user',
           kind: 'text',
           content: trimmed,
           createdAt: now,
         });
-        const optimisticAssistant = createMessage({
+        optimisticAssistant = createMessage({
           role: 'assistant',
           kind: 'text',
           content: '',
           createdAt: now,
         });
 
+        const baseSession = session;
+        const optimisticAssistantId = optimisticAssistant.id;
+
         setActiveSession((previous) => {
-          const base = previous ?? session;
+          const base = previous ?? baseSession;
           return {
             ...base,
-            messages: [...base.messages, optimisticUser, optimisticAssistant],
+            messages: [...base.messages, optimisticUser!, optimisticAssistant!],
             updatedAt: now,
           };
         });
 
-        const turns = toStreamTurns([...session.messages, optimisticUser]);
-        const response = await openGuestStreamRequest({
-          modelId: session.modelId,
-          messages: turns,
-        });
+        const turns = toStreamTurns([...baseSession.messages, optimisticUser]);
+        const response = await openGuestStreamRequest(
+          {
+            modelId: baseSession.modelId,
+            messages: turns,
+          },
+          abortController.signal,
+        );
 
-        let assistantContent = '';
         await readSseStream(response, (eventName, payload) => {
           const parsed = parseSsePayload(payload);
 
@@ -92,7 +171,7 @@ export function useLocalSendMessage({
               return {
                 ...previous,
                 messages: previous.messages.map((item) =>
-                  item.id === optimisticAssistant.id
+                  item.id === optimisticAssistantId
                     ? { ...item, content: item.content + delta }
                     : item,
                 ),
@@ -117,36 +196,62 @@ export function useLocalSendMessage({
           }
         });
 
-        const normalizedAssistantContent = assistantContent.trim();
-        if (!normalizedAssistantContent) {
+        if (!assistantContent.trim()) {
           throw new Error('模型没有返回可用内容');
         }
 
-        const updated = appendUserAssistantMessages(session, {
-          userContent: trimmed,
-          assistantContent: normalizedAssistantContent,
-        });
+        const updated = buildStoredSession();
+        if (!updated) {
+          throw new Error('会话保存失败');
+        }
 
         await saveLocalSession(updated);
         setActiveSession(updated);
         setActiveSessionId(updated.id);
+        replaceSession(updated.id);
         await refreshSessions();
-        setInputValue('');
       } catch (error) {
+        if (isAbortError(error)) {
+          const updated = buildStoredSession();
+          if (updated) {
+            await saveLocalSession(updated);
+            setActiveSession(updated);
+            setActiveSessionId(updated.id);
+            replaceSession(updated.id);
+            await refreshSessions();
+          } else {
+            removeOptimisticExchange();
+          }
+          return;
+        }
+
+        if (readInputValue() === '') {
+          setInputValue(content);
+        }
+        removeOptimisticExchange();
         setNotice(error instanceof Error ? error.message : '发送失败，请稍后重试');
       } finally {
+        if (sessionIdToClear) {
+          clearRouteBootstrapBypass(sessionIdToClear);
+        }
+        clearAbortController(abortController);
         setSending(false);
       }
     },
     [
       sending,
-      ensureSession,
+      readActiveSession,
+      createOptimisticSession,
       refreshSessions,
       setSending,
       setNotice,
       setInputValue,
+      readInputValue,
+      registerAbortController,
+      clearAbortController,
       setActiveSession,
       setActiveSessionId,
+      replaceSession,
     ],
   );
 }

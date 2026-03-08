@@ -29,7 +29,7 @@ export class OllamaStreamChatProvider implements StreamChatProvider {
 
   constructor(config?: { baseUrl?: string; model?: string }) {
     this.baseUrl = config?.baseUrl ?? 'http://127.0.0.1:11434';
-    this.defaultModel = config?.model ?? 'llama3.2:latest';
+    this.defaultModel = config?.model ?? 'deepseek-r1:8b';
   }
 
   async *streamChat(input: StreamChatInput): AsyncGenerator<string> {

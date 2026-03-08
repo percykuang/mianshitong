@@ -10,6 +10,7 @@ import type {
   PostMessageResult,
   SessionSummary,
 } from '@mianshitong/shared';
+import { compareSessionsByPinnedAndCreated } from '@/lib/chat-session-order';
 
 type SessionStore = Map<string, ChatSession>;
 
@@ -25,7 +26,7 @@ if (!globalThis.__mianshitong_chat_store__) {
 
 export function listSessionSummaries(): SessionSummary[] {
   return [...store.values()]
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .sort(compareSessionsByPinnedAndCreated)
     .map((item) => toSessionSummary(item));
 }
 
@@ -142,21 +143,16 @@ export function truncateSessionFromUserMessage(
     return undefined;
   }
 
-  const targetMessage = session.messages[targetIndex];
-  if (!targetMessage || targetMessage.role !== 'user') {
-    return undefined;
-  }
-
   const firstUserIndex = session.messages.findIndex((item) => item.role === 'user');
   session.messages = session.messages.slice(0, targetIndex);
+  session.report = null;
+  session.status = 'idle';
+  session.updatedAt = new Date().toISOString();
 
   if (targetIndex === firstUserIndex) {
     session.title = '新的对话';
   }
 
-  session.status = 'idle';
-  session.report = null;
-  session.updatedAt = new Date().toISOString();
   store.set(sessionId, session);
   return session;
 }

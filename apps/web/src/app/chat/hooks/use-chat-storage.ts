@@ -1,20 +1,21 @@
-import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
+import type { ChatSession, SessionSummary } from '@mianshitong/shared';
 import { useSession } from 'next-auth/react';
 import { useCallback } from 'react';
 import {
-  createSessionRequest,
   deleteAllSessionsRequest,
   deleteSessionRequest,
   fetchSessionById,
   fetchSessions,
+  renameSessionRequest,
 } from '../lib/chat-api';
-import { createGuestSession } from '../lib/chat-local-session';
+import { setSessionPinnedRequest } from '../lib/chat-session-settings-api';
 import {
   clearLocalSessions,
   deleteLocalSession,
   getLocalSessionById,
   listLocalSessions,
-  saveLocalSession,
+  renameLocalSession,
+  setLocalSessionPinnedState,
 } from '../lib/chat-local-storage';
 
 interface UseChatStorageResult {
@@ -22,7 +23,8 @@ interface UseChatStorageResult {
   isAuthenticated: boolean;
   fetchSessionList: () => Promise<SessionSummary[]>;
   fetchSessionDetail: (sessionId: string) => Promise<ChatSession>;
-  createSession: (modelId: ModelId) => Promise<ChatSession>;
+  renameSessionById: (sessionId: string, title: string) => Promise<ChatSession>;
+  setSessionPinnedState: (sessionId: string, pinned: boolean) => Promise<ChatSession>;
   deleteSessionById: (sessionId: string) => Promise<void>;
   deleteAllSessions: () => Promise<void>;
 }
@@ -51,15 +53,20 @@ export function useChatStorage(): UseChatStorageResult {
     [isAuthenticated],
   );
 
-  const createSession = useCallback(
-    async (modelId: ModelId) => {
-      if (isAuthenticated) {
-        return createSessionRequest({ modelId });
-      }
+  const renameSessionById = useCallback(
+    async (sessionId: string, title: string) => {
+      return isAuthenticated
+        ? renameSessionRequest(sessionId, title)
+        : renameLocalSession(sessionId, title);
+    },
+    [isAuthenticated],
+  );
 
-      const local = createGuestSession(modelId);
-      await saveLocalSession(local);
-      return local;
+  const setSessionPinnedState = useCallback(
+    async (sessionId: string, pinned: boolean) => {
+      return isAuthenticated
+        ? setSessionPinnedRequest(sessionId, pinned)
+        : setLocalSessionPinnedState(sessionId, pinned);
     },
     [isAuthenticated],
   );
@@ -90,7 +97,8 @@ export function useChatStorage(): UseChatStorageResult {
     isAuthenticated,
     fetchSessionList,
     fetchSessionDetail,
-    createSession,
+    renameSessionById,
+    setSessionPinnedState,
     deleteSessionById,
     deleteAllSessions,
   };

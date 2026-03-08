@@ -6,13 +6,17 @@ import {
 } from '@mianshitong/shared';
 import { createMessage, createRuntimeState } from './session-core';
 
+function createSessionId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export function createInterviewSession(input?: CreateSessionInput & { now?: string }): ChatSession {
   const now = input?.now ?? new Date().toISOString();
   const config = normalizeInterviewConfig(input?.config);
   const runtime = createRuntimeState(config);
 
   return {
-    id: `session_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`,
+    id: createSessionId(),
     title: input?.title?.trim() || '新的对话',
     modelId: input?.modelId ?? 'deepseek-chat',
     isPrivate: input?.isPrivate ?? true,
@@ -22,6 +26,7 @@ export function createInterviewSession(input?: CreateSessionInput & { now?: stri
     runtime,
     createdAt: now,
     updatedAt: now,
+    pinnedAt: null,
     messages: [
       createMessage({
         role: 'assistant',
@@ -43,7 +48,9 @@ export function toSessionSummary(session: ChatSession): SessionSummary {
     modelId: session.modelId,
     isPrivate: session.isPrivate,
     status: session.status,
+    createdAt: session.createdAt,
     updatedAt: session.updatedAt,
+    pinnedAt: session.pinnedAt,
     messageCount: session.messages.length,
     lastMessagePreview: lastMessage?.content.slice(0, 60) ?? '',
   };

@@ -7,7 +7,6 @@ interface StreamEventHandlerInput {
   setActiveSession: (
     value: ChatSession | null | ((previous: ChatSession | null) => ChatSession | null),
   ) => void;
-  setActiveSessionId: (value: string | null) => void;
   setNotice: (value: string | null) => void;
   setSyncedSession: (session: ChatSession) => void;
 }
@@ -41,13 +40,9 @@ export function createStreamEventHandler(input: StreamEventHandlerInput): SseEve
 
     if (eventName === 'done') {
       const maybeSession = parsed.session as ChatSession | undefined;
-      if (!maybeSession) {
-        return;
+      if (maybeSession) {
+        input.setSyncedSession(maybeSession);
       }
-
-      input.setSyncedSession(maybeSession);
-      input.setActiveSession(maybeSession);
-      input.setActiveSessionId(maybeSession.id);
       return;
     }
 

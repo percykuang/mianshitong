@@ -1,5 +1,6 @@
 import type { StreamChatProvider } from '@mianshitong/llm';
 import { getCurrentUserId } from '@/lib/server/auth-session';
+import { normalizeAssistantMarkdown } from '@/lib/server/chat-response-format';
 import {
   appendUserSessionExchange,
   getUserSession,
@@ -73,7 +74,7 @@ export async function POST(
             controller.enqueue(formatSseEvent('delta', { delta }));
           }
 
-          const normalizedAssistantText = assistantText.trim();
+          const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
           if (!normalizedAssistantText) {
             throw new Error('模型没有返回可用内容');
           }
@@ -89,10 +90,11 @@ export async function POST(
           controller.enqueue(formatSseEvent('done', { session: updatedSession }));
         } catch (error) {
           hasError = true;
-          if (assistantText.trim()) {
+          const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
+          if (normalizedAssistantText) {
             await appendUserSessionExchange(userId, sessionId, {
               userContent: content,
-              assistantContent: assistantText.trim(),
+              assistantContent: normalizedAssistantText,
             });
           }
           controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));

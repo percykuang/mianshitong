@@ -1,3 +1,4 @@
+import type { ChatTurn } from '@mianshitong/llm';
 import type {
   ChatSession,
   ChatSessionResponse,
@@ -5,7 +6,6 @@ import type {
   ModelId,
   SessionSummary,
 } from '@mianshitong/shared';
-import type { ChatTurn } from '@mianshitong/llm';
 
 export type SseEventHandler = (eventName: string, payload: string) => void;
 
@@ -16,6 +16,10 @@ async function readJson<T>(response: Response): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+export function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }
 
 export async function fetchSessions(): Promise<SessionSummary[]> {
@@ -44,6 +48,17 @@ export async function createSessionRequest(input: {
   return data.session;
 }
 
+export async function renameSessionRequest(sessionId: string, title: string): Promise<ChatSession> {
+  const response = await fetch(`/api/chat/sessions/${sessionId}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+
+  const data = await readJson<ChatSessionResponse>(response);
+  return data.session;
+}
+
 export async function deleteSessionRequest(sessionId: string): Promise<void> {
   const response = await fetch(`/api/chat/sessions/${sessionId}`, {
     method: 'DELETE',
@@ -66,11 +81,17 @@ export async function deleteAllSessionsRequest(): Promise<void> {
   }
 }
 
-export async function openStreamRequest(sessionId: string, content: string): Promise<Response> {
+export async function openStreamRequest(
+  sessionId: string,
+  content: string,
+  modelId: ModelId,
+  signal?: AbortSignal,
+): Promise<Response> {
   const response = await fetch(`/api/chat/sessions/${sessionId}/messages/stream`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, modelId }),
+    signal,
   });
 
   if (!response.ok) {
@@ -81,14 +102,18 @@ export async function openStreamRequest(sessionId: string, content: string): Pro
   return response;
 }
 
-export async function openGuestStreamRequest(input: {
-  modelId: ModelId;
-  messages: ChatTurn[];
-}): Promise<Response> {
+export async function openGuestStreamRequest(
+  input: {
+    modelId: ModelId;
+    messages: ChatTurn[];
+  },
+  signal?: AbortSignal,
+): Promise<Response> {
   const response = await fetch('/api/chat/stream', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(input),
+    signal,
   });
 
   if (!response.ok) {

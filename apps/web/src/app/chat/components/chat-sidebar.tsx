@@ -3,36 +3,42 @@ import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { GuestMenu } from '@/components/guest-menu';
 import { Button } from '@/components/ui/button';
+import { HoverPopover } from '@/components/ui/hover-popover';
 import { cn } from '@/lib/utils';
+import { ChatSidebarSessionItem } from './chat-sidebar-session-item';
 
 interface ChatSidebarProps {
-  loading: boolean;
+  sessionsLoading: boolean;
   sessions: SessionSummary[];
   activeSessionId: string | null;
   sidebarOpen: boolean;
   onSelectSession: (sessionId: string) => Promise<void>;
-  onDeleteSession: (sessionId: string) => Promise<void>;
-  onDeleteAllSessions: () => Promise<void>;
+  onRequestRenameSession: (session: SessionSummary) => void;
+  onRequestDeleteSession: (session: SessionSummary) => void;
+  onTogglePinSession: (session: SessionSummary, pinned: boolean) => Promise<void>;
+  onRequestDeleteAllSessions: () => void;
   onNewChat: () => Promise<void>;
   onCloseSidebar: () => void;
 }
 
 function SessionSkeleton() {
   return Array.from({ length: 5 }).map((_, index) => (
-    <div key={index} className="flex h-8 items-center gap-2 rounded-md px-2">
-      <div className="h-4 flex-1 rounded-md bg-sidebar-accent-foreground/10" />
+    <div key={index} className="rounded-xl border border-sidebar-border/40 px-3 py-3">
+      <div className="h-4 w-3/4 rounded-md bg-sidebar-accent-foreground/10" />
     </div>
   ));
 }
 
 export function ChatSidebar({
-  loading,
+  sessionsLoading,
   sessions,
   activeSessionId,
   sidebarOpen,
   onSelectSession,
-  onDeleteSession,
-  onDeleteAllSessions,
+  onRequestRenameSession,
+  onRequestDeleteSession,
+  onTogglePinSession,
+  onRequestDeleteAllSessions,
   onNewChat,
   onCloseSidebar,
 }: ChatSidebarProps) {
@@ -53,30 +59,43 @@ export function ChatSidebar({
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex flex-col gap-2 p-2" data-sidebar="header">
-          <div className="flex flex-row items-center justify-between">
-            <Link href="/" className="flex flex-row items-center gap-3">
+        <div
+          className="flex flex-col gap-0.5 border-b border-sidebar-border/80 p-3"
+          data-sidebar="header"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <Link href="/" className="flex min-w-0 flex-row items-center gap-3">
               <span className="cursor-pointer rounded-md px-2 text-lg font-semibold text-blue-600 hover:bg-muted">
                 面试通
               </span>
             </Link>
             <div className="flex flex-row gap-1">
-              <Button
-                variant="ghost"
-                className="h-8 p-1 md:h-fit md:p-2"
-                title="删除所有聊天记录"
-                aria-label="删除所有聊天记录"
-                onClick={() => void onDeleteAllSessions()}
+              <HoverPopover
+                content="删除所有会话记录"
+                contentClassName="min-w-[116px] rounded-lg px-3.5 py-1.5 text-[13px] font-medium shadow-md"
               >
-                <Trash2 className="size-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                className="h-8 p-1 md:h-fit md:p-2"
-                onClick={() => void onNewChat()}
+                <Button
+                  variant="ghost"
+                  className="h-8 p-1 text-foreground/62 transition-colors hover:text-destructive md:h-fit md:p-2"
+                  aria-label="删除所有会话记录"
+                  onClick={onRequestDeleteAllSessions}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </HoverPopover>
+              <HoverPopover
+                content="新建会话"
+                contentClassName="min-w-[88px] rounded-lg px-3.5 py-1.5 text-[13px] font-medium shadow-md"
               >
-                <Plus className="size-4" />
-              </Button>
+                <Button
+                  variant="ghost"
+                  className="h-8 p-1 md:h-fit md:p-2"
+                  aria-label="新建会话"
+                  onClick={() => void onNewChat()}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </HoverPopover>
               <Button variant="ghost" className="h-8 p-1 md:hidden" onClick={onCloseSidebar}>
                 <ChevronLeft className="size-4" />
               </Button>
@@ -84,56 +103,31 @@ export function ChatSidebar({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto">
-          <div className="relative flex w-full min-w-0 flex-col p-2" data-sidebar="group">
-            <div className="px-2 py-1 text-xs text-sidebar-foreground/50">Today</div>
-            <div className="w-full text-sm" data-sidebar="group-content">
-              <div className="flex flex-col gap-1">
-                {loading && sessions.length === 0 ? <SessionSkeleton /> : null}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto p-3">
+          <div className="flex flex-col gap-2">
+            {sessionsLoading && sessions.length === 0 ? <SessionSkeleton /> : null}
 
-                {!loading && sessions.length === 0 ? (
-                  <p className="px-2 py-2 text-xs text-muted-foreground">
-                    Your conversations will appear here once you start chatting!
-                  </p>
-                ) : null}
+            {!sessionsLoading && sessions.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-sidebar-border px-3 py-4 text-xs leading-6 text-sidebar-foreground/55">
+                新建一个会话后，你的聊天记录会展示在这里。
+              </p>
+            ) : null}
 
-                {sessions.map((item) => (
-                  <div
-                    key={item.id}
-                    className={cn(
-                      'group/item flex h-10 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors hover:bg-sidebar-accent',
-                      item.id === activeSessionId
-                        ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
-                        : 'text-sidebar-foreground',
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => void onSelectSession(item.id)}
-                      className="line-clamp-1 flex flex-1 cursor-pointer items-center text-left"
-                    >
-                      {item.title}
-                    </button>
-                    <button
-                      type="button"
-                      title="删除当前会话"
-                      aria-label="删除当前会话"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void onDeleteSession(item.id);
-                      }}
-                      className="flex size-6 cursor-pointer items-center justify-center rounded-md text-sidebar-foreground/60 opacity-0 transition-opacity group-hover/item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {sessions.map((item) => (
+              <ChatSidebarSessionItem
+                key={item.id}
+                session={item}
+                active={item.id === activeSessionId}
+                onSelect={onSelectSession}
+                onRequestRename={onRequestRenameSession}
+                onRequestDelete={onRequestDeleteSession}
+                onTogglePin={onTogglePinSession}
+              />
+            ))}
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 p-2" data-sidebar="footer">
+        <div className="mt-auto border-t border-sidebar-border p-2">
           <GuestMenu />
         </div>
       </aside>

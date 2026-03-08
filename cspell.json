@@ -34,6 +34,9 @@
     "cuid",
     "pkey",
     "fkey",
-    "psql"
+    "psql",
+    "shiki",
+    "Shiki",
+    "hljs"
   ]
 }

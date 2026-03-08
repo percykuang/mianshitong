@@ -1387,3 +1387,434 @@
 
 - 决策 AI 编排框架：LangChainJS vs LangGraphJS（可组合）
 - 进入编码迭代：搭建 Next.js + Prisma + PostgreSQL + Docker 的最小可运行闭环
+
+## Iteration 2.80（2026-03-08）
+
+### 目标
+
+- 把聊天页自动滚动行为向 `zhitalk.chat` 对齐，避免流式生成时抢走用户滚动控制权。
+
+### 主要改动
+
+- 通过 Playwright 实测确认参考站行为：AI 回复持续生成时，若用户手动上滚离开底部，页面不会再强制自动跟随到底部。
+- `use-auto-scroll` 新增“是否贴底”判断：仅当用户仍停留在底部附近时，消息流式更新才自动跟随；用户手动上滚超过阈值后，自动跟随立即暂停。
+- 会话切换时仍然保持自动定位到底部，保证进入已有长会话时的默认阅读位置不受影响。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如果后续还要继续向参考站收口，可以再补一个“回到底部”按钮作为离底状态下的显式恢复入口。
+
+## Iteration 2.81（2026-03-08）
+
+### 目标
+
+- 继续向 `zhitalk.chat` 收口，补充离底状态下的“回到底部”按钮。
+
+### 主要改动
+
+- `use-auto-scroll` 现在对外暴露 `isPinnedToBottom` 与 `scrollToBottom`，用于驱动离底状态下的显式恢复入口。
+- 聊天页在“已有对话且用户离开底部”时，会在输入区上方显示圆形“回到底部”按钮；点击后立即回到底部，并恢复自动跟随。
+- 按钮仅在当前不贴底、且不是会话切换空白过渡时出现，避免无意义干扰。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如果后续还要继续微调，可以再根据体验决定按钮位置是否更靠中间，或是否补极轻的显隐动效。
+
+## Iteration 2.82（2026-03-08）
+
+### 目标
+
+- 修复“生成中轻微上滚仍会被自动滚动抢回去”的剩余问题。
+
+### 主要改动
+
+- 根因确认：此前虽然加入了贴底阈值判断，但只要用户仍处于底部附近，系统仍会继续视为“可自动跟随”，这与参考站“用户一旦开始向上滚就立即让权”的行为不一致。
+- `use-auto-scroll` 现改为更严格的用户优先策略：在 AI 流式生成期间，只要检测到滚动容器的 `scrollTop` 出现向上变化，就立刻退出自动跟随；只有用户重新滚回底部附近或点击“回到底部”按钮时，才恢复自动跟随。
+- 同时保留“切换会话时自动定位到底部”的独立逻辑，避免影响已有会话的默认进入体验。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 继续观察是否还需要为移动端触摸拖拽补更细的体验微调，但当前基于 `scrollTop` 向上变化的策略已经能覆盖主流输入方式。
+
+## Iteration 2.83（2026-03-08）
+
+### 目标
+
+- 修复“长会话中用户离底发送消息不会自动回到底部”以及“回到底部按钮位置与参考站不一致”的问题。
+
+### 主要改动
+
+- 聊天页提交消息时不再只依赖 `use-auto-scroll` 的被动 effect，而是在用户点击发送或点击预设问题时主动执行一次 `scrollToBottom`，确保长会话离底发送时会立刻跳到最新消息区域。
+- 将“回到底部”按钮改为相对输入区定位，使其位置更接近 `zhitalk.chat` 的“底部居中、悬浮于输入框上方”样式。
+- 本地用 Playwright 复测：发送前将会话区滚到顶部后再发送，发送瞬间已能直接滚到底部。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 继续观察真实流式回复场景下的滚动行为，如果后续还有极端场景，再决定是否把滚动触发进一步下沉到消息流控制层。
+
+## Iteration 2.84（2026-03-08）
+
+### 目标
+
+- 修复“AI 返回纯代码文本时，前端无法展示为代码块”的问题。
+
+### 主要改动
+
+- 新增服务端公共工具 `chat-response-format.ts`，统一负责两件事：向模型注入“代码必须使用 fenced code block 输出”的系统指令，以及在回复完成后对“整段几乎全是代码”的纯文本进行保守兜底包裹。
+- 登录态消息流、游客消息流、编辑消息重生成三条链路都接入该工具，保证最终落库内容和前端最终展示内容保持一致。
+- 兜底策略仅处理“代码占比很高、说明性语句极少”的回复，避免把普通解释性段落误判成代码块。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如果后续要进一步提升稳定性，可以考虑把这套格式约束继续下沉到更明确的 Prompt 模板或模型输出协议层。
+
+## Iteration 2.85（2026-03-08）
+
+### 目标
+
+- 继续提升纯代码文本兜底时的语言识别准确率，并修复“半残 fenced code”导致的代码块脏内容问题。
+
+### 主要改动
+
+- 扩展服务端格式化规则，对 `vue / yaml / sql / bash / css / html / jsx / tsx / typescript / json` 等常见代码类型补充更细的特征识别。
+- 增加对“不成对 fenced code”的清洗：如果模型只输出了开头的残缺 fence 而未正确闭合，服务端会先去除残缺 fence，再做语言推断和安全包裹，避免最终代码块里出现裸露的反引号字面量。
+- 用 Playwright 做多组真实聊天回归，`javascript / vue / sql / bash / yaml / tsx` 场景均已验证代码块可正确展示。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如果后续还要继续收口，可以考虑在渲染层把 `typescript + JSX` 的展示标签进一步细化为 `tsx`，但这不影响当前代码块展示与复制下载功能。
+
+## Iteration 2.86（2026-03-08）
+
+### 目标
+
+- 收敛侧边栏会话列表的信息密度，不再展示最近一条 AI 回复摘要，改为展示会话发起时间。
+
+### 主要改动
+
+- 侧边栏会话列表从“标题 + 最近 AI 摘要”改为“标题 + 创建时间”。
+- 视觉上保留简洁单列布局，减少摘要信息带来的噪音。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 继续观察时间展示是否真的优于更简洁的列表，如果用户偏好更强的做减法，可以进一步去掉时间展示。
+
+## Iteration 2.87（2026-03-08）
+
+### 目标
+
+- 让侧边栏会话列表排序更稳定，避免旧会话因为新回复而频繁跳动。
+
+### 主要改动
+
+- 会话列表排序改为按 `createdAt desc` 为主，而不是按最近 `updatedAt` 变化排序。
+- 用 Playwright 验证：旧会话即使收到新消息，也不会直接跳到顶部，列表位置更稳定。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 在更简洁的产品方向下，继续评估是否彻底去掉时间并补充置顶能力。
+
+## Iteration 2.88（2026-03-08）：侧边栏会话列表做减法并补充置顶能力
+
+### 目标
+
+- 侧边栏会话列表向更简洁的产品思路收口：去掉时间展示与“最近会话”标题，并补充会话置顶能力。
+
+### 主要改动
+
+- 侧边栏列表展示收敛：
+  - 去掉会话创建时间展示；
+  - 去掉“最近会话”标题文案；
+  - 会话列表默认按 `createdAt desc` 稳定排序，不再因为最近回复时间变化而频繁跳动。
+- 新增会话置顶能力：
+  - 单条会话 `...` 菜单增加“置顶 / 取消置顶”；
+  - 置顶后该会话提升到列表最上方；
+  - 置顶项标题尾部常驻展示图钉图标。
+- 置顶状态持久化策略：
+  - 游客态写入浏览器 IndexDB；
+  - 登录态复用服务端会话持久化链路，把 `pinnedAt` 编码进现有 `runtime.__chatUi`，避免本轮额外引入 Prisma schema 迁移。
+- 排序规则统一：
+  - 置顶组按 `pinnedAt desc`；
+  - 非置顶组按 `createdAt desc`；
+  - 前后端与本地存储共用同一比较器，避免排序漂移。
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 迁移；服务端现有会话会在后续保存时自然带上 UI 状态字段。
+
+### 下一步
+
+- 如果后续还要继续打磨侧边栏体验，可以再评估是否补“拖拽排序”或“置顶分组分隔线”，但当前版本优先保持简洁与稳定。
+
+## Iteration 2.89（2026-03-08）：收敛共享契约漂移并恢复全仓 TypeScript 编译
+
+### 目标
+
+- 清理此前阻塞 `pnpm typecheck` 的跨包类型漂移，让 monorepo 回到全量可编译状态。
+
+### 主要改动
+
+- 收敛 `packages/shared` 与下游领域包的契约差异：
+  - `FeedbackMode` 恢复兼容 `per_question | end_summary`；
+  - `MessageKind` 恢复兼容 `feedback`；
+  - `InterviewQuestion` 补回 `level / title / keyPoints` 等题库与引擎依赖字段；
+  - `QuestionAssessment` 与 `InterviewReport` 补齐 `questionTitle / answer / feedback / overallScore / level / summary` 等旧链路仍在使用的字段。
+- 题库顺序常量收口：移除未被共享主题类型覆盖的 `frontend` 项，避免无效 topic 继续污染编译。
+- `packages/interview-engine/src/scoring.ts` 输出结构补齐新旧两套摘要字段，保证共享类型与 mock provider、引擎实现一致。
+- 最终恢复全仓 `pnpm typecheck` 通过。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性迁移；本轮以类型兼容恢复为主。
+
+### 下一步
+
+- 如果后续要继续收口领域模型，可以再单独做一轮“共享契约瘦身”，把当前兼容字段分阶段淘汰，而不是再次让下游包静态失配。
+
+## Iteration 2.90（2026-03-08）：共享契约瘦身第一阶段
+
+### 目标
+
+- 在不破坏现有聊天与面试链路的前提下，收缩 `packages/shared` 中明确重复的契约字段，降低后续继续演化时的认知负担。
+
+### 主要改动
+
+- 收敛 `QuestionAssessment`：移除重复的 `answer / feedback` 字段，仅保留 `summary` 作为题目级总结字段。
+- 收敛 `InterviewReport`：移除与 `overallSummary` 语义重复的 `summary` 字段，统一使用 `overallSummary`。
+- 收敛 `InterviewQuestion`：移除未被任何下游实际使用的 `expectedPoints`，统一保留 `keyPoints`。
+- 清理 `packages/shared/src/contracts.ts` 中未被导出的死代码：删除重复定义的 `InterviewSettings / DEFAULT_INTERVIEW_SETTINGS / QUICK_PROMPTS / normalizeInterviewConfig`，避免共享契约文件继续承担默认值与工具函数职责。
+- 下游同步切换到单一 canonical 字段：
+  - `packages/interview-engine/src/scoring.ts` 只输出 `summary / overallSummary`；
+  - `packages/llm/src/mock-provider.ts` 改为读取 `assessment.summary` 与 `report.overallSummary`。
+
+### 迁移/破坏性变更
+
+- 当前仓库内无破坏性影响；但如果未来有外部消费者直接依赖被删除的冗余字段，需要同步改为读取 `summary / overallSummary / keyPoints`。
+
+### 下一步
+
+- 第二阶段可以继续评估是否把 `contracts.ts` 中剩余的“纯常量/纯默认值”进一步外移，只保留真正的共享契约类型定义。
+
+## Iteration 2.91（2026-03-08）：共享契约瘦身第二阶段
+
+### 目标
+
+- 让 `packages/shared/src/contracts.ts` 回归“只定义共享类型”，进一步清晰 shared 包内部职责边界。
+
+### 主要改动
+
+- 新增 `packages/shared/src/constants.ts`：承载 `APP_NAME / APP_SLUG / MODEL_OPTIONS / INTERVIEW_TOPICS / QUICK_PROMPTS` 等纯常量。
+- `packages/shared/src/contracts.ts` 只保留类型定义与响应体类型，不再混放常量。
+- `packages/shared/src/defaults.ts` 收敛为单一职责，仅保留 `DEFAULT_INTERVIEW_CONFIG`。
+- `packages/shared/src/index.ts` 重新整理对外导出：
+  - 类型从 `contracts.ts` 暴露；
+  - 常量从 `constants.ts` 暴露；
+  - 默认配置从 `defaults.ts` 暴露；
+  - 工具函数继续从 `utils.ts` 暴露。
+
+### 迁移/破坏性变更
+
+- 对仓库内现有调用方无破坏性影响；shared 包的公共导出名保持不变。
+
+### 下一步
+
+- 如果后续还要继续收口，可以再评估是否为 `shared` 增加更细的目录分层（如 `types / constants / defaults / utils`），但当前扁平文件数仍可接受。
+
+## Iteration 2.92（2026-03-08）：shared 包目录结构升级
+
+### 目标
+
+- 将 `packages/shared/src` 从“多文件并列”升级为更清晰的职责目录结构，同时保持公共导出方式不变。
+
+### 主要改动
+
+- 新建目录：
+  - `packages/shared/src/types`
+  - `packages/shared/src/constants`
+  - `packages/shared/src/defaults`
+  - `packages/shared/src/utils`
+- 文件迁移：
+  - 共享类型迁入 `types/index.ts`
+  - 常量迁入 `constants/index.ts`
+  - 默认配置迁入 `defaults/index.ts`
+  - 工具函数迁入 `utils/index.ts`
+- 根出口 `packages/shared/src/index.ts` 保持统一导出职责，因此仓库内现有 `@mianshitong/shared` 调用方式无需调整。
+- 删除旧的并列文件：`contracts.ts / constants.ts / defaults.ts / utils.ts`。
+
+### 迁移/破坏性变更
+
+- 对仓库内无破坏性影响；若外部未来直接引用 shared 内部文件路径，需要改为新的目录路径，但当前项目内未发现此类用法。
+
+### 下一步
+
+- 当前 shared 包已经具备继续扩展的基本目录骨架；后续如新增 schema 校验或 response mapper，可直接按职责落到对应目录，而不需要再堆到根目录。
+
+## Iteration 2.94（2026-03-08）：微调侧栏会话项的置顶位与激活态
+
+### 目标
+
+- 针对侧栏单条会话项，按参考图细调右侧操作位、置顶图钉展示方式、激活态背景与三点热区大小。
+
+### 主要改动
+
+- 置顶会话项的图钉从标题尾部移动到右侧操作位，与 `...` 共用同一位置；默认显示图钉，hover 时切换为 `...`。
+- 会话项激活态改为纯背景高亮，不再使用边框与阴影强调。
+- 右侧 `...` 操作按钮的热区缩小，收口到更接近参考图的轻量小方块尺寸。
+
+### 迁移/破坏性变更
+
+- 无功能性破坏，仅样式细调。
+
+### 下一步
+
+- 如果还要继续压细节，可以再按截图逐项微调激活态背景明度、右侧图标垂直位置与 hover 过渡时长。
+
+## Iteration 2.95（2026-03-09）：本地 Ollama 默认模型切换为 DeepSeek R1 8B
+
+### 目标
+
+- 让本地免费调试时的默认模型风格更接近线上 DeepSeek 方向，降低每次都要手动覆写 Ollama 模型的成本。
+
+### 主要改动
+
+- 将聊天流式链路里的 Ollama 默认模型从 `llama3.2:latest` 调整为 `deepseek-r1:8b`。
+- 将 `packages/llm` 内部 `OllamaStreamChatProvider` 的默认模型同步调整为 `deepseek-r1:8b`。
+- 更新 `env.example` 中的 `OLLAMA_MODEL / OLLAMA_REASONER_MODEL` 推荐值，统一为 `deepseek-r1:8b`。
+
+### 迁移/破坏性变更
+
+- 仅影响未显式配置 `OLLAMA_MODEL` 的本地默认行为；如果已有 `.env.local` 指定模型，则仍以本地环境变量为准。
+
+### 下一步
+
+- 如果后续需要进一步贴近生产效果，建议直接补一套 `LLM_PROVIDER=deepseek` 的本地联调配置，并在 UI 上增加当前实际 provider / model 的调试展示。
+
+## Iteration 2.96（2026-03-09）：聊天代码块主题向 ZhiTalk 收口
+
+### 目标
+
+- 让 AI 回复中的代码块背景色、边框与亮暗主题更贴近 `zhitalk.chat` 当前实现。
+
+### 主要改动
+
+- 新增 `chat-code-theme.ts`，将代码高亮主题从分散的全局 CSS 变量收口为两套固定主题对象。
+- 聊天代码块改为使用更接近 `zhitalk.chat` 的容器结构：`rounded-xl border` 外框、独立头部工具条、代码区顶部单独分隔线。
+- 亮色主题代码区改为 `#ffffff / #24292e`；暗色主题代码区改为 `#24292e / #e1e4e8`，并同步收紧关键词、字符串、函数名、参数等 token 颜色。
+- 代码块工具按钮改为更轻量的图标按钮视觉，弱化 hover 背景，保留下载与复制能力。
+
+### 迁移/破坏性变更
+
+- 无接口变更；仅调整聊天代码块的视觉样式与高亮主题。
+
+### 下一步
+
+- 如仍需继续逼近 `zhitalk.chat`，下一步可再针对滚动条样式、横向滚动行为与代码字体做像素级微调。
+
+## Iteration 2.97（2026-03-09）：聊天代码块切换到 Shiki GitHub 双主题
+
+### 目标
+
+- 用现成的 GitHub 系主题替换手写 token 配色，让聊天代码块更稳定地贴近 `zhitalk.chat`，并降低后续维护成本。
+
+### 主要改动
+
+- `@mianshitong/web` 新增 `shiki`，移除 `react-syntax-highlighter` 及其类型依赖。
+- 新增 `chat-shiki.ts`，使用 `shiki/bundle/web` 的 `codeToHtml` 生成双主题高亮 HTML。
+- 代码块主题切换改为 `github-light + github-dark` 组合，通过 Shiki 官方双主题 CSS 变量实现，不再手写整套 token 颜色。
+- `globals.css` 中删除旧的 `.hljs` 大段主题规则，收敛为少量 Shiki 容器样式与 dark mode 覆写。
+
+### 迁移/破坏性变更
+
+- 无接口变更；代码块渲染实现从 `react-syntax-highlighter` 切换为 `shiki`。
+
+### 下一步
+
+- 如果后续仍需进一步逼近 `zhitalk.chat`，可以继续微调 `github-dark` 与 `github-dark-default / dimmed` 的取舍，或再细调工具条尺寸与间距。
+
+## Iteration 2.98（2026-03-09）：修复 markdown 包裹代码块与继续收口代码块细节
+
+### 目标
+
+- 修复 AI 回复把真正的 fenced code 包在外层 `markdown` fence 中时，前端显示成“代码里的代码”问题。
+- 继续把聊天代码块的头部按钮和代码区排版向 `zhitalk.chat` 做像素级收口。
+
+### 主要改动
+
+- 新增 `chat-markdown-normalization.ts`，统一处理“外层 `markdown/md` 包裹内层 Markdown 内容”的解包逻辑。
+- 服务端 `normalizeAssistantMarkdown` 接入该解包逻辑，确保新生成的回复在落库前就被规范化。
+- 客户端 `ChatMarkdown` 渲染前也接入同样的解包逻辑，兼容历史会话中的旧数据。
+- 代码块样式继续微调：
+  - 工具按钮去掉圆角，与参考站保持一致；
+  - 代码区行高收口到 `12px / 16px`；
+  - 补齐 monospace 字体栈，保持与参考站更接近的密度与观感。
+- 使用 Playwright 复测“用 JS 写一个冒泡排序，返回 markdown 代码块”场景，确认现在会直接展示为 `js` 代码块，不再出现外层 `markdown` 包裹。
+
+### 迁移/破坏性变更
+
+- 无接口变更；仅调整 Markdown 规范化与代码块视觉细节。
+
+### 下一步
+
+- 如果后续仍发现极少数模型回复以异常 fence 形式输出，可继续补更细的 fence 恢复规则，但当前主路径问题已被双层兜底覆盖。
+
+## Iteration 2.99（2026-03-09）：清理未使用的代码与静态资源
+
+### 目标
+
+- 删除当前仓库中已不再被代码引用的孤儿源码文件与模板静态资源，降低噪音与后续维护成本。
+
+### 主要改动
+
+- 删除未被任何运行链路引用的源码文件：
+  - `apps/web/src/lib/server/chat-response-code-detection.ts`
+  - `apps/web/src/app/chat/components/chat-conversation-skeleton.tsx`
+- 删除 `apps/web/public` 下未被项目引用的默认模板 SVG：
+  - `window.svg`
+  - `globe.svg`
+  - `next.svg`
+  - `vercel.svg`
+  - `file.svg`
+- 删除仓库根目录下未被项目引用的临时截图参考文件：
+  - `image.png`
+  - `image2.png`
+  - `zhitalk-code-block-ref.png`
+
+### 迁移/破坏性变更
+
+- 无运行时破坏；本轮仅清理已确认无引用的孤儿文件。
+
+### 下一步
+
+- 如果后续还要继续做减法，可以再单独评估“未使用导出函数/类型”的粒度，但这类清理需要更强的静态分析，不建议和本轮文件级清理混做。

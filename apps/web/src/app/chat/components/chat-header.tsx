@@ -13,6 +13,7 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar }: ChatHeaderProps) {
         variant="outline"
         className="h-8 px-2 md:h-fit md:px-2"
         data-testid="sidebar-toggle-button"
+        aria-label={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
         onClick={onToggleSidebar}
       >
         {sidebarOpen ? <ChevronLeft className="size-4" /> : <Menu className="size-4" />}

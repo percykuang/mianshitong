@@ -9,9 +9,12 @@ import {
   type SessionStatus,
   type SessionSummary,
 } from '@mianshitong/shared';
+import { createChatSessionId, normalizeChatSessionId } from '@/lib/chat-session-id';
+import { decodeSessionRuntime, encodeSessionRuntime } from './chat-session-ui-state';
 
 export type SessionRecord = {
   id: string;
+  userId: string;
   title: string;
   modelId: string;
   isPrivate: boolean;
@@ -28,6 +31,10 @@ function createId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function resolveSessionId(sessionId?: string | null): string {
+  return normalizeChatSessionId(sessionId) ?? createChatSessionId();
+}
+
 function toTitle(content: string): string {
   const normalized = content.replace(/\s+/g, ' ').trim();
   if (!normalized) {
@@ -41,7 +48,7 @@ function resolveModelId(modelId: string): ModelId {
   return MODEL_OPTIONS.some((item) => item.id === modelId) ? (modelId as ModelId) : 'deepseek-chat';
 }
 
-function createMessage(input: {
+export function createMessage(input: {
   role: ChatMessage['role'];
   kind: ChatMessage['kind'];
   content: string;
@@ -60,11 +67,14 @@ function parseSessionStatus(value: string): SessionStatus {
   return value === 'interviewing' || value === 'completed' ? value : 'idle';
 }
 
-export function createDraftSession(input?: CreateSessionInput): ChatSession {
+export function createDraftSession(
+  input?: CreateSessionInput,
+  sessionId?: string | null,
+): ChatSession {
   const now = new Date().toISOString();
 
   return {
-    id: `session_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`,
+    id: resolveSessionId(sessionId),
     title: input?.title?.trim() || '新的对话',
     modelId: input?.modelId ?? 'deepseek-chat',
     isPrivate: input?.isPrivate ?? true,
@@ -80,6 +90,7 @@ export function createDraftSession(input?: CreateSessionInput): ChatSession {
     },
     createdAt: now,
     updatedAt: now,
+    pinnedAt: null,
     messages: [
       createMessage({
         role: 'assistant',
@@ -94,6 +105,7 @@ export function createDraftSession(input?: CreateSessionInput): ChatSession {
 
 export function toSession(record: SessionRecord): ChatSession {
   const config = normalizeInterviewConfig(record.config as Partial<ChatSession['config']>);
+  const { runtime, pinnedAt } = decodeSessionRuntime(record.runtime);
 
   return {
     id: record.id,
@@ -103,10 +115,11 @@ export function toSession(record: SessionRecord): ChatSession {
     status: parseSessionStatus(record.status),
     config,
     report: (record.report as unknown as ChatSession['report']) ?? null,
-    runtime: record.runtime as unknown as ChatSession['runtime'],
+    runtime,
     messages: record.messages as unknown as ChatMessage[],
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
+    pinnedAt,
   };
 }
 
@@ -119,7 +132,9 @@ export function toSessionSummary(session: ChatSession): SessionSummary {
     modelId: session.modelId,
     isPrivate: session.isPrivate,
     status: session.status,
+    createdAt: session.createdAt,
     updatedAt: session.updatedAt,
+    pinnedAt: session.pinnedAt,
     messageCount: session.messages.length,
     lastMessagePreview: lastMessage?.content.slice(0, 60) ?? '',
   };
@@ -136,7 +151,7 @@ export function toSessionCreateData(
     isPrivate: session.isPrivate,
     status: session.status,
     config: session.config as unknown as Prisma.InputJsonValue,
-    runtime: session.runtime as unknown as Prisma.InputJsonValue,
+    runtime: encodeSessionRuntime(session),
     messages: session.messages as unknown as Prisma.InputJsonValue,
     user: { connect: { id: userId } },
   };
@@ -157,7 +172,7 @@ export function toSessionUpdateData(
     status: session.status,
     config: session.config as unknown as Prisma.InputJsonValue,
     report,
-    runtime: session.runtime as unknown as Prisma.InputJsonValue,
+    runtime: encodeSessionRuntime(session),
     messages: session.messages as unknown as Prisma.InputJsonValue,
   };
 }
@@ -181,21 +196,19 @@ export function appendSessionMessages(
     createMessage({ role: 'assistant', kind: 'text', content: assistantContent, createdAt: now }),
   );
 
-  if (
-    next.title === '新的对话' &&
-    next.messages.filter((item) => item.role === 'user').length === 1
-  ) {
+  if (next.messages.filter((item) => item.role === 'user').length === 1) {
     next.title = toTitle(userContent);
   }
 
-  next.status = 'idle';
   next.updatedAt = now;
+  next.status = 'idle';
   return next;
 }
 
 export function truncateSessionForEdit(
   session: ChatSession,
   messageId: string,
+  now: string = new Date().toISOString(),
 ): ChatSession | null {
   const targetIndex = session.messages.findIndex(
     (item) => item.id === messageId && item.role === 'user',
@@ -204,13 +217,19 @@ export function truncateSessionForEdit(
     return null;
   }
 
+  const nextMessages = session.messages.slice(0, targetIndex);
   const firstUserIndex = session.messages.findIndex((item) => item.role === 'user');
-  const next = { ...session, messages: session.messages.slice(0, targetIndex) };
-  if (targetIndex === firstUserIndex) {
-    next.title = '新的对话';
-  }
-  next.status = 'idle';
-  next.report = null;
-  next.updatedAt = new Date().toISOString();
-  return next;
+
+  return {
+    ...session,
+    title: targetIndex === firstUserIndex ? '新的对话' : session.title,
+    messages: nextMessages,
+    report: null,
+    runtime: {
+      ...session.runtime,
+      activeQuestionAnswers: [],
+    },
+    updatedAt: now,
+    status: 'idle',
+  };
 }

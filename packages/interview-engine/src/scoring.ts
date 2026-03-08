@@ -46,22 +46,21 @@ export function buildAssessment(
       scores.tradeoffs) /
     5;
 
-  let feedback = '回答基本覆盖了关键点，建议在边界场景里再补一个真实案例。';
+  let summary = '回答基本覆盖了关键点，建议在边界场景里再补一个真实案例。';
   if (averageScore < 2.5) {
-    feedback = '这题还需要补基础，建议先讲核心概念，再补一个落地例子。';
+    summary = '这题还需要补基础，建议先讲核心概念，再补一个落地例子。';
   } else if (averageScore > 4.2) {
-    feedback = '回答扎实，继续保持这种“结论 -> 原因 -> 例子 -> 权衡”的表达结构。';
+    summary = '回答扎实，继续保持这种“结论 -> 原因 -> 例子 -> 权衡”的表达结构。';
   }
 
   return {
     questionId: question.id,
     questionTitle: question.title,
     topic: question.topic,
-    answer,
+    summary,
     matchedPoints,
     missingPoints,
     scores,
-    feedback,
   };
 }
 
@@ -113,18 +112,18 @@ export function buildInterviewReport(assessments: QuestionAssessment[]): Intervi
     .slice(0, 3)
     .map((item) => `围绕“${item}”整理一页复盘笔记，并给出一个项目例子。`);
 
-  let summary = '你的基础能力不错，建议继续加强工程化和取舍表达。';
+  let overallSummary = '你的基础能力不错，建议继续加强工程化和取舍表达。';
   if (level === 'needs-work') {
-    summary = '当前基础还不稳定，建议优先补核心概念与常见场景。';
+    overallSummary = '当前基础还不稳定，建议优先补核心概念与常见场景。';
   }
   if (level === 'strong') {
-    summary = '整体表现优秀，继续强化系统化表达和复杂场景推理。';
+    overallSummary = '整体表现优秀，继续强化系统化表达和复杂场景推理。';
   }
 
   return {
+    overallSummary,
     overallScore,
     level,
-    summary,
     strengths,
     gaps,
     nextSteps,

@@ -6,9 +6,14 @@ import {
   type ModelId,
   type SessionSummary,
 } from '@mianshitong/shared';
+import { createChatSessionId, normalizeChatSessionId } from '@/lib/chat-session-id';
 
 function createId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function resolveSessionId(sessionId?: string | null): string {
+  return normalizeChatSessionId(sessionId) ?? createChatSessionId();
 }
 
 function toTitle(content: string): string {
@@ -35,11 +40,18 @@ export function createMessage(input: {
   };
 }
 
-export function createGuestSession(modelId: ModelId): ChatSession {
+export function normalizeStoredSession(session: ChatSession): ChatSession {
+  return {
+    ...session,
+    pinnedAt: session.pinnedAt ?? null,
+  };
+}
+
+export function createDraftLocalSession(modelId: ModelId, sessionId?: string | null): ChatSession {
   const now = new Date().toISOString();
 
   return {
-    id: `session_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`,
+    id: resolveSessionId(sessionId),
     title: '新的对话',
     modelId,
     isPrivate: true,
@@ -55,6 +67,7 @@ export function createGuestSession(modelId: ModelId): ChatSession {
     },
     createdAt: now,
     updatedAt: now,
+    pinnedAt: null,
     messages: [
       createMessage({
         role: 'assistant',
@@ -67,6 +80,10 @@ export function createGuestSession(modelId: ModelId): ChatSession {
   };
 }
 
+export function createGuestSession(modelId: ModelId, sessionId?: string | null): ChatSession {
+  return createDraftLocalSession(modelId, sessionId);
+}
+
 export function toSessionSummary(session: ChatSession): SessionSummary {
   const lastMessage = session.messages.at(-1);
   return {
@@ -75,7 +92,9 @@ export function toSessionSummary(session: ChatSession): SessionSummary {
     modelId: session.modelId,
     isPrivate: session.isPrivate,
     status: session.status,
+    createdAt: session.createdAt,
     updatedAt: session.updatedAt,
+    pinnedAt: session.pinnedAt,
     messageCount: session.messages.length,
     lastMessagePreview: lastMessage?.content.slice(0, 60) ?? '',
   };
@@ -108,6 +127,7 @@ export function appendUserAssistantMessages(
   next.messages.push(
     createMessage({ role: 'assistant', kind: 'text', content: assistantContent, createdAt: now }),
   );
+
   if (
     next.title === '新的对话' &&
     next.messages.filter((item) => item.role === 'user').length === 1

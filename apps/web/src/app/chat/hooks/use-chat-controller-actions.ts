@@ -4,11 +4,13 @@ import { closeSidebarOnMobile, copyToClipboard } from './chat-controller-helpers
 import { useChatDeleteActions } from './use-chat-delete-actions';
 
 interface UseChatControllerActionsInput {
-  createSession: () => Promise<ChatSession>;
   fetchSessionById: (sessionId: string) => Promise<ChatSession>;
   refreshSessions: () => Promise<SessionSummary[]>;
   deleteSessionById: (sessionId: string) => Promise<void>;
   deleteAllSessions: () => Promise<void>;
+  readCachedSession: (sessionId: string) => ChatSession | null;
+  removeCachedSession: (sessionId: string) => void;
+  clearCachedSessions: () => void;
   sendMessage: (content: string) => Promise<void>;
   editUserMessage: (messageId: string, content: string) => Promise<boolean>;
   activeSessionId: string | null;
@@ -23,15 +25,22 @@ interface UseChatControllerActionsInput {
   setActiveSessionId: (value: string | null) => void;
   setEditingMessageId: (value: string | null) => void;
   setEditingValue: (value: string) => void;
+  setActiveSessionLoading: (value: boolean) => void;
+  pushSession: (sessionId: string) => void;
+  pushNewChat: () => void;
+  replaceSession: (sessionId: string) => void;
+  replaceNewChat: () => void;
 }
 
 export function useChatControllerActions(input: UseChatControllerActionsInput) {
   const {
-    createSession,
     fetchSessionById,
     refreshSessions,
     deleteSessionById,
     deleteAllSessions,
+    readCachedSession,
+    removeCachedSession,
+    clearCachedSessions,
     sendMessage,
     editUserMessage,
     activeSessionId,
@@ -46,6 +55,11 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     setActiveSessionId,
     setEditingMessageId,
     setEditingValue,
+    setActiveSessionLoading,
+    pushSession,
+    pushNewChat,
+    replaceSession,
+    replaceNewChat,
   } = input;
 
   const deleteActions = useChatDeleteActions({
@@ -54,6 +68,9 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     refreshSessions,
     deleteSessionById,
     deleteAllSessions,
+    readCachedSession,
+    removeCachedSession,
+    clearCachedSessions,
     setInputValue,
     setSelectedModelId,
     setNotice,
@@ -61,59 +78,67 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     setActiveSessionId,
     setEditingMessageId,
     setEditingValue,
+    setActiveSessionLoading,
+    replaceSession,
+    replaceNewChat,
   });
 
   const handlePickSession = useCallback(
     async (sessionId: string) => {
-      try {
-        const session = await fetchSessionById(sessionId);
-        setActiveSession(session);
-        setActiveSessionId(session.id);
-        setSelectedModelId(session.modelId);
-        setEditingMessageId(null);
-        setEditingValue('');
-        closeSidebarOnMobile((open) => setSidebarOpen(open));
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : '读取会话失败');
+      const cachedSession = readCachedSession(sessionId);
+      setActiveSessionId(sessionId);
+      setEditingMessageId(null);
+      setEditingValue('');
+
+      if (cachedSession) {
+        setActiveSession(cachedSession);
+        setSelectedModelId(cachedSession.modelId);
+        setActiveSessionLoading(false);
+      } else {
+        setActiveSessionLoading(true);
       }
+
+      pushSession(sessionId);
+      closeSidebarOnMobile((open) => setSidebarOpen(open));
     },
     [
-      fetchSessionById,
+      readCachedSession,
       setActiveSession,
       setActiveSessionId,
-      setSelectedModelId,
+      setActiveSessionLoading,
       setEditingMessageId,
       setEditingValue,
+      setSelectedModelId,
+      pushSession,
       setSidebarOpen,
-      setNotice,
     ],
   );
 
   const handleNewChat = useCallback(async () => {
-    try {
-      await createSession();
-      setInputValue('');
-      setEditingMessageId(null);
-      setEditingValue('');
-      closeSidebarOnMobile((open) => setSidebarOpen(open));
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : '创建会话失败');
-    }
+    setActiveSession(null);
+    setActiveSessionId(null);
+    setActiveSessionLoading(false);
+    setInputValue('');
+    setEditingMessageId(null);
+    setEditingValue('');
+    pushNewChat();
+    closeSidebarOnMobile((open) => setSidebarOpen(open));
   }, [
-    createSession,
+    setActiveSession,
+    setActiveSessionId,
+    setActiveSessionLoading,
     setInputValue,
     setEditingMessageId,
     setEditingValue,
+    pushNewChat,
     setSidebarOpen,
-    setNotice,
   ]);
 
   const handleQuickPrompt = useCallback(
     async (prompt: string) => {
-      setInputValue(prompt);
       await sendMessage(prompt);
     },
-    [setInputValue, sendMessage],
+    [sendMessage],
   );
 
   const handleCopy = useCallback(

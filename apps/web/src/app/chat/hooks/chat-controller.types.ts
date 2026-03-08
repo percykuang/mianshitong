@@ -2,12 +2,13 @@ import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
 
 export interface ChatController {
   sessions: SessionSummary[];
+  sessionsLoading: boolean;
   activeSessionId: string | null;
   activeSession: ChatSession | null;
   inputValue: string;
   selectedModelId: ModelId;
   sending: boolean;
-  loading: boolean;
+  activeSessionLoading: boolean;
   notice: string | null;
   toast: string | null;
   sidebarOpen: boolean;
@@ -23,6 +24,7 @@ export interface ChatController {
   handleDeleteAllSessions: () => Promise<void>;
   handleQuickPrompt: (prompt: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
+  stopMessageGeneration: () => void;
   editUserMessage: (messageId: string, content: string) => Promise<boolean>;
   startEditingUserMessage: (messageId: string, content: string) => void;
   cancelEditingUserMessage: () => void;
