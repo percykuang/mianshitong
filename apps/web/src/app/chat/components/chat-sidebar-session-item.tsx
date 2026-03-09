@@ -31,16 +31,16 @@ export function ChatSidebarSessionItem({
   return (
     <div
       className={cn(
-        'group/session flex min-w-0 items-center gap-1 rounded-[18px] px-1.5 py-0.5 transition-colors',
+        'group/session flex min-w-0 items-center gap-1 rounded-[18px] px-3 py-0.5 transition-colors',
         active
-          ? 'bg-sidebar-accent/65 text-sidebar-accent-foreground'
-          : 'text-sidebar-foreground hover:bg-sidebar-accent/45',
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'text-sidebar-foreground hover:bg-sidebar-accent',
       )}
     >
       <button
         type="button"
         onClick={() => void onSelect(session.id)}
-        className="flex min-w-0 flex-1 cursor-pointer items-center rounded-[14px] px-3 py-1.5 text-left"
+        className="flex min-w-0 flex-1 cursor-pointer items-center rounded-[14px] py-1 text-left"
       >
         <span className="line-clamp-1 min-w-0 flex-1 text-sm leading-6 font-medium">
           {session.title}

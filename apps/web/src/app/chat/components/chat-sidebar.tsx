@@ -89,7 +89,7 @@ export function ChatSidebar({
               >
                 <Button
                   variant="ghost"
-                  className="h-8 p-1 md:h-fit md:p-2"
+                  className="mr-1.25 h-8 p-1 md:h-fit md:p-2"
                   aria-label="新建会话"
                   onClick={() => void onNewChat()}
                 >
@@ -103,8 +103,8 @@ export function ChatSidebar({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto p-3">
-          <div className="flex flex-col gap-2">
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 py-2">
+          <div className="flex flex-col gap-1">
             {sessionsLoading && sessions.length === 0 ? <SessionSkeleton /> : null}
 
             {!sessionsLoading && sessions.length === 0 ? (
