@@ -1,7 +1,7 @@
 'use client';
 
 import type { SessionSummary } from '@mianshitong/shared';
-import { MoreHorizontal, Pencil, Pin, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Pin, Trash } from '@/components/icons';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -113,7 +113,7 @@ export function ChatSidebarSessionItem({
                 onRequestDelete(session);
               }}
             >
-              <Trash2 className="size-3.5" />
+              <Trash className="size-3.5" />
               <span>删除</span>
             </button>
           </PopoverContent>

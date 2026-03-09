@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader } from '@/components/icons';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { signOut, useSession } from 'next-auth/react';
@@ -83,7 +83,7 @@ export function GuestMenu({
       >
         <div className="size-6 animate-pulse rounded-full bg-zinc-500/30" />
         <span className="animate-pulse rounded-md bg-zinc-500/30 text-transparent">Guest</span>
-        <Loader2 className="ml-auto size-4 animate-spin text-zinc-500" />
+        <Loader className="ml-auto size-4 animate-spin text-zinc-500" />
       </button>
     );
   }

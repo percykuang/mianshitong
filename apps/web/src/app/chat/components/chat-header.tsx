@@ -1,4 +1,4 @@
-import { ChevronLeft, Menu } from 'lucide-react';
+import { ChevronLeft, Menu } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
 interface ChatHeaderProps {

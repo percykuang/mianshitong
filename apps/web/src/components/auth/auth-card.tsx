@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Loader2 } from 'lucide-react';
+import { Loader } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -82,7 +82,7 @@ export function AuthCard({
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
           <Button type="submit" className="h-10 w-full" disabled={pending}>
-            {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {pending ? <Loader className="size-4 animate-spin" /> : null}
             {submitLabel}
           </Button>
         </form>

@@ -1,9 +1,9 @@
 import type { SessionSummary } from '@mianshitong/shared';
-import { ChevronLeft, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, Plus, Trash } from '@/components/icons';
 import Link from 'next/link';
 import { GuestMenu } from '@/components/guest-menu';
 import { Button } from '@/components/ui/button';
-import { HoverPopover } from '@/components/ui/hover-popover';
+import { HoverTooltip } from '@/components/ui/hover-tooltip';
 import { cn } from '@/lib/utils';
 import { ChatSidebarSessionItem } from './chat-sidebar-session-item';
 
@@ -70,7 +70,7 @@ export function ChatSidebar({
               </span>
             </Link>
             <div className="flex flex-row gap-1">
-              <HoverPopover
+              <HoverTooltip
                 content="删除所有会话记录"
                 contentClassName="min-w-[116px] rounded-lg px-3.5 py-1.5 text-[13px] font-medium shadow-md"
               >
@@ -80,10 +80,10 @@ export function ChatSidebar({
                   aria-label="删除所有会话记录"
                   onClick={onRequestDeleteAllSessions}
                 >
-                  <Trash2 className="size-4" />
+                  <Trash className="size-4" />
                 </Button>
-              </HoverPopover>
-              <HoverPopover
+              </HoverTooltip>
+              <HoverTooltip
                 content="新建会话"
                 contentClassName="min-w-[88px] rounded-lg px-3.5 py-1.5 text-[13px] font-medium shadow-md"
               >
@@ -95,7 +95,7 @@ export function ChatSidebar({
                 >
                   <Plus className="size-4" />
                 </Button>
-              </HoverPopover>
+              </HoverTooltip>
               <Button variant="ghost" className="h-8 p-1 md:hidden" onClick={onCloseSidebar}>
                 <ChevronLeft className="size-4" />
               </Button>

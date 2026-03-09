@@ -1,5 +1,6 @@
 export {
   type ChatMessage,
+  type ChatMessageFeedback,
   type ChatSession,
   type ChatSessionResponse,
   type ChatSessionsResponse,

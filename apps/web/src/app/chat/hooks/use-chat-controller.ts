@@ -163,6 +163,10 @@ export function useChatController(): ChatController {
     setSending(false);
   }, [setSending]);
 
+  const showToast = useCallback((content: string) => {
+    setToast(content);
+  }, []);
+
   const remoteEditMessage = useEditMessage({
     activeSession,
     sending,
@@ -286,5 +290,6 @@ export function useChatController(): ChatController {
     setEditingValue,
     handleCopy: actions.handleCopy,
     showNotice: actions.showNotice,
+    showToast,
   };
 }

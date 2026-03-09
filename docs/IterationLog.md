@@ -2315,3 +2315,707 @@
   - 发送中停止生成与重复发送提示；
   - 长消息滚动到底与“用户手动上滚后不再抢滚动”；
   - 代码块复制/下载与主题切换。
+
+## Iteration 3.16（2026-03-09）：对齐极简 like/dislike 消息反馈
+
+### 目标
+
+- 先按 `zhitalk.chat` 的极简思路补齐 AI 回复的 like/dislike 反馈闭环，仅记录正负反馈，不提前引入点踩原因或后台分析。
+
+### 主要改动
+
+- 共享契约扩展：
+  - `packages/shared` 为 `ChatMessage` 新增可选 `feedback` 字段，类型为 `like | dislike | null`。
+- 持久化策略采用“消息内嵌反馈”而不是独立反馈表：
+  - 登录用户：反馈写入数据库中的会话 `messages` JSON；
+  - 游客：反馈写入本地 IndexDB 会话数据；
+  - 这样无需新增 Prisma 表迁移，改动范围更小，也更贴合当前仅做极简对齐的目标。
+- 新增通用反馈更新能力：
+  - `apps/web/src/lib/chat-message-feedback.ts`
+  - `apps/web/src/app/chat/lib/chat-local-message-feedback.ts`
+  - `apps/web/src/lib/server/chat-message-feedback-repository.ts`
+- 新增远端反馈接口：
+  - `PATCH /api/chat/sessions/[sessionId]/messages/[messageId]/feedback`
+- 前端交互对齐：
+  - AI 回复区域的“赞同回复 / 不赞同回复”不再只是提示文案；
+  - 点击后会真正写入反馈；
+  - 再次点击当前已选中的反馈可取消；
+  - 当前已选中的按钮会有激活态样式。
+- 新增单测：
+  - `apps/web/src/lib/chat-message-feedback.test.ts`
+
+### 迁移/破坏性变更
+
+- 无 Prisma schema 变更，无数据库迁移。
+- 旧消息数据没有 `feedback` 字段时按“未反馈”处理，兼容历史会话。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm test:e2e`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 后续如果继续增强该能力，再考虑：
+  - 点踩原因；
+  - 后台反馈查询；
+  - 模型/场景维度的反馈统计。
+
+## Iteration 3.17（2026-03-09）：对齐 zhitalk 的 like/dislike 可感知反馈
+
+### 目标
+
+- 修复 AI 回复 like/dislike 点击后“像没反应”的体感问题，并把交互细节向 `zhitalk.chat` 靠拢。
+
+### 主要改动
+
+- 使用 Playwright 对比确认 `zhitalk.chat` 的真实行为：
+  - 点击后立即出现 toast；
+  - 当前选中的按钮进入禁用态；
+  - 另一侧按钮仍可点击切换；
+  - 不再支持点击同一按钮取消反馈。
+- 对齐前端交互实现：
+  - 新增 `showToast` 能力，从消息项触发页面顶部 toast；
+  - `message-upvote` / `message-downvote` 增加 `data-testid`，并按当前反馈状态切换禁用态；
+  - 点赞提示文案为 `Upvoted Response!`，点踩提示文案为 `Downvoted Response!`。
+- 新增一条页面烟测：
+  - 校验 like/dislike 点击后 toast 可见；
+  - 校验按钮禁用/可切换状态与 `zhitalk.chat` 对齐。
+
+### 迁移/破坏性变更
+
+- 无数据结构迁移；仅交互层行为调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm test:e2e`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 当前 like/dislike 已完成极简对齐。后续若继续增强，再考虑点踩原因与反馈后台。
+
+## Iteration 3.18（2026-03-09）：AI 回复反馈改为三态切换
+
+### 目标
+
+- 把 AI 回复的点赞/点踩从“双态切换”改为“三态切换”：默认态、点赞态、点踩态。
+- 让激活态图标使用填充视觉，提升状态可感知性。
+
+### 主要改动
+
+- 前端反馈交互改为三态：
+  - 点击点赞：进入点赞态；
+  - 再次点击点赞：回到默认态；
+  - 点踩同理；
+  - 点赞与点踩之间仍可直接互相切换。
+- 复用现有 `feedback: null` 协议，不新增后端字段或接口。
+- 激活态图标改为填充样式，并保留按钮高亮背景。
+- 新增/更新测试覆盖：
+  - 单测覆盖 `like -> dislike` 切换；
+  - E2E 覆盖三态切换、`aria-pressed` 状态与填充图标样式。
+- 组件拆分：将消息操作区从 `chat-message-item` 中拆出，避免单文件继续膨胀。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 旧数据仍兼容：没有 `feedback` 字段时按默认态处理。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm test:e2e`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续继续演进，可再评估：
+  - 默认态是否显示“取消反馈”单独文案；
+  - 点踩原因收集；
+  - 反馈数据在后台的统计与分析。
+
+## Iteration 3.19（2026-03-09）：图标库从 Lucide 迁移到 Remix Icon
+
+### 目标
+
+- 将 `apps/web` 中的图标依赖从 `lucide-react` 迁移到 `@remixicon/react`，并完成对应图标替换。
+- 在不破坏现有交互的前提下，统一全站图标风格并降低后续维护成本。
+
+### 主要改动
+
+- 依赖调整：
+  - 新增 `@remixicon/react`；
+  - 移除 `lucide-react`。
+- 新增统一图标映射层：
+  - `apps/web/src/components/icons.ts`
+  - 将项目已使用的 Lucide 图标名映射到对应的 Remix Icon 组件，降低业务文件改动面。
+- 全量替换 `apps/web/src` 下原有 `lucide-react` 导入，统一改为项目内部图标映射层。
+- 点赞/点踩激活态继续保留“填充图标”效果，但实现方式改为直接切换到 Remix Icon 的 `fill` 版本，而不是依赖 CSS 填充描边图标。
+- 更新 E2E 断言：从 Lucide 专属 class 判断，改为与图标库无关的状态属性判断，避免后续再次被图标库实现细节绑死。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- `apps/web` 的图标实现依赖已从 Lucide 切换为 Remix Icon；如后续新增图标，优先在统一映射层中补充。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm test:e2e`
+  - `pnpm lint`
+- `pnpm format:check` 在迁移后发现格式化差异，已补做格式修复并继续校验。
+
+### 下一步
+
+- 如果后续你要继续优化视觉一致性，可以再单独做一轮：
+  - 聊天页高频图标的粗细/尺寸微调；
+  - 首页营销区图标的风格统一；
+  - 侧边栏操作图标的 hover/激活态细化。
+
+## Iteration 3.20（2026-03-09）：清理图标兼容命名
+
+### 目标
+
+- 去掉 Remix Icon 映射层中沿用自 Lucide 的历史兼容命名，统一项目内部图标命名风格。
+
+### 主要改动
+
+- 将以下兼容命名统一替换为更干净的项目内命名：
+  - `Code2 -> Code`
+  - `Trash2 -> Trash`
+  - `Loader2 -> Loader`
+  - `CheckIcon -> Check`
+  - `XIcon -> X`
+  - `PanelLeftIcon -> SidebarToggle`
+  - `ChevronDownIcon -> ChevronDown`
+  - `ChevronUpIcon -> ChevronUp`
+- 同步更新 `apps/web/src` 下所有引用，避免继续暴露 Lucide 风格的别名。
+- 保持 `icons.ts` 作为统一图标映射层不变，后续新增图标继续在该层收敛。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 仅项目内部代码命名调整，无运行时协议变化。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm test:e2e`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续继续清理，可以再统一审视一轮 `icons.ts` 的语义命名，减少与具体库实现的耦合。
+
+## Iteration 3.21（2026-03-09）：整理统一图标映射层
+
+### 目标
+
+- 提升 `icons.ts` 的可维护性，让后续新增图标时能快速定位到合适分组。
+
+### 主要改动
+
+- 将 `apps/web/src/components/icons.ts` 按用途分组：
+  - 导航与布局；
+  - 选择与反馈；
+  - 内容与对话；
+  - 通用操作。
+- 补充极简注释，保留现有导出名不变，避免影响业务层引用。
+
+### 迁移/破坏性变更
+
+- 无。仅文件结构整理，不涉及运行时行为变化。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续图标继续增多，可以再考虑拆成 `chat-icons.ts` / `ui-icons.ts` 两个文件。
+
+## Iteration 3.22（2026-03-09）：将纯提示类 Hover Popover 改为 Tooltip
+
+### 目标
+
+- 将聊天页中仅用于 hover 提示的交互从 `Popover` 调整为 `Tooltip`，使交互语义更符合 UI 规范。
+
+### 主要改动
+
+- 新增 `apps/web/src/components/ui/hover-tooltip.tsx`，基于 Radix Tooltip 封装统一的 hover 提示组件。
+- 删除旧的 `hover-popover` 封装，避免继续用 Popover 承担纯提示职责。
+- 替换以下场景的提示实现：
+  - 侧栏顶部“删除所有会话记录”；
+  - 侧栏顶部“新建会话”；
+  - 代码块“复制代码”；
+  - 代码块“下载代码”。
+- 保留菜单型交互（例如会话项 `...` 操作）继续使用 `Popover`，不混淆职责。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 仅前端提示组件实现调整，无接口或数据结构变化。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm test:e2e`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续继续收敛交互规范，可以再统一梳理一轮项目中所有“纯提示”和“带操作浮层”的组件边界。
+
+## Iteration 3.23（2026-03-09）：统一 Tooltip 视觉风格
+
+### 目标
+
+- 让聊天页及通用 UI 的 Tooltip 与当前浮层体系在颜色、边框、圆角和阴影上保持一致。
+
+### 主要改动
+
+- 调整 `apps/web/src/components/ui/tooltip.tsx` 的基础样式：
+  - 使用 `bg-popover` / `text-popover-foreground`；
+  - 增加边框与柔和阴影；
+  - 圆角统一为 `rounded-lg`；
+  - 增加轻微 `backdrop-blur`；
+  - 文本尺寸统一为 `13px` 中号提示文案。
+- 将 Tooltip 默认延迟调整为 `120ms`，降低闪现感。
+- 同步收窄 `hover-tooltip` 中的重复样式，让基础样式更多收敛到 Tooltip 基类。
+
+### 迁移/破坏性变更
+
+- 无。仅视觉样式调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续继续微调，可再分别细化聊天页 Tooltip 和全局 Tooltip 的尺寸层级。
+
+## Iteration 3.24（2026-03-09）：收紧 Tooltip 与触发元素的间距
+
+### 目标
+
+- 让 Tooltip 的尖角和触发元素更贴近，减少视觉上的悬浮距离。
+
+### 主要改动
+
+- 依据 Radix Tooltip 的 `sideOffset` 机制，将 `hover-tooltip` 的 `sideOffset` 从 `6` 调整为 `4`。
+- 保持箭头绘制方式不变，避免引入不同方向下的定位偏差。
+
+### 迁移/破坏性变更
+
+- 无。仅视觉间距微调。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+
+### 下一步
+
+- 如果你还觉得距离偏大，可以继续将 `sideOffset` 再收紧到 `3`，但会更贴近触发元素边缘。
+
+## Iteration 3.25（2026-03-09）：消息复制改为局部提示态
+
+### 目标
+
+- 将 AI 消息和用户消息的复制交互改为局部反馈：hover 显示 Tooltip，点击后按钮临时切换为对勾，不再触发全局 toast。
+
+### 主要改动
+
+- 在 `chat-message-actions` 内为消息复制按钮新增局部 `copied` 状态与超时恢复逻辑。
+- 用户消息与 AI 消息复制按钮统一接入 `HoverTooltip`：
+  - hover 显示“复制消息”或“复制回复”；
+  - 复制成功后按钮图标切换为对勾，Tooltip/`aria-label` 切换为“已复制”。
+- 消息复制失败时改为通过 `notice` 告知，不再依赖全局 toast。
+- 移除消息列表对全局 `onCopy` 的透传，避免消息复制继续走控制器中的全局 toast 链路。
+- 新增一条 E2E 烟测，校验消息复制的 Tooltip、局部 copied 状态与“无全局 copy toast”。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 仅消息复制交互从全局 toast 改为局部提示态。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm test:e2e`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续继续对齐细节，可再考虑给消息复制按钮补一个更轻的 hover 高亮态，和代码块操作按钮保持完全一致。
+
+## Iteration 3.26（2026-03-09）：统一复制成功态为主题蓝
+
+### 目标
+
+- 将消息复制和代码块复制的“已复制”成功态统一为主题蓝，增强状态感知的一致性。
+
+### 主要改动
+
+- 消息复制按钮在 `copied` 态下，按钮前景色切换为 `--color-blue-600`。
+- 代码块复制按钮在 `copied` 态下，同步切换为 `--color-blue-600`。
+- 成功态仍保留对勾图标，仅统一视觉主题色，不改交互时长和逻辑。
+
+### 迁移/破坏性变更
+
+- 无。仅成功态视觉样式调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+
+### 下一步
+
+- 如果后续还要继续收口，可以把所有“成功态”图标都统一成同一套主题色策略。
+
+## Iteration 3.27（2026-03-09）：统一点赞/点踩激活态为主题蓝
+
+### 目标
+
+- 将 AI 消息点赞/点踩的激活态与复制成功态统一到同一套主题蓝视觉语言。
+
+### 主要改动
+
+- 点赞/点踩按钮在激活态下：
+  - 前景色切换为 `--color-blue-600`；
+  - 背景切换为基于主题蓝的轻度染色底；
+  - hover 时保持同一主题蓝语义，不再回退到中性色。
+- 保持原有三态切换、填充图标和禁用逻辑不变，仅调整样式表现。
+
+### 迁移/破坏性变更
+
+- 无。仅激活态视觉样式调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+
+### 下一步
+
+- 如果后续继续统一交互语言，可再决定是否把其他“已选中”按钮也统一到这套主题蓝策略。
+
+## Iteration 3.28（2026-03-09）：撤回主题蓝样式收口
+
+### 目标
+
+- 撤回最近两次与主题蓝相关的视觉收口，避免在主题色尚未定稿前继续扩大样式改动面。
+
+### 主要改动
+
+- 撤回代码块复制按钮 `copied` 态的主题蓝前景色，恢复为上一版中性样式。
+- 撤回消息复制按钮 `copied` 态的主题蓝前景色，恢复为上一版局部对勾反馈但不绑定主题色。
+- 撤回点赞/点踩激活态的主题蓝前景和蓝色染色底，恢复为中性色激活态样式。
+- 保留前面已经完成的功能改动：
+  - 消息复制的局部 copied 状态；
+  - Tooltip 提示；
+  - 不再使用全局 copy toast；
+  - 点赞/点踩三态逻辑。
+
+### 迁移/破坏性变更
+
+- 无。仅样式回退。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 后续如需统一主题色，建议等全局主题策略确定后再集中处理，避免反复返工。
+
+## Iteration 3.29（2026-03-09）：移除点赞/点踩 toast
+
+### 目标
+
+- 去掉 AI 消息点赞/点踩后的全局 toast，减少多余打扰，保留按钮自身的状态反馈即可。
+
+### 主要改动
+
+- 移除 `use-chat-message-feedback` 中点赞/点踩成功后的 toast 触发逻辑。
+- 清理消息列表与消息项中不再需要的 `onToast` 透传。
+- 更新 E2E：不再断言 `Upvoted Response!` / `Downvoted Response!` / `Cleared Response Feedback!` 文案。
+- 保留原有功能不变：
+  - 点赞/点踩三态切换；
+  - 按钮激活态与填充图标；
+  - 反馈失败时仍通过 `notice` 提示。
+
+### 迁移/破坏性变更
+
+- 无。仅移除反馈成功时的全局 toast。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm test:e2e`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续继续做减法，可再评估是否要把反馈失败提示也收敛成更轻量的局部反馈。
+
+## Iteration 3.30（2026-03-09）：去掉点赞/点踩激活态背景
+
+### 目标
+
+- 让点赞/点踩激活态只通过填充图标表达状态，不再额外叠加按钮背景。
+
+### 主要改动
+
+- 移除点赞/点踩激活态下的 `bg-muted` / `hover:bg-muted` 背景样式。
+- 保留原有三态切换、填充图标和禁用逻辑不变，仅做视觉减法。
+
+### 迁移/破坏性变更
+
+- 无。仅按钮样式调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+
+### 下一步
+
+- 如果后续还想继续做减法，可以再评估消息操作区的 hover 反馈是否也要统一减弱。
+
+## Iteration 3.31（2026-03-09）：代码下载增加局部成功态
+
+### 目标
+
+- 让代码块“下载代码”按钮在点击后也像“复制代码”一样，短暂显示对勾反馈。
+
+### 主要改动
+
+- 为代码块下载按钮新增局部 `downloaded` 状态。
+- 下载成功后：
+  - 按钮图标短暂切换为对勾；
+  - Tooltip 文案切换为“已下载”。
+- 复用与复制按钮一致的 1500ms 恢复时长，保持交互一致性。
+
+### 迁移/破坏性变更
+
+- 无。仅代码块下载按钮的局部反馈增强。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续继续补齐交互一致性，可再考虑给下载按钮补充独立的 E2E 烟测。
+
+## Iteration 3.32（2026-03-09）：补充点赞/点踩 Tooltip 文案
+
+### 目标
+
+- 为消息操作区的点赞/点踩按钮补充明确的 hover 文案，降低图标理解成本。
+
+### 主要改动
+
+- 点赞按钮 hover 时显示 Tooltip 文案“喜欢”。
+- 点踩按钮 hover 时显示 Tooltip 文案“不喜欢”。
+- 不改动原有三态切换、填充图标和局部复制反馈逻辑。
+
+### 迁移/破坏性变更
+
+- 无。仅提示文案增强。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+
+### 下一步
+
+- 如果后续继续统一文案语气，可再决定“喜欢 / 不喜欢”是否要与其他产品文案统一成同一套词汇风格。
+
+## Iteration 3.33（2026-03-09）：统一消息复制文案为“复制”
+
+### 目标
+
+- 简化消息复制按钮文案，减少“复制消息 / 复制回复”的冗余区分。
+
+### 主要改动
+
+- 将用户消息与 AI 消息复制按钮的默认 Tooltip/`aria-label` 文案统一为“复制”。
+- 保留代码块的“复制代码”文案不变，避免与普通消息复制混淆。
+
+### 迁移/破坏性变更
+
+- 无。仅文案调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+
+### 下一步
+
+- 如果后续继续收口，可再统一审视聊天页里所有 hover 文案的词汇长度和风格。
+
+## Iteration 3.34（2026-03-09）：补充代码输出风格约束
+
+### 目标
+
+- 约束大模型在输出代码块时尽量遵守统一的代码风格，减少前端展示时的风格漂移。
+
+### 主要改动
+
+- 在统一聊天回复格式系统提示词中新增两条代码风格约束：
+  - 代码缩进一律使用 2 个空格；
+  - 对于通常使用分号结尾的语言，语句结束必须补上分号。
+- 保持该约束只作用于“模型生成提示词”层，不对模型输出再做二次代码重写，避免后处理误改代码。
+- 更新单测，锁定这两条约束文案，防止后续被误删。
+
+### 迁移/破坏性变更
+
+- 无。仅系统提示词增强。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续发现模型仍偶尔不遵守，可再评估是否对代码块增加更强的后处理格式化，但当前不建议优先走这条路。
+
+## Iteration 3.35（2026-03-09）：修复 AI 消息区与输入框右边界未对齐
+
+### 目标
+
+- 修复聊天页中 AI 回复内容区右边界比底部输入框更靠右的问题，保证消息区与输入区横向边界一致。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/components/chat-message-item.tsx` 中 AI 消息内容容器的宽度策略：
+  - 将助手消息在横向 `flex` 布局里的容器类从 `w-full` 改为 `min-w-0 flex-1`；
+  - 避免“头像宽度 + 内容 100%”共同参与布局后把消息内容挤出父容器，导致代码块等内容右边界超出输入框。
+- 本地页面校验：
+  - 通过浏览器读取元素边界，代码块容器与输入框表单的 `right` 值已对齐，差值为 `0`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若后续继续调整聊天区版式，优先保持消息区与输入区复用一致的横向容器约束，避免再次出现边界漂移。
+
+## Iteration 3.36（2026-03-09）：统一聊天页横向容器约束
+
+### 目标
+
+- 将聊天页消息区、过渡空白态、输入区的横向宽度与内边距约束收口到同一来源，降低后续样式漂移和重复维护风险。
+
+### 主要改动
+
+- 新增共享布局常量文件：
+  - `apps/web/src/app/chat/components/chat-layout.ts`
+- 抽出两组横向容器样式常量：
+  - `CHAT_CONTENT_SHELL_CLASS`：统一 `max-w-4xl` 与左右 `px`；
+  - `CHAT_MESSAGE_COLUMN_CLASS`：统一消息区列表列布局。
+- 将以下组件改为复用共享常量，而不是各自手写一套相近 class：
+  - `chat-message-list.tsx`
+  - `chat-composer.tsx`
+  - `chat-conversation-transition.tsx`
+- 保持现有交互与视觉行为不变，仅收敛布局来源。
+
+### 迁移/破坏性变更
+
+- 无。仅聊天页内部样式约束重构。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+- 浏览器页面校验：
+  - 代码块容器与输入框表单右边界差值 `delta = 0`。
+
+### 下一步
+
+- 若后续继续调整聊天页宽度，只需要修改共享布局常量即可，不再需要分散改多处组件。

@@ -62,6 +62,7 @@ export interface InterviewReport {
 }
 
 export type MessageRole = 'system' | 'user' | 'assistant';
+export type ChatMessageFeedback = 'like' | 'dislike';
 export type MessageKind =
   | 'text'
   | 'question'
@@ -86,6 +87,7 @@ export interface ChatMessage {
   kind: MessageKind;
   content: string;
   createdAt: string;
+  feedback?: ChatMessageFeedback | null;
 }
 
 export interface ChatSession {

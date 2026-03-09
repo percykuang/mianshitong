@@ -15,6 +15,8 @@ describe('prependChatReplyFormattingInstruction', () => {
 
     expect(messages[0]?.role).toBe('system');
     expect(messages[0]?.content).toContain('默认使用 Markdown 输出');
+    expect(messages[0]?.content).toContain('代码缩进一律使用 2 个空格');
+    expect(messages[0]?.content).toContain('语句结尾必须补上分号');
     expect(messages[1]?.content).toBe('帮我写一个冒泡排序');
   });
 

@@ -32,4 +32,5 @@ export interface ChatController {
   setEditingValue: (value: string) => void;
   handleCopy: (content: string) => Promise<void>;
   showNotice: (content: string) => void;
+  showToast: (content: string) => void;
 }

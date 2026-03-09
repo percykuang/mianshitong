@@ -40,6 +40,10 @@
     "hljs",
     "indexeddb",
     "unstub",
-    "legacyab"
+    "legacyab",
+    "upvote",
+    "downvote",
+    "Upvoted",
+    "Downvoted"
   ]
 }

@@ -72,3 +72,56 @@ test('删除当前会话后应回到空聊天页', async ({ page }) => {
   await expect(page.getByText(session.title)).toHaveCount(0);
   await expect(page.getByText('新建一个会话后，你的聊天记录会展示在这里。')).toBeVisible();
 });
+
+test('消息复制应显示 tooltip 和局部 copied 状态，不触发全局 toast', async ({ page }) => {
+  const session = buildGuestSession({
+    id: '55555555555555555555555555555555',
+    title: '复制测试',
+    createdAt: '2026-03-09T06:00:00.000Z',
+    userContent: '请帮我优化这段项目经历',
+    assistantContent: '可以，我会先帮你提炼技术亮点和量化结果。',
+  });
+
+  await seedGuestSessions(page, [session]);
+  await page.goto(`/chat/${session.id}`);
+
+  const assistantCopy = page.getByTestId('assistant-message-copy');
+
+  await assistantCopy.hover();
+  await expect(page.getByText('复制回复')).toBeVisible();
+
+  await assistantCopy.click();
+  await expect(assistantCopy).toHaveAttribute('data-copy-state', 'copied');
+  await expect(assistantCopy).toHaveAttribute('aria-label', '已复制');
+  await expect(page.getByText('Copied to clipboard!')).toHaveCount(0);
+});
+
+test('消息 like/dislike 应支持三态切换和填充图标', async ({ page }) => {
+  const session = buildGuestSession({
+    id: '44444444444444444444444444444444',
+    title: '反馈测试',
+    createdAt: '2026-03-09T07:00:00.000Z',
+    userContent: '请帮我优化简历',
+    assistantContent: '可以，先把简历贴给我，我会帮你逐段优化。',
+  });
+
+  await seedGuestSessions(page, [session]);
+  await page.goto(`/chat/${session.id}`);
+
+  const upvote = page.getByTestId('message-upvote');
+  const downvote = page.getByTestId('message-downvote');
+
+  await downvote.click();
+  await expect(downvote).toBeEnabled();
+  await expect(downvote).toHaveAttribute('aria-pressed', 'true');
+  await expect(downvote).toHaveAttribute('data-icon-variant', 'fill');
+
+  await downvote.click();
+  await expect(downvote).toHaveAttribute('aria-pressed', 'false');
+  await expect(downvote).toHaveAttribute('data-icon-variant', 'line');
+
+  await upvote.click();
+  await expect(upvote).toBeEnabled();
+  await expect(upvote).toHaveAttribute('aria-pressed', 'true');
+  await expect(upvote).toHaveAttribute('data-icon-variant', 'fill');
+});

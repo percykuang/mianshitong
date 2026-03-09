@@ -1,5 +1,12 @@
 import Link from 'next/link';
-import { ArrowRight, CircleCheck, Code2, FileText, MessageSquare, Sparkles } from 'lucide-react';
+import {
+  ArrowRight,
+  CircleCheck,
+  Code,
+  FileText,
+  MessageSquare,
+  Sparkles,
+} from '@/components/icons';
 import { GuestMenu } from '@/components/guest-menu';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,7 +27,7 @@ const features = [
   {
     title: '面试题解答',
     description: '涵盖前端、算法、系统设计等各类编程面试题详解',
-    icon: Code2,
+    icon: Code,
   },
 ] as const;
 

@@ -1,5 +1,5 @@
 import { MODEL_OPTIONS, type ModelId } from '@mianshitong/shared';
-import { Send, Square } from 'lucide-react';
+import { Send, Square } from '@/components/icons';
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { CHAT_CONTENT_SHELL_CLASS } from './chat-layout';
 
 interface ChatComposerProps {
   hasConversation: boolean;
@@ -71,7 +72,7 @@ export function ChatComposer({
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl bg-background px-2 pb-3 md:px-4 md:pb-4">
+    <div className={`${CHAT_CONTENT_SHELL_CLASS} bg-background pb-3 md:pb-4`}>
       <div className="relative flex w-full flex-col gap-4">
         {showQuickPrompts ? (
           <div className="grid w-full gap-2 sm:grid-cols-2" data-testid="suggested-actions">

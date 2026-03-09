@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown } from '@/components/icons';
 import { usePathname } from 'next/navigation';
 import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -56,7 +56,6 @@ export function ChatClient() {
     if (!controller.sending && content.trim()) {
       scrollToBottom();
     }
-
     await controller.sendMessage(content);
   };
 
@@ -73,11 +72,9 @@ export function ChatClient() {
 
     requestAnimationFrame(() => {
       const input = composerInputRef.current;
-      if (!input) {
-        return;
+      if (input) {
+        input.focus();
       }
-
-      input.focus();
     });
   };
 
@@ -122,7 +119,6 @@ export function ChatClient() {
                 editingMessageId={activeEditingMessageId}
                 editingValue={controller.editingValue}
                 scrollContainerRef={scrollContainerRef}
-                onCopy={controller.handleCopy}
                 onStartEditUserMessage={controller.startEditingUserMessage}
                 onEditingValueChange={controller.setEditingValue}
                 onCancelEditUserMessage={controller.cancelEditingUserMessage}

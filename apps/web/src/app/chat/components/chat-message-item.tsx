@@ -1,18 +1,20 @@
 import type { ChatMessage } from '@mianshitong/shared';
-import { Copy, Pencil, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Sparkles } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { useChatMessageFeedback } from '../hooks/use-chat-message-feedback';
 import { ChatLoadingIndicator } from './chat-loading-indicator';
 import { ChatMarkdown } from './chat-markdown';
+import { ChatMessageActions } from './chat-message-actions';
 
 interface ChatMessageItemProps {
+  sessionId: string | null;
   message: ChatMessage;
   isLoading: boolean;
   isEditing: boolean;
   editingValue: string;
   sending: boolean;
-  onCopy: (content: string) => Promise<void>;
   onStartEditUserMessage: (messageId: string, content: string) => void;
   onEditingValueChange: (value: string) => void;
   onCancelEditUserMessage: () => void;
@@ -21,12 +23,12 @@ interface ChatMessageItemProps {
 }
 
 export function ChatMessageItem({
+  sessionId,
   message,
   isLoading,
   isEditing,
   editingValue,
   sending,
-  onCopy,
   onStartEditUserMessage,
   onEditingValueChange,
   onCancelEditUserMessage,
@@ -34,6 +36,11 @@ export function ChatMessageItem({
   onNotice,
 }: ChatMessageItemProps) {
   const isEditableUserMessage = message.role === 'user' && !isLoading;
+  const { pendingMessageId, setMessageFeedback } = useChatMessageFeedback({
+    sessionId,
+    onError: onNotice,
+  });
+  const feedbackPending = pendingMessageId === message.id;
 
   return (
     <article className="group/message w-full animate-in duration-200 fade-in">
@@ -48,7 +55,6 @@ export function ChatMessageItem({
             <Sparkles className="size-3.5" />
           </span>
         ) : null}
-
         <div
           className={cn(
             'flex flex-col gap-2 md:gap-3',
@@ -56,7 +62,7 @@ export function ChatMessageItem({
               ? isEditing
                 ? 'ml-auto w-full max-w-xl'
                 : 'max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)]'
-              : 'w-full',
+              : 'min-w-0 flex-1',
           )}
         >
           <div
@@ -114,58 +120,16 @@ export function ChatMessageItem({
                 message.role === 'user' ? 'justify-end' : 'justify-start',
               )}
             >
-              {isEditableUserMessage ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="编辑消息"
-                    onClick={() => onStartEditUserMessage(message.id, message.content)}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="复制消息"
-                    onClick={() => void onCopy(message.content)}
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="复制回复"
-                    onClick={() => void onCopy(message.content)}
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="赞同回复"
-                    onClick={() => onNotice('感谢反馈，我们会继续优化回复质量')}
-                  >
-                    <ThumbsUp className="size-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="不赞同回复"
-                    onClick={() => onNotice('已记录反馈，我们会改进后续回复')}
-                  >
-                    <ThumbsDown className="size-3.5" />
-                  </Button>
-                </>
-              )}
+              <ChatMessageActions
+                isUserMessage={isEditableUserMessage}
+                content={message.content}
+                messageId={message.id}
+                activeFeedback={message.feedback ?? null}
+                feedbackPending={feedbackPending}
+                onNotice={onNotice}
+                onStartEditUserMessage={onStartEditUserMessage}
+                onSetMessageFeedback={setMessageFeedback}
+              />
             </div>
           ) : null}
         </div>

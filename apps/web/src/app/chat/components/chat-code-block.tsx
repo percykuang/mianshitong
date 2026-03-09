@@ -1,9 +1,9 @@
 'use client';
 
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
-import { Check, Copy, Download } from 'lucide-react';
+import { Check, Copy, Download } from '@/components/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HoverPopover } from '@/components/ui/hover-popover';
+import { HoverTooltip } from '@/components/ui/hover-tooltip';
 import { cn } from '@/lib/utils';
 import { highlightCodeBlock } from './chat-shiki';
 
@@ -42,6 +42,12 @@ interface HighlightResult {
   html: string | null;
 }
 
+interface CodeActionButtonProps {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+}
+
 function normalizeLanguage(languageClassName?: string) {
   const match = /language-([\w-]+)/.exec(languageClassName ?? '');
   return (match?.[1] ?? 'text').toLowerCase();
@@ -66,15 +72,9 @@ export function renderInlineCode({ className, children, ...rest }: CodeProps) {
   );
 }
 
-interface CodeActionButtonProps {
-  label: string;
-  icon: ReactNode;
-  onClick: () => void;
-}
-
 function CodeActionButton({ label, icon, onClick }: CodeActionButtonProps) {
   return (
-    <HoverPopover content={label} side="top">
+    <HoverTooltip content={label} side="top">
       <button
         type="button"
         aria-label={label}
@@ -83,7 +83,7 @@ function CodeActionButton({ label, icon, onClick }: CodeActionButtonProps) {
       >
         {icon}
       </button>
-    </HoverPopover>
+    </HoverTooltip>
   );
 }
 
@@ -101,24 +101,27 @@ export function ChatCodeBlock({ className, children, ...rest }: CodeProps) {
   const highlightKey = useMemo(() => `${language}\u0000${code}`, [code, language]);
   const [highlightResult, setHighlightResult] = useState<HighlightResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
   const copiedTimerRef = useRef<number | null>(null);
+  const downloadedTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     void highlightCodeBlock(code, language).then((html) => {
-      if (cancelled) {
-        return;
+      if (!cancelled) {
+        setHighlightResult({ key: highlightKey, html });
       }
-
-      setHighlightResult({
-        key: highlightKey,
-        html,
-      });
     });
 
     return () => {
       cancelled = true;
+      if (copiedTimerRef.current) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+      if (downloadedTimerRef.current) {
+        window.clearTimeout(downloadedTimerRef.current);
+      }
     };
   }, [code, highlightKey, language]);
 
@@ -145,6 +148,15 @@ export function ChatCodeBlock({ className, children, ...rest }: CodeProps) {
     anchor.download = getDownloadFilename(language);
     anchor.click();
     URL.revokeObjectURL(url);
+
+    setDownloaded(true);
+    if (downloadedTimerRef.current) {
+      window.clearTimeout(downloadedTimerRef.current);
+    }
+    downloadedTimerRef.current = window.setTimeout(() => {
+      setDownloaded(false);
+      downloadedTimerRef.current = null;
+    }, 1500);
   }, [code, language]);
 
   return (
@@ -153,8 +165,8 @@ export function ChatCodeBlock({ className, children, ...rest }: CodeProps) {
         <span className="ml-1 font-mono lowercase">{language}</span>
         <div className="flex items-center gap-2">
           <CodeActionButton
-            label="下载代码"
-            icon={<Download className="size-3.5" />}
+            label={downloaded ? '已下载' : '下载代码'}
+            icon={downloaded ? <Check className="size-3.5" /> : <Download className="size-3.5" />}
             onClick={handleDownload}
           />
           <CodeActionButton
