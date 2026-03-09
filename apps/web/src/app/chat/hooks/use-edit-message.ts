@@ -1,7 +1,12 @@
-import type { ChatMessage, ChatSession } from '@mianshitong/shared';
+import type { ChatSession } from '@mianshitong/shared';
 import { useCallback } from 'react';
 import { fetchSessionById, openEditStreamRequest, readSseStream } from '../lib/chat-api';
 import { createTemporaryMessage } from '../lib/chat-helpers';
+import {
+  syncFetchedRemoteSession,
+  syncResolvedRemoteSession,
+} from '../lib/chat-remote-session-sync';
+import { getEditableUserMessageIndex } from '../lib/chat-message-mutations';
 import { createStreamEventHandler } from './stream-event-handler';
 
 interface EditMessageDeps {
@@ -14,10 +19,6 @@ interface EditMessageDeps {
     value: ChatSession | null | ((prev: ChatSession | null) => ChatSession | null),
   ) => void;
   setActiveSessionId: (value: string | null) => void;
-}
-
-function getEditableUserMessageIndex(messages: ChatMessage[], messageId: string): number {
-  return messages.findIndex((item) => item.id === messageId && item.role === 'user');
 }
 
 export function useEditMessage({
@@ -77,10 +78,22 @@ export function useEditMessage({
           }),
         );
 
-        const latest = syncedSession ?? (await fetchSessionById(session.id));
-        setActiveSession(latest);
-        setActiveSessionId(latest.id);
-        await refreshSessions();
+        if (syncedSession) {
+          await syncResolvedRemoteSession({
+            session: syncedSession,
+            refreshSessions,
+            setActiveSession,
+            setActiveSessionId,
+          });
+        } else {
+          await syncFetchedRemoteSession({
+            sessionId: session.id,
+            fetchSessionById,
+            refreshSessions,
+            setActiveSession,
+            setActiveSessionId,
+          });
+        }
         return true;
       } catch (error) {
         setNotice(error instanceof Error ? error.message : '编辑失败，请稍后重试');

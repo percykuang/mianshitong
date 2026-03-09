@@ -43,3 +43,6 @@ build
 
 # OS
 .DS_Store
+
+playwright-report
+test-results

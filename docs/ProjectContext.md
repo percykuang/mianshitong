@@ -404,3 +404,5 @@
 
 - 已删除一批确认无引用的孤儿文件，包括旧的 `chat-response-code-detection.ts`、未再接入的 `ChatConversationSkeleton` 组件、`apps/web/public` 下默认模板 SVG，以及根目录残留的临时截图素材。
 - 本轮清理目标仅限“文件级、可证实无引用”项，避免把仍在演进中的模块误删。
+
+- 2026-03-09：仓库已正式接入聊天页最小 Playwright 页面烟测，定位是补足“真实页面链路”的回归保护，而不是替代现有 Vitest。当前覆盖 3 条高风险链路：首发预设消息发送、会话切换、删除当前会话。测试实现刻意收敛为游客态 + IndexDB 种子数据 + `/api/chat/stream` 路由 mock，并复用本机 Google Chrome channel，避免把测试稳定性绑定到真实模型、数据库或额外浏览器下载上。

@@ -2,7 +2,7 @@ const CODE_BLOCK_PATTERN = /```[\s\S]*?```/;
 const COMPLETE_FENCE_PATTERN = /^```([\w-]*)\n([\s\S]*?)\n```$/;
 const FENCE_LINE_PATTERN = /^\s*```([\w-]+)?\s*$/;
 const CODE_LINE_PATTERN =
-  /^\s*(?:#!\/|[{}()[\],.;]|\w+\s*[:=]\s*.+|(?:const|let|var|function|return|for|while|if|else|switch|case|break|continue|class|import|export|from|try|catch|finally|new|await|async|def|print|SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|WITH|interface|type|enum|extends|implements)\b|(?:console|Math|JSON|Array|Object|Promise)\.|\/\/|\/\*|\*\/|#include|<\/?[A-Za-z][^>]*>|\.\w+\(|\w+\([^)]*\)\s*\{|[-+*/%<>!=]=?|=>|(?:echo|cd|ls|cat|grep|find|mkdir|rm|cp|mv|chmod|chown|sed|awk|curl|wget|pnpm|npm|yarn|bun|node|git|docker|kubectl)\b|[.#]?[A-Za-z_-][\w-]*\s*\{|[A-Za-z_-][\w-]*:\s*.+|-[ ]+[A-Za-z_-][\w-]*:?.*)/;
+  /^\s*(?:#!\/|[{}()[\],.;]|[\w.$\[\]]+\s*(?::|[-+*/%]?=)\s*.+|(?:const|let|var|function|return|for|while|if|else|switch|case|break|continue|class|import|export|from|try|catch|finally|new|await|async|def|print|SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|WITH|interface|type|enum|extends|implements)\b|(?:console|Math|JSON|Array|Object|Promise)\.|\/\/|\/\*|\*\/|#include|<\/?[A-Za-z][^>]*>|\.\w+\(|\w+\([^)]*\)\s*\{|[-+*/%<>!=]=?|=>|(?:echo|cd|ls|cat|grep|find|mkdir|rm|cp|mv|chmod|chown|sed|awk|curl|wget|pnpm|npm|yarn|bun|node|git|docker|kubectl)\b|[.#]?[A-Za-z_-][\w-]*\s*\{|[A-Za-z_-][\w-]*:\s*.+|-[ ]+[A-Za-z_-][\w-]*:?.*)/;
 const PROSE_LINE_PATTERN = /[，。！？；：]/;
 
 export function hasCompleteCodeBlock(content: string): boolean {

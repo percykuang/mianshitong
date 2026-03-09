@@ -1,5 +1,6 @@
 import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
 import { useCallback } from 'react';
+import { getDeleteSessionTransitionPlan } from '../lib/chat-delete-transition';
 
 interface UseChatDeleteActionsInput {
   activeSessionId: string | null;
@@ -44,45 +45,54 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
     replaceNewChat,
   } = input;
 
+  const resetEditorState = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingValue('');
+  }, [setEditingMessageId, setEditingValue]);
+
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
       try {
         await deleteSessionById(sessionId);
         removeCachedSession(sessionId);
         const latest = await refreshSessions();
+        const nextSessionId = latest[0]?.id ?? null;
+        const cachedNextSession = nextSessionId ? readCachedSession(nextSessionId) : null;
+        const transition = getDeleteSessionTransitionPlan({
+          activeSessionId,
+          deletedSessionId: sessionId,
+          nextSessionId,
+          hasCachedNextSession: Boolean(cachedNextSession),
+        });
 
-        if (activeSessionId !== sessionId) {
+        if (transition.kind === 'noop') {
           return;
         }
 
-        if (latest.length === 0) {
+        if (transition.kind === 'reset') {
           setActiveSession(null);
           setActiveSessionId(null);
-          setEditingMessageId(null);
-          setEditingValue('');
+          resetEditorState();
           replaceNewChat();
           return;
         }
 
-        const cachedNextSession = readCachedSession(latest[0].id);
-        if (cachedNextSession) {
+        if (transition.kind === 'use-cached' && cachedNextSession) {
           setActiveSession(cachedNextSession);
           setActiveSessionId(cachedNextSession.id);
           setSelectedModelId(cachedNextSession.modelId);
-          setEditingMessageId(null);
-          setEditingValue('');
+          resetEditorState();
           setActiveSessionLoading(false);
           replaceSession(cachedNextSession.id);
           return;
         }
 
         setActiveSessionLoading(true);
-        const nextSession = await fetchSessionById(latest[0].id);
+        const nextSession = await fetchSessionById(transition.sessionId);
         setActiveSession(nextSession);
         setActiveSessionId(nextSession.id);
         setSelectedModelId(nextSession.modelId);
-        setEditingMessageId(null);
-        setEditingValue('');
+        resetEditorState();
         replaceSession(nextSession.id);
       } catch (error) {
         setNotice(error instanceof Error ? error.message : '删除会话失败');
@@ -99,11 +109,10 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
       removeCachedSession,
       replaceNewChat,
       replaceSession,
+      resetEditorState,
       setActiveSession,
       setActiveSessionId,
       setActiveSessionLoading,
-      setEditingMessageId,
-      setEditingValue,
       setNotice,
       setSelectedModelId,
     ],
@@ -117,8 +126,7 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
       setActiveSession(null);
       setActiveSessionId(null);
       setInputValue('');
-      setEditingMessageId(null);
-      setEditingValue('');
+      resetEditorState();
       replaceNewChat();
       setActiveSessionLoading(false);
     } catch (error) {
@@ -129,11 +137,10 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
     deleteAllSessions,
     refreshSessions,
     replaceNewChat,
+    resetEditorState,
     setActiveSession,
     setActiveSessionId,
     setActiveSessionLoading,
-    setEditingMessageId,
-    setEditingValue,
     setInputValue,
     setNotice,
   ]);

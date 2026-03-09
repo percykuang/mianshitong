@@ -1869,3 +1869,449 @@
 ### 迁移/破坏性变更
 
 - 无，仅为会话项背景色试验性微调。
+
+## Iteration 3.03（2026-03-09）：补齐 apps/web 聊天核心纯逻辑测试覆盖
+
+### 目标
+
+- 在不改动聊天 UI 交互的前提下，先为 `apps/web` 的关键纯逻辑模块补上回归保护，降低后续继续拆分聊天主控层时的回归风险。
+
+### 主要改动
+
+- Vitest 配置扩展到 `apps/web`：
+  - 根 `vitest.config.ts` 新增 `./apps/web/vitest.config.ts` 项目；
+  - 新增 `apps/web/vitest.config.ts`，为 Web 侧测试补充 `@ -> src` 别名解析。
+- 新增 `apps/web` 关键单测：
+  - `apps/web/src/lib/chat-markdown-normalization.test.ts`
+  - `apps/web/src/lib/chat-session-id.test.ts`
+  - `apps/web/src/lib/chat-session-order.test.ts`
+  - `apps/web/src/lib/server/chat-response-format.test.ts`
+  - `apps/web/src/lib/server/chat-response-language.test.ts`
+- 顺带修复两处被测试暴露出的低风险问题：
+  - `chat-response-language.ts` 中 JavaScript 语言检测正则异常，导致普通 JS 代码识别不稳定；
+  - `chat-response-fence.ts` 未将 `+=` 等复合赋值语句稳定识别为代码行，影响无 fenced code block 的代码回复自动包裹。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮主要是测试补强与代码识别规则的小幅修正。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 下一轮可继续沿着“先测试、后收口”的方向推进：
+  - 优先补 `send-message / 会话持久化 / 排序与置顶` 的更多纯逻辑测试；
+  - 再考虑把 `use-chat-controller` 继续拆薄，而不是直接做大重构。
+
+## Iteration 3.04（2026-03-09）：补齐游客会话与 SSE 解析测试覆盖
+
+### 目标
+
+- 在不触碰聊天 UI 的前提下，继续补强游客会话本地数据层与 SSE 解析层的回归保护，降低后续继续优化发送链路时的回归风险。
+
+### 主要改动
+
+- 新增游客会话与发送基础层测试：
+  - `apps/web/src/app/chat/lib/chat-local-session.test.ts`
+  - `apps/web/src/app/chat/lib/chat-api.test.ts`
+  - `apps/web/src/app/chat/stores/chat-session-cache-store.test.ts`
+- 覆盖的关键行为包括：
+  - 新会话欢迎消息与标题生成；
+  - 编辑首条用户消息后的会话重建；
+  - 构造流式上下文时过滤 `report` 消息；
+  - SSE 跨 chunk 解析；
+  - SSE 最后一个事件无空行结尾时的兜底消费；
+  - 会话缓存的写入、覆盖、删除与清空。
+- 顺带修复一处被测试暴露出的低风险问题：
+  - `apps/web/src/app/chat/lib/chat-api.ts` 在流结束时会丢失未以 `\n\n` 结尾的最后一个 SSE 事件；现已在结束时补充 flush 剩余 buffer。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮为测试补强与 SSE 解析健壮性修正。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 下一轮如果继续走低风险路径，建议补：
+  - `chat-local-storage.ts` 的本地会话读写与迁移；
+  - `chat-session-list-store / chat-active-session-store` 的状态更新测试；
+  - 然后再评估是否拆 `use-chat-controller`。
+
+## Iteration 3.06（2026-03-09）：补齐发送链路底层辅助模块测试覆盖
+
+### 目标
+
+- 在不触碰发送 hook 主体与聊天 UI 的前提下，继续补强发送链路底层辅助模块的回归保护，为后续拆薄 `use-send-message` 提前打基础。
+
+### 主要改动
+
+- 新增发送链路辅助模块测试：
+  - `apps/web/src/app/chat/lib/chat-helpers.test.ts`
+  - `apps/web/src/app/chat/lib/chat-route-bootstrap-bypass.test.ts`
+  - `apps/web/src/app/chat/hooks/stream-event-handler.test.ts`
+- 覆盖的关键行为包括：
+  - 临时消息创建时的默认 `kind` 与时间戳；
+  - SSE payload 的 JSON 解析与无效输入兜底；
+  - 路由 bootstrap bypass 的标记、查询与清除；
+  - 流式 `delta` 事件对 optimistic assistant 消息的追加；
+  - `done` 事件的服务端会话同步；
+  - `error` 事件的 notice 提示。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮仅新增测试。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 下一轮可开始评估如何把 `use-send-message / use-local-send-message` 中的 optimistic update 与错误恢复逻辑进一步下沉成可测试函数，再决定是否拆 hook 主体。
+
+## Iteration 3.07（2026-03-09）：下沉发送链路消息变换逻辑并补测试
+
+### 目标
+
+- 在不改变现有聊天交互的前提下，把发送与本地编辑链路中可测试的消息变换逻辑从 hook 中下沉出来，降低 hook 复杂度并继续补齐回归保护。
+
+### 主要改动
+
+- 新增消息变换辅助模块：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - `apps/web/src/app/chat/lib/chat-local-stream-handler.ts`
+- 新增对应测试：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.test.ts`
+  - `apps/web/src/app/chat/lib/chat-local-stream-handler.test.ts`
+- 将以下重复逻辑从 hook 中下沉到 helper：
+  - 会话标题生成；
+  - optimistic 消息追加；
+  - assistant delta 追加；
+  - optimistic 消息移除；
+  - 本地会话持久化前的最终会话构造；
+  - 本地流式回复的 delta/done/error 事件处理；
+  - 可编辑用户消息定位。
+- 相关 hook 已改为复用上述 helper：
+  - `use-local-send-message.ts`
+  - `use-send-message.ts`
+  - `use-local-edit-message.ts`
+  - `use-edit-message.ts`
+- 顺带修正一个潜在回归点：
+  - 本地发送在中途中止时，仍会保留已生成的部分 assistant 内容并落到本地会话，而不是丢失中途已生成的回复片段。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮为小步重构与测试补强。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 下一轮可开始评估是否继续把 `use-send-message` 中的“同步服务端会话 / 失败恢复”再下沉一层；若继续保持当前节奏，可在有测试保护的前提下再决定是否拆 `use-chat-controller`。
+
+## Iteration 3.08（2026-03-09）：下沉服务端会话同步与失败恢复逻辑
+
+### 目标
+
+- 继续小步拆薄远端发送/编辑链路，把“服务端会话同步与失败恢复”从 hook 中抽离出来，降低重复逻辑与后续维护成本。
+
+### 主要改动
+
+- 新增服务端会话同步辅助模块：
+  - `apps/web/src/app/chat/lib/chat-remote-session-sync.ts`
+- 新增对应测试：
+  - `apps/web/src/app/chat/lib/chat-remote-session-sync.test.ts`
+- 抽离出的能力包括：
+  - 同步已拿到的远端会话到当前 UI 状态；
+  - 按 `sessionId` 拉取并同步远端会话；
+  - 失败时的兜底尝试同步。
+- 相关 hook 已改为复用该 helper：
+  - `use-send-message.ts`
+  - `use-edit-message.ts`
+- 这样做后，`use-send-message` 中内联的 `syncPersistedSession` 已移除，成功态与失败恢复态都改为走统一 helper，减少重复状态写入分支。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮为小步重构与测试补强。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 下一轮如果继续保持当前节奏，可开始评估 `use-chat-controller.ts` 中是否还存在可继续下沉的“组合但可复用”的逻辑；若没有明显收益，再考虑转向补更高层的交互级测试。
+
+## Iteration 3.09（2026-03-09）：下沉路由会话加载决策并补测试
+
+### 目标
+
+- 继续小步拆薄 controller 周边逻辑，把 `use-chat-controller-effects` 中最容易回归的“路由会话加载决策”提炼为纯函数，降低分支复杂度并提升可测试性。
+
+### 主要改动
+
+- 新增路由会话加载决策 helper：
+  - `apps/web/src/app/chat/lib/chat-route-hydration.ts`
+- 新增对应测试：
+  - `apps/web/src/app/chat/lib/chat-route-hydration.test.ts`
+- 抽离出的决策包括：
+  - 未 ready 时是否只展示 loading；
+  - 无路由 session 时是否重置当前会话；
+  - 有缓存时是否立即应用缓存；
+  - 是否需要展示 loading；
+  - 是否需要继续远端加载；
+  - pending route bootstrap bypass 时是否跳过远端加载。
+- `use-chat-controller-effects.ts` 已改为复用该 helper，使 effect 本身更偏向“执行副作用”，而不是混合状态判断与副作用。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮为纯逻辑下沉与测试补强。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 下一轮如果继续做减法，可评估：
+  - `use-chat-delete-actions.ts` 中删除后切换会话的决策是否值得提炼；
+  - 或者转向补一层更接近真实交互的测试，避免继续做收益递减的纯逻辑拆分。
+
+## Iteration 3.10（2026-03-09）：下沉删除后会话切换决策并补测试
+
+### 目标
+
+- 继续小步拆薄 controller 周边逻辑，把删除单个会话后“接下来切到哪里”的分支决策从 hook 中抽成纯函数，降低后续维护与回归风险。
+
+### 主要改动
+
+- 新增删除后会话切换决策 helper：
+  - `apps/web/src/app/chat/lib/chat-delete-transition.ts`
+- 新增对应测试：
+  - `apps/web/src/app/chat/lib/chat-delete-transition.test.ts`
+- 抽离出的决策包括：
+  - 删除的不是当前激活会话时无需切换；
+  - 删掉当前会话且无剩余会话时重置到新会话页；
+  - 有缓存的下一个会话时直接切缓存；
+  - 无缓存时走远端拉取。
+- `use-chat-delete-actions.ts` 已改为复用该 helper，并把编辑态清理收敛为局部 `resetEditorState`，减少重复赋值分支。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮为纯逻辑下沉与测试补强。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 当前 controller 周边最明显的纯逻辑已基本收口。下一轮如果继续优化，更建议转向更高层的交互级测试或局部组件测试，而不是继续做边际收益更低的纯逻辑拆分。
+
+## Iteration 3.11（2026-03-09）：为聊天交互补齐首批 jsdom Hook 测试
+
+### 目标
+
+- 在已有纯逻辑测试保护的基础上，开始补一层更接近真实用户动作的交互级测试，验证聊天关键 Hook 在 DOM 环境下的行为，而不直接上整页 E2E。
+
+### 主要改动
+
+- 为 `apps/web` 增加最小组件测试基建：
+  - 安装 `@testing-library/react`
+  - 安装 `@testing-library/jest-dom`
+  - 安装 `jsdom`
+- 调整 `apps/web/vitest.config.ts`，纳入 `*.dom.test.ts(x)` 测试文件。
+- 新增 DOM 测试基础 setup：
+  - `apps/web/vitest.setup.ts`
+- 新增交互级测试：
+  - `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - `apps/web/src/app/chat/hooks/chat-controller-helpers.dom.test.ts`
+- 覆盖的关键交互包括：
+  - 选中已缓存会话时立即应用缓存并在移动端关闭侧栏；
+  - 选中未缓存会话时进入 loading；
+  - 新建会话时重置输入与编辑态；
+  - 提交编辑成功/失败时的编辑态收口；
+  - 移动端侧栏自动关闭；
+  - 复制按钮在安全上下文与回退 `execCommand` 两种路径下的行为。
+- 本轮采用 Vitest 官方支持的 `@jest-environment jsdom` 文件级配置，避免为少量 DOM 测试引入更重的多项目测试编排复杂度。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮主要新增测试基建与交互测试。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 当前项目已同时具备：
+  - 纯逻辑单测；
+  - Hook/DOM 交互测试。
+- 下一轮如果继续优化，建议优先补“会话切换 / 新建会话 / 删除会话 / 复制代码块”这类用户最敏感的交互测试，而不是再继续做边际收益更低的纯逻辑拆分。
+
+## Iteration 3.13（2026-03-09）：补齐快速提示词、复制与编辑态交互测试
+
+### 目标
+
+- 继续沿着 Hook/DOM 交互测试方向推进，覆盖聊天页中用户直接可感知的细节行为，减少高频交互改动的回归风险。
+
+### 主要改动
+
+- 扩展 `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts` 覆盖范围：
+  - 快速提示词点击后直接触发发送；
+  - 复制成功时展示成功 toast；
+  - 复制失败时展示失败 toast；
+  - 开始编辑、取消编辑、展示 notice 时的状态更新；
+  - 已保留原有的选会话、新建会话、提交编辑成功/失败等测试。
+- 这样做后，`useChatControllerActions` 这一层的关键用户动作已经有较完整的交互回归保护。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮仅新增交互测试。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 当前聊天页的 Hook/DOM 交互测试覆盖已经具备相当密度。下一轮如果继续优化，更建议开始用更贴近真实页面的自动化测试去验证：
+  - 新建会话后首条发送；
+  - 会话切换时的状态稳定；
+  - 删除后界面收口；
+  - 长消息滚动与定位。
+
+## Iteration 3.14（2026-03-09）：补齐发送分发与停止生成的 Hook/DOM 测试
+
+### 目标
+
+- 继续补聊天页高频交互测试，覆盖 `useChatController` 层的发送分发、发送中阻止重复发送与停止生成行为。
+
+### 主要改动
+
+- 新增 DOM 测试：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+- 覆盖的关键交互包括：
+  - 登录用户发送时走远端发送；
+  - 游客发送时走本地发送；
+  - 发送中再次发送非空内容时阻止发送并展示 toast；
+  - 点击停止生成时中止当前流并清除 `sending` 状态。
+- 本轮测试通过模块 mock 的方式聚焦 `useChatController` 自身的行为分发，不依赖整页渲染，保持测试成本可控。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮仅新增交互测试。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 当前聊天关键交互的 Hook/DOM 测试已较完整。下一轮如果继续优化，更建议开始引入更贴近真实页面的自动化测试，优先覆盖：
+  - 新建会话后首条发送；
+  - 会话切换时状态稳定；
+  - 长消息滚动到底部；
+  - 删除后页面收口。
+
+## Iteration 3.15（2026-03-09）：接入聊天页最小 Playwright 页面烟测
+
+### 目标
+
+- 在现有单测与 Hook/DOM 测试之外，补一层更贴近真实页面的自动化回归保护，优先覆盖聊天页最容易引发体感回归的关键链路。
+
+### 主要改动
+
+- 新增 Playwright 页面级测试基建：
+  - 根目录新增 `playwright.config.ts`
+  - 根脚本新增 `pnpm test:e2e`
+  - 新增 `apps/web/e2e/chat-smoke.spec.ts`
+  - 新增 `apps/web/e2e/support/chat-e2e-fixtures.ts`
+- 测试策略保持最小、稳定、低侵入：
+  - 复用本机已安装的 Google Chrome channel，避免强依赖 Playwright 自带浏览器下载；
+  - 通过浏览器侧写入 IndexDB 来构造游客态会话数据；
+  - 通过 `page.route()` mock `/api/chat/stream`，避免依赖真实模型与数据库。
+- 当前已落地并通过的烟测链路：
+  - 新建会话后点击预设项发送，生成独立路由并完成回复；
+  - 会话切换后展示对应会话内容；
+  - 删除当前会话后页面回到空聊天页。
+- `.gitignore` 已补充 Playwright 产物目录，避免测试输出污染仓库。
+
+### 迁移/破坏性变更
+
+- 无运行时破坏性变更；本轮仅新增测试基建与仓库脚本。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm test:e2e`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果继续补自动化测试，优先级建议为：
+  - 发送中停止生成与重复发送提示；
+  - 长消息滚动到底与“用户手动上滚后不再抢滚动”；
+  - 代码块复制/下载与主题切换。

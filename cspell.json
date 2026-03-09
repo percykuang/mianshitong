@@ -37,6 +37,9 @@
     "psql",
     "shiki",
     "Shiki",
-    "hljs"
+    "hljs",
+    "indexeddb",
+    "unstub",
+    "legacyab"
   ]
 }

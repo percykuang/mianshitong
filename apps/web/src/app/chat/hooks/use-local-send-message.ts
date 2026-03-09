@@ -1,10 +1,15 @@
 import type { ChatSession } from '@mianshitong/shared';
 import { useCallback } from 'react';
 import { isAbortError, openGuestStreamRequest, readSseStream } from '../lib/chat-api';
+import { createLocalStreamHandler } from '../lib/chat-local-stream-handler';
+import {
+  appendOptimisticMessages,
+  buildStoredLocalSession,
+  removeOptimisticMessages,
+} from '../lib/chat-message-mutations';
 import { clearRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 import { createMessage, toStreamTurns } from '../lib/chat-local-session';
 import { saveLocalSession } from '../lib/chat-local-storage';
-import { parseSsePayload } from '../lib/chat-helpers';
 
 interface LocalSendMessageDeps {
   sending: boolean;
@@ -22,15 +27,6 @@ interface LocalSendMessageDeps {
   ) => void;
   setActiveSessionId: (value: string | null) => void;
   replaceSession: (sessionId: string) => void;
-}
-
-function toSessionTitle(content: string): string {
-  const normalized = content.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return '新的对话';
-  }
-
-  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
 }
 
 export function useLocalSendMessage({
@@ -65,55 +61,8 @@ export function useLocalSendMessage({
       let now = new Date().toISOString();
       let optimisticUser: ReturnType<typeof createMessage> | null = null;
       let optimisticAssistant: ReturnType<typeof createMessage> | null = null;
-      let assistantContent = '';
       let sessionIdToClear: string | null = null;
-
-      const buildStoredSession = (): ChatSession | null => {
-        if (!session || !optimisticUser) {
-          return null;
-        }
-
-        const next: ChatSession = {
-          ...session,
-          messages: [
-            ...session.messages,
-            optimisticUser,
-            ...(assistantContent.trim() && optimisticAssistant
-              ? [{ ...optimisticAssistant, content: assistantContent.trim() }]
-              : []),
-          ],
-          updatedAt: now,
-          status: 'idle',
-        };
-
-        const userCount = session.messages.filter((item) => item.role === 'user').length;
-        if (next.title === '新的对话' && userCount === 0) {
-          next.title = toSessionTitle(trimmed);
-        }
-
-        return next;
-      };
-
-      const removeOptimisticExchange = () => {
-        if (!optimisticUser && !optimisticAssistant) {
-          return;
-        }
-
-        setActiveSession((previous) => {
-          if (!previous) {
-            return previous;
-          }
-
-          return {
-            ...previous,
-            status: 'idle',
-            messages: previous.messages.filter(
-              (message) =>
-                message.id !== optimisticUser?.id && message.id !== optimisticAssistant?.id,
-            ),
-          };
-        });
-      };
+      let streamHandler: ReturnType<typeof createLocalStreamHandler> | null = null;
 
       try {
         session = readActiveSession() ?? createOptimisticSession();
@@ -133,16 +82,19 @@ export function useLocalSendMessage({
         });
 
         const baseSession = session;
-        const optimisticAssistantId = optimisticAssistant.id;
-
-        setActiveSession((previous) => {
-          const base = previous ?? baseSession;
-          return {
-            ...base,
-            messages: [...base.messages, optimisticUser!, optimisticAssistant!],
-            updatedAt: now,
-          };
+        streamHandler = createLocalStreamHandler({
+          optimisticAssistantId: optimisticAssistant.id,
+          setActiveSession,
+          setNotice,
         });
+
+        setActiveSession((previous) =>
+          appendOptimisticMessages(
+            previous ?? baseSession,
+            [optimisticUser!, optimisticAssistant!],
+            now,
+          ),
+        );
 
         const turns = toStreamTurns([...baseSession.messages, optimisticUser]);
         const response = await openGuestStreamRequest(
@@ -153,54 +105,21 @@ export function useLocalSendMessage({
           abortController.signal,
         );
 
-        await readSseStream(response, (eventName, payload) => {
-          const parsed = parseSsePayload(payload);
+        await readSseStream(response, streamHandler.handleEvent);
 
-          if (eventName === 'delta') {
-            const delta = typeof parsed.delta === 'string' ? parsed.delta : '';
-            if (!delta) {
-              return;
-            }
-
-            assistantContent += delta;
-            setActiveSession((previous) => {
-              if (!previous) {
-                return previous;
-              }
-
-              return {
-                ...previous,
-                messages: previous.messages.map((item) =>
-                  item.id === optimisticAssistantId
-                    ? { ...item, content: item.content + delta }
-                    : item,
-                ),
-              };
-            });
-            return;
-          }
-
-          if (eventName === 'done') {
-            const value =
-              typeof parsed.assistantContent === 'string'
-                ? parsed.assistantContent
-                : assistantContent;
-            assistantContent = value;
-            return;
-          }
-
-          if (eventName === 'error') {
-            const message =
-              typeof parsed.message === 'string' ? parsed.message : '模型调用失败，请稍后重试';
-            setNotice(message);
-          }
-        });
-
-        if (!assistantContent.trim()) {
+        const assistantContent = streamHandler.getAssistantContent().trim();
+        if (!assistantContent) {
           throw new Error('模型没有返回可用内容');
         }
 
-        const updated = buildStoredSession();
+        const updated = buildStoredLocalSession({
+          session,
+          optimisticUser,
+          optimisticAssistant,
+          assistantContent,
+          now,
+          submittedContent: trimmed,
+        });
         if (!updated) {
           throw new Error('会话保存失败');
         }
@@ -212,7 +131,14 @@ export function useLocalSendMessage({
         await refreshSessions();
       } catch (error) {
         if (isAbortError(error)) {
-          const updated = buildStoredSession();
+          const updated = buildStoredLocalSession({
+            session,
+            optimisticUser,
+            optimisticAssistant,
+            assistantContent: streamHandler?.getAssistantContent() ?? '',
+            now,
+            submittedContent: trimmed,
+          });
           if (updated) {
             await saveLocalSession(updated);
             setActiveSession(updated);
@@ -220,7 +146,9 @@ export function useLocalSendMessage({
             replaceSession(updated.id);
             await refreshSessions();
           } else {
-            removeOptimisticExchange();
+            setActiveSession((previous) =>
+              removeOptimisticMessages(previous, [optimisticUser?.id, optimisticAssistant?.id]),
+            );
           }
           return;
         }
@@ -228,7 +156,9 @@ export function useLocalSendMessage({
         if (readInputValue() === '') {
           setInputValue(content);
         }
-        removeOptimisticExchange();
+        setActiveSession((previous) =>
+          removeOptimisticMessages(previous, [optimisticUser?.id, optimisticAssistant?.id]),
+        );
         setNotice(error instanceof Error ? error.message : '发送失败，请稍后重试');
       } finally {
         if (sessionIdToClear) {

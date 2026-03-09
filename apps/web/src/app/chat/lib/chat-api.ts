@@ -146,6 +146,32 @@ export async function openEditStreamRequest(
   return response;
 }
 
+function emitSseEvent(rawEvent: string, onEvent: SseEventHandler): void {
+  const lines = rawEvent
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return;
+  }
+
+  let eventName = 'message';
+  const payloadLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim();
+      continue;
+    }
+
+    if (line.startsWith('data:')) {
+      payloadLines.push(line.slice(5).trimStart());
+    }
+  }
+
+  onEvent(eventName, payloadLines.join('\n'));
+}
+
 export async function readSseStream(response: Response, onEvent: SseEventHandler): Promise<void> {
   if (!response.body) {
     throw new Error('流式响应为空');
@@ -171,29 +197,12 @@ export async function readSseStream(response: Response, onEvent: SseEventHandler
 
       const rawEvent = buffer.slice(0, boundaryIndex);
       buffer = buffer.slice(boundaryIndex + 2);
-      const lines = rawEvent
-        .split('\n')
-        .map((line) => line.trimEnd())
-        .filter(Boolean);
-      if (lines.length === 0) {
-        continue;
-      }
-
-      let eventName = 'message';
-      const payloadLines: string[] = [];
-
-      for (const line of lines) {
-        if (line.startsWith('event:')) {
-          eventName = line.slice(6).trim();
-          continue;
-        }
-
-        if (line.startsWith('data:')) {
-          payloadLines.push(line.slice(5).trimStart());
-        }
-      }
-
-      onEvent(eventName, payloadLines.join('\n'));
+      emitSseEvent(rawEvent, onEvent);
     }
+  }
+
+  const rest = buffer.trim();
+  if (rest) {
+    emitSseEvent(rest, onEvent);
   }
 }

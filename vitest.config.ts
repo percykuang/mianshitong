@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 // Each workspace can optionally add its own vitest config later.
 export default defineConfig({
   test: {
-    projects: ['./packages/*'],
+    projects: ['./packages/*', './apps/web/vitest.config.ts'],
     coverage: {
       enabled: false,
     },

@@ -1,5 +1,6 @@
 import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
 import { useEffect } from 'react';
+import { getRouteSessionHydrationPlan } from '../lib/chat-route-hydration';
 import { hasRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 
 interface UseChatControllerEffectsInput {
@@ -97,33 +98,31 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
   }, [ready, refreshSessions, setNotice, setSessionsLoading]);
 
   useEffect(() => {
-    if (!ready) {
-      setActiveSessionLoading(Boolean(routeSessionId));
-      return;
-    }
+    const activeSession = readActiveSession();
+    const cachedSession = routeSessionId ? readCachedSession(routeSessionId) : null;
+    const plan = getRouteSessionHydrationPlan({
+      ready,
+      routeSessionId,
+      routeSessionAlreadyHydrated: activeSession?.id === routeSessionId,
+      hasCachedSession: Boolean(cachedSession),
+      pendingRouteTransition: routeSessionId ? hasRouteBootstrapBypass(routeSessionId) : false,
+    });
 
-    if (!routeSessionId) {
+    setActiveSessionLoading(plan.shouldSetLoading);
+
+    if (plan.shouldResetSession) {
       setActiveSession(null);
       setActiveSessionId(null);
-      setActiveSessionLoading(false);
       return;
     }
 
-    const activeSession = readActiveSession();
-    const cachedSession = readCachedSession(routeSessionId);
-    const routeSessionAlreadyHydrated = activeSession?.id === routeSessionId;
-    const pendingRouteTransition = hasRouteBootstrapBypass(routeSessionId);
-
-    if (cachedSession) {
+    if (cachedSession && plan.shouldApplyCachedSession) {
       setActiveSession(cachedSession);
       setActiveSessionId(cachedSession.id);
       setSelectedModelId(cachedSession.modelId);
-      setActiveSessionLoading(false);
-    } else if (!routeSessionAlreadyHydrated) {
-      setActiveSessionLoading(true);
     }
 
-    if (pendingRouteTransition && (cachedSession || routeSessionAlreadyHydrated)) {
+    if (!routeSessionId || !plan.shouldLoadRemote) {
       return;
     }
 

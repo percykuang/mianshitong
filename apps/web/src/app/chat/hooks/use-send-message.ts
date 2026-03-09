@@ -1,8 +1,14 @@
 import type { ChatSession } from '@mianshitong/shared';
 import { useCallback } from 'react';
 import { fetchSessionById, isAbortError, openStreamRequest, readSseStream } from '../lib/chat-api';
-import { clearRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 import { createTemporaryMessage } from '../lib/chat-helpers';
+import {
+  syncFetchedRemoteSession,
+  syncResolvedRemoteSession,
+  trySyncFetchedRemoteSession,
+} from '../lib/chat-remote-session-sync';
+import { appendOptimisticMessages, removeOptimisticMessages } from '../lib/chat-message-mutations';
+import { clearRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 import { createStreamEventHandler } from './stream-event-handler';
 
 interface SendMessageDeps {
@@ -56,43 +62,6 @@ export function useSendMessage({
       let optimisticAssistantId: string | null = null;
       let sessionIdToClear: string | null = null;
 
-      const removeOptimisticExchange = () => {
-        if (!optimisticUserId && !optimisticAssistantId) {
-          return;
-        }
-
-        setActiveSession((previous) => {
-          if (!previous) {
-            return previous;
-          }
-
-          return {
-            ...previous,
-            status: 'idle',
-            messages: previous.messages.filter(
-              (message) => message.id !== optimisticUserId && message.id !== optimisticAssistantId,
-            ),
-          };
-        });
-      };
-
-      const syncPersistedSession = async (): Promise<boolean> => {
-        if (!session) {
-          return false;
-        }
-
-        const latest = await fetchSessionById(session.id).catch(() => null);
-        if (!latest) {
-          return false;
-        }
-
-        setActiveSession(latest);
-        setActiveSessionId(latest.id);
-        replaceSession(latest.id);
-        await refreshSessions();
-        return true;
-      };
-
       try {
         session = readActiveSession() ?? createOptimisticSession();
         sessionIdToClear = session.id;
@@ -102,14 +71,13 @@ export function useSendMessage({
         optimisticUserId = optimisticUser.id;
         optimisticAssistantId = optimisticAssistant.id;
 
-        setActiveSession((previous) => {
-          const base = previous ?? session!;
-          return {
-            ...base,
-            messages: [...base.messages, optimisticUser, optimisticAssistant],
-            updatedAt: optimisticUser.createdAt,
-          };
-        });
+        setActiveSession((previous) =>
+          appendOptimisticMessages(
+            previous ?? session!,
+            [optimisticUser, optimisticAssistant],
+            optimisticUser.createdAt,
+          ),
+        );
 
         const response = await openStreamRequest(
           session.id,
@@ -131,17 +99,41 @@ export function useSendMessage({
           }),
         );
 
-        const latest = syncedSession ?? (await fetchSessionById(session.id));
-        setActiveSession(latest);
-        setActiveSessionId(latest.id);
-        replaceSession(latest.id);
-        await refreshSessions();
+        if (syncedSession) {
+          await syncResolvedRemoteSession({
+            session: syncedSession,
+            refreshSessions,
+            setActiveSession,
+            setActiveSessionId,
+            replaceSession,
+          });
+        } else {
+          await syncFetchedRemoteSession({
+            sessionId: session.id,
+            fetchSessionById,
+            refreshSessions,
+            setActiveSession,
+            setActiveSessionId,
+            replaceSession,
+          });
+        }
       } catch (error) {
-        const synced = await syncPersistedSession();
+        const synced = session
+          ? await trySyncFetchedRemoteSession({
+              sessionId: session.id,
+              fetchSessionById,
+              refreshSessions,
+              setActiveSession,
+              setActiveSessionId,
+              replaceSession,
+            })
+          : false;
 
         if (isAbortError(error)) {
           if (!synced) {
-            removeOptimisticExchange();
+            setActiveSession((previous) =>
+              removeOptimisticMessages(previous, [optimisticUserId, optimisticAssistantId]),
+            );
           }
           return;
         }
@@ -150,7 +142,9 @@ export function useSendMessage({
           setInputValue(content);
         }
         if (!synced) {
-          removeOptimisticExchange();
+          setActiveSession((previous) =>
+            removeOptimisticMessages(previous, [optimisticUserId, optimisticAssistantId]),
+          );
         }
         setNotice(error instanceof Error ? error.message : '发送失败，请稍后重试');
       } finally {

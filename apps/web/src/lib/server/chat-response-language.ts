@@ -108,7 +108,9 @@ export function detectCodeLanguage(content: string): string {
     return 'typescript';
   }
 
-  if (/(?:const|let|var|function|console\.|=>|for\s*\(|while\s*\(|if\s*\()/m.test(content)) {
+  if (
+    /(^|\n)\s*(?:const|let|var|function|console\.|=>|for\s*\(|while\s*\(|if\s*\()/m.test(content)
+  ) {
     return 'javascript';
   }
 

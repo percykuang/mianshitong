@@ -82,7 +82,7 @@ export function ChatClient() {
   };
 
   return (
-    <div className="group/sidebar-wrapper flex min-h-svh w-full overflow-hidden has-[[data-variant=inset]]:bg-sidebar">
+    <div className="group/sidebar-wrapper flex min-h-svh w-full overflow-hidden has-data-[variant=inset]:bg-sidebar">
       <ChatSidebar
         sessionsLoading={controller.sessionsLoading}
         sessions={controller.sessions}
