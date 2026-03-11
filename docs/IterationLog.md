@@ -9,6 +9,25 @@
 
 ---
 
+## Iteration 3.56（2026-03-11）：新增面试通 favicon SVG
+
+### 目标
+
+- 为面试通提供一个与产品定位匹配的 favicon，并直接接入 Next.js App Router 的 `icon.svg`。
+
+### 主要改动
+
+- 新增 `apps/web/src/app/icon.svg`：
+  - 蓝色渐变底 + 白色对话气泡 + 勾选符号，表达“对话 + 通过/认可”的产品语义。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要 `.ico` 或多尺寸打包，可基于该 SVG 再生成并替换 `apps/web/src/app/favicon.ico`。
+
 ## Iteration 3.55（2026-03-11）：本地化 cspell schema
 
 ### 目标
