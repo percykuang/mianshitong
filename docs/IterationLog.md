@@ -9,6 +9,68 @@
 
 ---
 
+## Iteration 3.55（2026-03-11）：本地化 cspell schema
+
+### 目标
+
+- 解决 VS Code 无法加载远程 cspell schema 的问题，避免提示“Location ... is untrusted”。
+
+### 主要改动
+
+- 新增本地 schema 文件：
+  - `schemas/cspell.schema.json`
+- `cspell.json` 改为引用本地 schema：
+  - `$schema: "./schemas/cspell.schema.json"`
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若升级 cspell 版本，可重新拉取 schema 以保持一致。
+
+## Iteration 3.54（2026-03-11）：调整浅色主题删除项 hover 背景
+
+### 目标
+
+- 修正浅色主题下会话菜单“删除”项 hover 背景色过重的问题。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-sidebar-session-item.tsx`
+  - 删除项 hover 背景从 `hover:bg-destructive/80` 调整为 `hover:bg-destructive/10`，保留红色文字与暗色主题样式。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需继续对齐参考图，可再微调为 `hover:bg-destructive/20`。
+
+## Iteration 3.53（2026-03-11）：聊天页错误提示从底部迁移到顶部 Toast
+
+### 目标
+
+- 去掉聊天页底部“请求失败”类红字提示，改为更轻量的顶部 toast 展示，降低打断感与视觉噪音。
+
+### 主要改动
+
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 移除底部 `notice` 文本渲染。
+  - 统一在顶部 toast 展示 `notice/ toast`，`notice` 用红色样式区分错误态。
+- `apps/web/src/app/chat/hooks/use-chat-controller-effects.ts`
+  - 为 `notice` 增加与 `toast` 一致的 1.8s 自动清理机制，避免错误提示常驻。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若后续需要区分“可恢复错误/致命错误”，可在 `notice` 上增加错误等级并扩展 toast 样式。
+
 ## Iteration 2.48（2026-03-06）：聊天页对齐 zhitalk（删除交互 + 游客本地存储 + 登录态 DB 存储）
 
 ### 目标
@@ -3019,3 +3081,522 @@
 ### 下一步
 
 - 若后续继续调整聊天页宽度，只需要修改共享布局常量即可，不再需要分散改多处组件。
+
+## Iteration 3.37（2026-03-09）：对齐新建会话空态标题区样式与轻量动效
+
+### 目标
+
+- 将新建会话时聊天区顶部空态文案“面试通 / AI 智能面试官，优化简历，模拟面试”的样式与呈现方式向 `zhitalk.chat` 对齐。
+
+### 方案对比
+
+- 方案 1（采用）：只对齐标题区的排版与轻量进入动效。
+  - 优点：改动小、性能成本几乎为零、不影响现有聊天流程。
+- 方案 2：继续细化为与快捷提问区联动的整段分层动效。
+  - 缺点：实现复杂度与回归风险更高，这次需求范围不值得放大。
+
+### 主要改动
+
+- 新增独立空态组件：
+  - `apps/web/src/app/chat/components/chat-empty-state.tsx`
+- `chat-message-list.tsx` 改为引用新组件，避免空态样式继续堆在消息列表文件内。
+- 样式对齐 `zhitalk.chat`：
+  - 标题改为 `text-3xl md:text-4xl`、`font-semibold`、`text-blue-600`；
+  - 副标题改为 `text-xl md:text-2xl`、`text-zinc-500`、`mt-4`；
+  - 容器改为 `max-w-3xl` 的居中布局。
+- 进入动效：
+  - 基于仓库已使用的 `tw-animate-css`，为标题与副标题补充轻量 `animate-in fade-in slide-in-from-bottom-2` 动画；
+  - 未引入任何新依赖。
+
+### 迁移/破坏性变更
+
+- 无。仅聊天空态展示层样式调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+- Playwright 对比结果：
+  - 本地空态标题与 `zhitalk.chat` 均为 `36px / 600 / blue-600`；
+  - 本地空态副标题与 `zhitalk.chat` 均为 `24px / 400 / zinc-500 / mt-4`；
+  - 本地额外补充了轻量 enter 动画，用于提升新建会话时的进入感。
+
+### 下一步
+
+- 若你后续还想继续抠细节，可以再对齐快捷提问区与空态标题之间的纵向节奏，但建议保持现在这种轻量级改动方式。
+
+## Iteration 3.38（2026-03-09）：调整新建会话空态标题区为左对齐
+
+### 目标
+
+- 将新建会话空态中的标题与副标题由居中改为左对齐，使其与下方内容区的阅读起点更一致。
+
+### 方案对比
+
+- 方案 1（采用）：只调整标题区文本对齐方式为左对齐。
+  - 优点：改动最小，不影响整体容器宽度与现有动效。
+- 方案 2：连同空态整体容器基线一起继续往左收紧。
+  - 缺点：会进一步影响与预设按钮、输入区之间的整体节奏，这次先不扩大范围。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-empty-state.tsx`
+  - 将空态容器从 `text-center` 调整为 `text-left`；
+  - 保留上一轮已对齐的字号、颜色和轻量进入动效不变。
+
+### 迁移/破坏性变更
+
+- 无。仅文本对齐方式调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+
+### 下一步
+
+- 若你后续还觉得左边界不够贴近，可再单独评估是否要把空态容器的 `max-w-3xl` 或 `px` 再向输入区左边缘收紧。
+
+## Iteration 3.39（2026-03-09）：收敛 AI 回复头像与 loading UI 到 zhitalk.chat 风格
+
+### 目标
+
+- 缩小聊天页 AI 回复 UI 与 `zhitalk.chat` 的差异，重点对齐头像尺寸、消息列间距、loading 形态与轻量进场动效。
+
+### 方案对比
+
+- 方案 1（采用）：轻量对齐方案。
+  - 对齐头像尺寸与外圈样式；
+  - 收敛 AI 回复列间距；
+  - 将 loading 从“思考中 + 点”改为更极简的点阵占位；
+  - 只改展示层组件，不动聊天状态流。
+- 方案 2：深度重做 AI 回复整行与流式阶段时序。
+  - 更像 `zhitalk.chat`，但会扩大到消息流时序和显隐逻辑，回归风险更高。
+
+### 主要改动
+
+- 新增 AI 头像组件：
+  - `apps/web/src/app/chat/components/chat-assistant-avatar.tsx`
+  - 头像外壳改为 `size-8`、`-mt-1`、`ring-1 ring-border`；
+  - 图标尺寸保持约 `14px`，与 `zhitalk.chat` 基线一致。
+- 收敛 AI 消息项展示：
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - AI 消息列间距从原先更松散的本地风格调整为更接近 `zhitalk.chat` 的节奏；
+  - 为 AI 消息行补充轻量 `fade-in + slide-in` 进入动画。
+- loading UI 收敛：
+  - `apps/web/src/app/chat/components/chat-loading-indicator.tsx`
+  - 移除可见的“思考中”文案，仅保留极简点阵占位；
+  - 保留无障碍 `sr-only` 文案，避免可访问性回退；
+  - loading 外层加入轻量进入动画。
+
+### 对标结果
+
+- Playwright 读取 `zhitalk.chat` 得到的关键基线：
+  - AI 头像外壳：`32x32`；
+  - 头像样式：`-mt-1`、`rounded-full`、`bg-background`、`ring-1 ring-border`；
+  - 图标尺寸约 `14px`；
+  - AI 行主结构：`flex w-full items-start gap-2 md:gap-3`。
+- 本地页面校验结果：
+  - AI 头像外壳已调整为 `32x32`；
+  - 图标尺寸与外圈样式已对齐到同一基线；
+  - loading 可见文案已去除，仅保留点阵占位与无障碍文本。
+
+### 迁移/破坏性变更
+
+- 无。仅聊天页 AI 回复展示层调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm format:check`
+
+### 下一步
+
+- 若你后续还要继续向 `zhitalk.chat` 抠细节，可以再单独收敛“AI 回复 action 区的出现时机”和“流式首 token 前的占位表现”，但建议继续保持小步改动。
+
+## Iteration 3.40（2026-03-09）：对齐输入框文案、模型菜单与发送按钮
+
+### 目标
+
+- 将聊天页输入区的占位文案、模型菜单和发送按钮进一步向 `zhitalk.chat` 对齐。
+
+### 方案对比
+
+- 方案 1（采用）：轻量对齐方案。
+  - 修改占位文案；
+  - 模型菜单改为顶部弹出，并补齐两行菜单项内容；
+  - 发送按钮收敛到与 `zhitalk.chat` 相同的圆形尺寸和状态表现。
+- 方案 2：继续深挖输入区内所有附属元素（上下文百分比、文件按钮等）的全部细节。
+  - 缺点：范围扩大，不是这次需求重点。
+
+### 主要改动
+
+- 占位文案：
+  - `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 将输入框占位从英文 `Send a message...` 调整为中文 `发消息...`。
+- 模型菜单：
+  - `packages/shared/src/constants/index.ts`
+    - 为 `MODEL_OPTIONS` 增加 `description`，并将模型名称文案对齐为 `Deepseek Chat` / `Deepseek Reasoner`；
+  - `apps/web/src/app/chat/components/chat-composer.tsx`
+    - 模型下拉改为 `side="top" + align="start" + position="popper"`，使菜单从顶部弹出；
+    - 触发器增加前置图标；
+    - 菜单项改为“两行文案”结构，标题与说明对齐 `zhitalk.chat`。
+- 发送按钮：
+  - `apps/web/src/components/icons.ts`
+    - 新增 `ArrowUp` 图标导出；
+  - `apps/web/src/app/chat/components/chat-composer.tsx`
+    - 未输入时按钮禁用并保持灰态；
+    - 可发送时显示深色圆形按钮和上箭头图标；
+    - 生成中保持深色圆形按钮，并切换为停止图标。
+
+### 对标结果
+
+- Playwright 验证 `zhitalk.chat`：
+  - 模型菜单位于触发器上方；
+  - 菜单宽度不小于 `260px`；
+  - 菜单项为两行文本，标题约 `12px medium`，描述约 `10px muted`；
+  - 发送按钮在空态/可发送态均为 `32x32` 圆形按钮。
+- 本地验证结果：
+  - 占位文案已为 `发消息...`；
+  - 模型菜单 `placement = top`；
+  - 发送按钮空态为灰色禁用，输入后为深色上箭头，发送中为深色停止按钮。
+
+### 迁移/破坏性变更
+
+- 无。仅输入区展示层与共享模型文案调整。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm format:check`
+
+### 下一步
+
+- 若你后续还要继续和 `zhitalk.chat` 抠细节，可以再单独处理输入区上方的上下文百分比按钮与文件上传按钮，但建议继续小步推进。
+
+## Iteration 3.41（2026-03-09）：修正模型触发器字号与重复下拉箭头
+
+### 目标
+
+- 修复输入区模型选择器与 `zhitalk.chat` 仍存在的细节偏差：
+  - 文字偏大；
+  - 重复出现两个向下箭头；
+  - 触发器内部图标与文字节奏不够贴近参考实现。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 移除手动添加的 `ChevronDown`，只保留共享 `SelectTrigger` 内置的默认下拉图标；
+  - 将模型名称文案收敛为 `text-xs font-medium`，与 `zhitalk.chat` 基线一致；
+  - 维持前置图标为 `16px`，并简化触发器内部结构，避免视觉上显得过重。
+- 对标结果：
+  - 本地触发器当前为 2 个图标（前置图标 + 默认箭头），不再重复渲染箭头；
+  - 文本字号已与 `zhitalk.chat` 对齐到 `text-xs` 级别。
+
+### 迁移/破坏性变更
+
+- 无。仅模型触发器展示微调。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm lint`
+  - `pnpm format:check`
+  - `pnpm typecheck`
+
+### 下一步
+
+- 若后续还要继续抠细节，可再评估是否替换前置图标 glyph 本身；当前已对齐尺寸和节奏，但未引入站点私有图标资产。
+
+## Iteration 3.42（2026-03-09）：将模型菜单选中对勾移到左侧
+
+### 目标
+
+- 修复模型菜单选中项的对勾位置，使其与参考实现一致，显示在菜单项前侧而不是后侧。
+
+### 主要改动
+
+- `apps/web/src/components/ui/select.tsx`
+  - 将 `SelectItem` 的选中指示器位置从 `right-2` 调整为 `left-2`；
+  - 同步将菜单项内边距从 `pr-8 pl-2` 调整为 `pr-2 pl-8`，为左侧对勾预留空间。
+
+### 迁移/破坏性变更
+
+- 无。仅共享下拉项布局微调。
+
+### 验证
+
+- 已执行并通过：
+  - `pnpm lint`
+  - `pnpm format:check`
+- Playwright 本地验证：
+  - 模型菜单选中项的对勾已显示在前侧。
+
+## Iteration 3.43（2026-03-09）：收敛模型触发器的焦点边框样式
+
+### 目标
+
+- 修复聊天输入区模型选择器在选中/回焦后仍可能出现的粗边框视觉问题，使其与 `zhitalk.chat` 的轻量触发器样式保持一致。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 仅对聊天页内的模型 `SelectTrigger` 做局部覆盖；
+  - 显式移除普通态、`focus`、`focus-visible`、`data-[state=open]` 下的边框、阴影与 ring；
+  - 保留 hover 背景反馈，不修改共享 `Select` 组件默认行为，避免影响项目内其它下拉框。
+
+### 迁移/破坏性变更
+
+- 无。仅聊天页模型触发器样式微调。
+
+### 验证
+
+- 已通过 Playwright 读取聊天页模型触发器 computed style，确认选中后：
+  - `border` 为 `0px`；
+  - `box-shadow` 未产生可见 ring；
+  - `outline` 未产生可见描边。
+
+### 下一步
+
+- 若你后续仍观察到边框问题，再继续针对截图对应状态补充 `active` / 浏览器原生焦点样式排查，但当前代码已优先收敛本组件自身样式来源。
+
+## Iteration 3.44（2026-03-09）：补充模型触发器的指针样式
+
+### 目标
+
+- 修复聊天输入区模型选择按钮在 hover 时未显示可点击指针的问题。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 为模型 `SelectTrigger` 补充 `cursor-pointer`，使 `Deepseek Chat / Deepseek Reasoner` 触发器在 hover 时具备明确的可点击反馈。
+
+### 迁移/破坏性变更
+
+- 无。仅局部交互样式调整。
+
+### 验证
+
+- 计划执行：`pnpm format:check && pnpm lint && pnpm typecheck`
+
+## Iteration 3.45（2026-03-09）：统一下拉菜单项的手型指针反馈
+
+### 目标
+
+- 修复模型菜单项在 hover 时未显示可点击手型的问题。
+
+### 主要改动
+
+- `apps/web/src/components/ui/select.tsx`
+  - 将共享 `SelectItem` 的默认鼠标样式从 `cursor-default` 调整为 `cursor-pointer`；
+  - 为禁用项补充 `data-[disabled]:cursor-not-allowed`，避免交互语义混淆。
+
+### 迁移/破坏性变更
+
+- 无。仅共享下拉菜单项交互样式调整。
+
+### 验证
+
+- 计划执行：`pnpm format:check && pnpm lint && pnpm typecheck`
+
+## Iteration 3.46（2026-03-09）：清理调试截图并收敛 Tailwind important 写法
+
+### 目标
+
+- 清理仓库中未被项目使用的临时文件。
+- 修复 VS Code 中 `suggestCanonicalClasses` 类问题，并增加后续防回归检查。
+
+### 主要改动
+
+- 删除仓库根目录下未被项目引用的临时调试截图：
+  - `composer-current.png`
+  - `image.png`
+  - `local-ai-loading.png`
+  - `local-ai-loading-2.png`
+  - `model-trigger-after-fix.png`
+  - `zhitalk-ai-ui.png`
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 将 `!border-none`、`!border-0`、`!shadow-none` 等旧式 important 写法，统一改为 Tailwind 官方推荐的后缀 `!` 语法。
+- `scripts/check-tailwind-canonical.mjs`
+  - 新增基于 TypeScript AST 的轻量检查脚本；
+  - 仅检查 `className` / `class` / `cn()` / `cva()` 中的 Tailwind 类字符串；
+  - 若出现 `!border-none` 这类前缀 important 写法，会在 lint 阶段直接报错。
+- `package.json`
+  - 新增 `lint:tailwind`；
+  - 将该检查并入根脚本 `pnpm lint`，防止后续再引入同类问题。
+
+### 迁移/破坏性变更
+
+- 无。仅清理无用文件并收紧样式规范检查。
+
+### 验证
+
+- 计划执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 若后续还想进一步清理“未使用源码文件”，建议单独做一轮静态引用分析与人工复核，避免误删运行时动态引用文件。
+
+## Iteration 3.47（2026-03-09）：补齐剩余 Tailwind canonical 类修复
+
+### 目标
+
+- 清理 VS Code 中剩余的 `suggestCanonicalClasses` 提示，并扩展仓库检查规则，覆盖常见可收敛类名。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 将 `min-w-[260px]` 改为 `min-w-65`。
+- `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 将 `dark:text-[#fff]` 改为 `dark:text-white`；
+  - 将 `break-words` 改为 `wrap-break-word`。
+- `apps/web/src/app/chat/components/chat-markdown.tsx`
+  - 将 `break-words` 改为 `wrap-break-word`。
+- `scripts/check-tailwind-canonical.mjs`
+  - 新增对以下 canonical 场景的检查：
+    - `text-[#fff]` -> `text-white`
+    - `break-words` -> `wrap-break-word`
+    - `min-w-[Npx]` 且 `N` 可按 Tailwind spacing scale 收敛时 -> `min-w-{N/4}`
+
+### 迁移/破坏性变更
+
+- 无。仅类名规范收敛与 lint 规则增强。
+
+### 验证
+
+- 计划执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+
+## Iteration 3.48（2026-03-10）：统一暗黑主题下侧栏按钮图标颜色
+
+### 目标
+
+- 修复暗黑主题下「新建会话」与「折叠侧边栏」图标颜色与其它图标不一致的问题。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-sidebar.tsx`
+  - 新建会话按钮补充 `text-foreground/62` 与 hover 颜色，保持与其它图标一致。
+- `apps/web/src/app/chat/components/chat-header.tsx`
+  - 侧栏折叠按钮补充 `text-foreground/62` 与 hover 颜色，避免暗黑主题图标偏亮。
+
+### 迁移/破坏性变更
+
+- 无。仅样式一致性调整。
+
+### 验证
+
+- 计划执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+
+## Iteration 3.49（2026-03-10）：去除暗黑主题输入区与模型按钮蒙层
+
+### 目标
+
+- 暗黑主题下移除输入框背景与模型切换按钮的灰色蒙层。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 为输入框与模型选择按钮补充 `dark:bg-transparent`，避免暗黑主题下出现背景叠色。
+
+### 迁移/破坏性变更
+
+- 无。仅样式一致性调整。
+
+### 验证
+
+- 计划执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+
+## Iteration 3.50（2026-03-10）：增强暗黑主题删除色对比度
+
+### 目标
+
+- 提升暗黑主题下删除按钮的红色亮度，对齐参考图效果。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-sidebar.tsx`
+  - 删除所有会话按钮 hover 色在暗黑主题提升为更亮的 red。
+- `apps/web/src/app/chat/components/chat-sidebar-session-item.tsx`
+  - 会话菜单删除项在暗黑主题使用更亮 red，并调整 hover 背景。
+
+### 迁移/破坏性变更
+
+- 无。仅样式调整。
+
+### 验证
+
+- 计划执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+
+## Iteration 3.51（2026-03-10）：调整删除项暗黑 hover 背景强度
+
+### 目标
+
+- 修正暗黑主题下删除项 hover 背景深度，使其更接近参考图表现。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-sidebar-session-item.tsx`
+  - 删除项 hover 背景从 `dark:hover:bg-red-500/10` 调整为 `dark:hover:bg-red-500/20`。
+
+### 迁移/破坏性变更
+
+- 无。仅样式调整。
+
+### 验证
+
+- 计划执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+
+## Iteration 3.52（2026-03-10）：更新主题切换文案
+
+### 目标
+
+- 将主题切换菜单文案改为中文描述。
+
+### 主要改动
+
+- `apps/web/src/components/guest-menu.tsx`
+  - `Toggle dark mode` 改为 `切换深色主题`。
+  - `Toggle light mode` 改为 `切换浅色主题`。
+
+### 迁移/破坏性变更
+
+- 无。仅文案调整。
+
+### 验证
+
+- 计划执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`

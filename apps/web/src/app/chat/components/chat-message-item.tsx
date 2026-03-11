@@ -1,9 +1,9 @@
 import type { ChatMessage } from '@mianshitong/shared';
-import { Sparkles } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useChatMessageFeedback } from '../hooks/use-chat-message-feedback';
+import { ChatAssistantAvatar } from './chat-assistant-avatar';
 import { ChatLoadingIndicator } from './chat-loading-indicator';
 import { ChatMarkdown } from './chat-markdown';
 import { ChatMessageActions } from './chat-message-actions';
@@ -43,33 +43,29 @@ export function ChatMessageItem({
   const feedbackPending = pendingMessageId === message.id;
 
   return (
-    <article className="group/message w-full animate-in duration-200 fade-in">
+    <article className="group/message w-full animate-in duration-200 fade-in slide-in-from-bottom-1">
       <div
         className={cn(
           'flex w-full items-start gap-2 md:gap-3',
           message.role === 'user' ? 'justify-end' : 'justify-start',
         )}
       >
-        {message.role === 'assistant' ? (
-          <span className="mt-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background text-foreground">
-            <Sparkles className="size-3.5" />
-          </span>
-        ) : null}
+        {message.role === 'assistant' ? <ChatAssistantAvatar loading={isLoading} /> : null}
         <div
           className={cn(
-            'flex flex-col gap-2 md:gap-3',
+            'flex flex-col gap-2',
             message.role === 'user'
               ? isEditing
-                ? 'ml-auto w-full max-w-xl'
-                : 'max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)]'
-              : 'min-w-0 flex-1',
+                ? 'ml-auto w-full max-w-xl md:gap-3'
+                : 'max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)] md:gap-3'
+              : 'min-w-0 flex-1 md:gap-4',
           )}
         >
           <div
             className={cn(
               'flex flex-col gap-2 overflow-hidden text-sm',
               message.role === 'user' && !isEditing
-                ? 'w-fit rounded-2xl bg-blue-600 px-3 py-2 text-right text-white dark:text-[#fff]'
+                ? 'w-fit rounded-2xl bg-blue-600 px-3 py-2 text-right text-white dark:text-white'
                 : message.role === 'user'
                   ? 'w-full max-w-xl rounded-2xl border border-border bg-background p-2 text-left text-foreground'
                   : 'bg-transparent px-0 py-0 text-left text-foreground',
@@ -105,7 +101,7 @@ export function ChatMessageItem({
                 </div>
               </div>
             ) : message.role === 'user' ? (
-              <p className="break-words whitespace-pre-wrap text-white dark:text-[#fff]">
+              <p className="wrap-break-word whitespace-pre-wrap text-white dark:text-white">
                 {message.content}
               </p>
             ) : (

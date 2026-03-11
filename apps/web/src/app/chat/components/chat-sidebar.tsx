@@ -76,7 +76,7 @@ export function ChatSidebar({
               >
                 <Button
                   variant="ghost"
-                  className="h-8 p-1 text-foreground/62 transition-colors hover:text-destructive md:h-fit md:p-2"
+                  className="h-8 p-1 text-foreground/62 transition-colors hover:text-destructive md:h-fit md:p-2 dark:hover:text-red-500"
                   aria-label="删除所有会话记录"
                   onClick={onRequestDeleteAllSessions}
                 >
@@ -89,14 +89,18 @@ export function ChatSidebar({
               >
                 <Button
                   variant="ghost"
-                  className="mr-1.25 h-8 p-1 md:h-fit md:p-2"
+                  className="mr-1.25 h-8 p-1 text-foreground/62 transition-colors hover:text-foreground md:h-fit md:p-2"
                   aria-label="新建会话"
                   onClick={() => void onNewChat()}
                 >
                   <Plus className="size-4" />
                 </Button>
               </HoverTooltip>
-              <Button variant="ghost" className="h-8 p-1 md:hidden" onClick={onCloseSidebar}>
+              <Button
+                variant="ghost"
+                className="h-8 p-1 text-foreground/62 transition-colors hover:text-foreground md:hidden"
+                onClick={onCloseSidebar}
+              >
                 <ChevronLeft className="size-4" />
               </Button>
             </div>

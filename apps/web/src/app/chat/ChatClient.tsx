@@ -37,6 +37,8 @@ export function ChatClient() {
   )
     ? controller.editingMessageId
     : null;
+  const toastMessage = controller.notice ?? controller.toast;
+  const toastClassName = controller.notice ? 'bg-red-600 text-white' : 'bg-zinc-900 text-white';
 
   const dialog = useChatSessionDialog({
     onRenameSession: renameSession,
@@ -167,10 +169,6 @@ export function ChatClient() {
             </div>
           </div>
         </div>
-
-        {controller.notice ? (
-          <p className="px-4 pb-3 text-[13px] text-red-600">{controller.notice}</p>
-        ) : null}
       </main>
 
       <ChatSessionDialog
@@ -184,10 +182,10 @@ export function ChatClient() {
         onConfirmDeleteAll={dialog.confirmDeleteAll}
       />
 
-      {controller.toast ? (
+      {toastMessage ? (
         <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-          <p className="rounded-md bg-zinc-900 px-3 py-2 text-xs text-white shadow-sm">
-            {controller.toast}
+          <p className={cn('rounded-md px-3 py-2 text-xs shadow-sm', toastClassName)}>
+            {toastMessage}
           </p>
         </div>
       ) : null}

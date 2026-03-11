@@ -107,7 +107,7 @@ export function ChatSidebarSessionItem({
             </button>
             <button
               type="button"
-              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-destructive transition-colors hover:bg-destructive/10"
+              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-destructive transition-colors hover:bg-destructive/10 dark:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-500"
               onClick={() => {
                 setMenuOpen(false);
                 onRequestDelete(session);

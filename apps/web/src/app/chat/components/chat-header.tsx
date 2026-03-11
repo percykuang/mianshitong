@@ -11,7 +11,7 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar }: ChatHeaderProps) {
     <header className="sticky top-0 z-20 flex items-center gap-2 bg-background px-2 py-1.5 md:px-2">
       <Button
         variant="outline"
-        className="h-8 px-2 md:h-fit md:px-2"
+        className="h-8 px-2 text-foreground/62 transition-colors hover:text-foreground md:h-fit md:px-2"
         data-testid="sidebar-toggle-button"
         aria-label={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
         onClick={onToggleSidebar}

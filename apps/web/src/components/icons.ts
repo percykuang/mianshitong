@@ -5,6 +5,7 @@ export {
   RiArrowDownSLine as ChevronDown,
   RiArrowLeftSLine as ChevronLeft,
   RiArrowRightLine as ArrowRight,
+  RiArrowUpLine as ArrowUp,
   RiArrowUpSLine as ChevronUp,
   RiCloseLine as X,
   RiMenuLine as Menu,

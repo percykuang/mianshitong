@@ -19,16 +19,7 @@ interface ChatMessageListProps {
   onNotice: (content: string) => void;
 }
 
-function EmptyConversationState() {
-  return (
-    <div className="flex min-h-full flex-col items-center justify-center px-4 py-16 text-center">
-      <div className="text-4xl font-semibold text-zinc-900 md:text-4xl">面试通</div>
-      <div className="mt-4 text-xl text-zinc-500 md:text-2xl">
-        AI 智能面试官，优化简历，模拟面试
-      </div>
-    </div>
-  );
-}
+import { ChatEmptyState } from './chat-empty-state';
 
 export function ChatMessageList({
   sessionId,
@@ -53,7 +44,7 @@ export function ChatMessageList({
   return (
     <div ref={scrollContainerRef} className="min-h-0 flex-1 touch-pan-y overflow-y-auto">
       <div className={CHAT_MESSAGE_COLUMN_CLASS}>
-        {!hasConversation && !suppressEmptyState ? <EmptyConversationState /> : null}
+        {!hasConversation && !suppressEmptyState ? <ChatEmptyState /> : null}
 
         {visibleMessages.map((message, index) => (
           <ChatMessageItem

@@ -5,6 +5,7 @@ import { hasRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 
 interface UseChatControllerEffectsInput {
   ready: boolean;
+  notice: string | null;
   toast: string | null;
   routeSessionId: string | null;
   refreshSessions: () => Promise<SessionSummary[]>;
@@ -27,6 +28,7 @@ interface UseChatControllerEffectsInput {
 export function useChatControllerEffects(input: UseChatControllerEffectsInput): void {
   const {
     ready,
+    notice,
     toast,
     routeSessionId,
     refreshSessions,
@@ -59,6 +61,20 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
       window.clearTimeout(timer);
     };
   }, [toast, setToast]);
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setNotice(null);
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [notice, setNotice]);
 
   useEffect(() => {
     if (window.innerWidth < 768) {

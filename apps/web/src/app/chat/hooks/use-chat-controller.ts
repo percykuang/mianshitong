@@ -197,6 +197,7 @@ export function useChatController(): ChatController {
 
   useChatControllerEffects({
     ready,
+    notice,
     toast,
     routeSessionId: currentRouteSessionId,
     refreshSessions,

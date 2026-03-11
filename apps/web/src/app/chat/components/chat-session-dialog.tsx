@@ -90,6 +90,7 @@ export function ChatSessionDialog({
             <Button
               type="button"
               variant="destructive"
+              className="bg-red-500"
               disabled={submitting}
               onClick={() => void onConfirmDeleteSession()}
             >

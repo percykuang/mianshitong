@@ -132,7 +132,7 @@ export function GuestMenu({
               setOpen(false);
             }}
           >
-            {`Toggle ${toggleTarget} mode`}
+            {toggleTarget === 'dark' ? '切换深色主题' : '切换浅色主题'}
           </button>
 
           <div className="my-1 h-px bg-border" />
@@ -153,7 +153,7 @@ export function GuestMenu({
               router.push('/login');
             }}
           >
-            {isAuthenticated ? '退出登录' : 'Login to your account'}
+            {isAuthenticated ? '退出登录' : '登录账户'}
           </button>
         </div>
       ) : null}

@@ -21,7 +21,7 @@
     "build": "pnpm -r --if-present build",
     "start:web": "pnpm -C apps/web start",
     "start:admin": "pnpm -C apps/admin start",
-    "lint": "pnpm -r --if-present lint && pnpm lint:css",
+    "lint": "pnpm -r --if-present lint && pnpm lint:css && pnpm lint:tailwind",
     "lint:css": "stylelint \"**/*.css\"",
     "lint:css:fix": "stylelint \"**/*.css\" --fix",
     "lint:style": "stylelint \"**/*.css\" --config stylelint.strict.config.mjs",
@@ -35,7 +35,8 @@
     "test:coverage": "vitest run --coverage",
     "commitlint": "commitlint",
     "prepare": "husky",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "lint:tailwind": "node scripts/check-tailwind-canonical.mjs"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.0",

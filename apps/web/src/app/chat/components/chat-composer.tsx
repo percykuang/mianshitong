@@ -1,20 +1,15 @@
 import { MODEL_OPTIONS, type ModelId } from '@mianshitong/shared';
-import { Send, Square } from '@/components/icons';
+import { ArrowUp, Sparkles, Square } from '@/components/icons';
 import {
   type FormEvent,
   type KeyboardEvent,
   type RefObject,
+  useMemo,
   useState,
   useSyncExternalStore,
 } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { CHAT_CONTENT_SHELL_CLASS } from './chat-layout';
 
@@ -56,6 +51,10 @@ export function ChatComposer({
     () => false,
   );
   const showQuickPrompts = !hasConversation && !suppressQuickPrompts;
+  const selectedModel = useMemo(
+    () => MODEL_OPTIONS.find((option) => option.id === selectedModelId) ?? MODEL_OPTIONS[0],
+    [selectedModelId],
+  );
 
   const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -104,9 +103,9 @@ export function ChatComposer({
               onKeyDown={handleTextareaKeyDown}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
-              placeholder="Send a message..."
+              placeholder="发消息..."
               data-testid="multimodal-input"
-              className="field-sizing-fixed min-h-20 w-full grow resize-none rounded-none !border-none bg-transparent p-2 text-sm shadow-none ring-0 outline-hidden [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none [&::-webkit-scrollbar]:hidden"
+              className="field-sizing-fixed min-h-20 w-full grow resize-none rounded-none border-none! bg-transparent p-2 text-sm shadow-none ring-0 outline-hidden [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none dark:bg-transparent [&::-webkit-scrollbar]:hidden"
             />
           </div>
 
@@ -117,19 +116,41 @@ export function ChatComposer({
                 onValueChange={(value) => onModelChange(value as ModelId)}
                 disabled={loading}
               >
-                <SelectTrigger className="h-8 border-0 px-2 shadow-none hover:bg-accent">
-                  <SelectValue />
+                <SelectTrigger className="h-8 cursor-pointer rounded-[6px_6px_6px_12px] border-0! px-2 shadow-none! hover:bg-accent focus:border-transparent focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:border-0! focus-visible:shadow-none! focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none data-[state=open]:border-0! data-[state=open]:shadow-none! data-[state=open]:ring-0 data-[state=open]:outline-none dark:bg-transparent">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Sparkles className="size-4 text-foreground" />
+                    <span className="hidden truncate text-xs font-medium sm:block">
+                      {selectedModel.label}
+                    </span>
+                  </span>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent
+                  position="popper"
+                  side="top"
+                  align="start"
+                  sideOffset={4}
+                  className="min-w-65 p-0"
+                >
                   {MODEL_OPTIONS.map((option) => (
-                    <SelectItem key={option.id} value={option.id}>
-                      {option.label}
+                    <SelectItem
+                      key={option.id}
+                      value={option.id}
+                      className="items-start rounded-none py-2 pr-2 pl-8 focus:bg-accent"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-medium text-foreground">
+                          {option.label}
+                        </div>
+                        <div className="mt-px truncate text-[10px] leading-tight text-muted-foreground">
+                          {option.description}
+                        </div>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             ) : (
-              <div className="h-8 w-32" />
+              <div className="h-8 w-40" />
             )}
 
             <Button
@@ -138,9 +159,13 @@ export function ChatComposer({
               data-testid="send-button"
               aria-label={sending ? '停止生成' : '发送消息'}
               onClick={sending ? onStop : undefined}
-              disabled={loading}
+              disabled={loading || (!sending && !inputValue.trim())}
             >
-              {sending ? <Square className="size-3.5 fill-current" /> : <Send className="size-4" />}
+              {sending ? (
+                <Square className="size-3.5 fill-current" />
+              ) : (
+                <ArrowUp className="size-4" />
+              )}
             </Button>
           </div>
         </form>
