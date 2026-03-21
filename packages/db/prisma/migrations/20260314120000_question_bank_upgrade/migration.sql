@@ -1,0 +1,5 @@
+ALTER TABLE "QuestionBankItem"
+ADD COLUMN "answer" TEXT,
+ADD COLUMN "tags" JSONB,
+ADD COLUMN "rubric" JSONB,
+ADD COLUMN "order" INTEGER;

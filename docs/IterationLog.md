@@ -7,7 +7,1590 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
----
+## Iteration 4.15（2026-03-22）：Admin 提交面二次收口
+
+### 目标
+
+- 在进入 Web 出题机制设计前，再清理一轮 Admin 提交面，去掉明显多余的配置和遗留文件。
+
+### 主要改动
+
+- `apps/admin/src/app/layout.tsx`
+  - 更新后台 metadata，移除过时的“模型配置管理”描述。
+- `apps/admin/src/components/admin-shell.tsx`
+  - 删除未使用的 `description` props，保留仍被题目新建/编辑页使用的 `hideHeader`，收窄页面壳层 API。
+- `apps/admin/src/app/globals.css`
+  - 移除未使用的 `tw-animate-css` 全局导入与无实际用途的 `dark` 自定义变体声明。
+- `apps/admin/next.config.ts`
+  - 收窄 `transpilePackages`，只保留实际被 Admin 引用的 `@mianshitong/db`。
+- `apps/admin/package.json`
+  - 删除未实际使用的 `@mianshitong/shared`、`tw-animate-css` 依赖声明。
+- `apps/admin/src/app/favicon.ico`
+  - 删除旧 favicon 文件，避免与 `icon.svg` 图标约定冲突。
+
+### 验证
+
+- 待同步 lockfile 后执行完整检查。
+
+### 下一步
+
+- 若本轮检查通过，则 Admin 可作为当前阶段的可提交基线。
+
+## Iteration 4.13（2026-03-22）：Admin MVP 上线前加固
+
+### 目标
+
+- 补足 Admin 端最关键的上线前安全与稳定性问题。
+
+### 主要改动
+
+- `apps/admin/src/lib/admin-security.ts`
+  - 新增管理员安全助手，提供登录失败限流、来源 IP 提取、可选 IP 白名单校验。
+- `apps/admin/src/app/api/admin/login/route.ts`
+  - 登录接口增加来源校验与失败限流，成功登录后清理失败计数。
+- `apps/admin/src/app/api/admin/logout/route.ts`
+  - 退出接口增加来源校验。
+- `apps/admin/src/app/api/question-bank/items/route.ts`
+  - 新建题目接口改为使用统一校验逻辑，严格校验难度、标签、序号与布尔字段。
+- `apps/admin/src/app/api/question-bank/items/[id]/route.ts`
+  - 编辑题目接口改为使用统一校验逻辑，拒绝非法字段值。
+- `apps/admin/src/app/api/question-bank/batch-delete/route.ts`
+  - 批量删除接口增加来源校验。
+- `apps/admin/src/app/api/users/[userId]/route.ts`
+  - 删除用户接口增加来源校验。
+- `apps/admin/src/app/api/sessions/[sessionId]/route.ts`
+  - 删除会话接口增加来源校验。
+- `apps/admin/src/lib/question-bank-validation.ts`
+  - 新增题库请求体验证助手，复用新建/编辑接口的数据校验逻辑。
+- `apps/admin/src/lib/session-messages.ts`
+  - 抽离系统欢迎语识别与可见消息计数逻辑。
+- `apps/admin/src/app/sessions/page.tsx`
+  - 会话列表改为复用统一消息统计逻辑。
+- `apps/admin/src/app/users/[userId]/page.tsx`
+  - 修复为 Next 16 兼容的异步 `params` 读取，并统一消息数统计口径。
+- `apps/admin/src/components/question-bank-options.ts`
+  - 新增 `QuestionLevelValue` 与难度校验函数，并收紧标签规范化逻辑。
+- `env.example`
+  - 新增可选环境变量 `ADMIN_ALLOWED_IPS` 示例说明。
+
+### 迁移/破坏性变更
+
+- 如需启用 Admin 访问白名单，需在环境变量中配置 `ADMIN_ALLOWED_IPS`。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.14（2026-03-22）：Admin 提交前清理
+
+### 目标
+
+- 清理 Admin 中已失效的旧组件、孤儿路由和多余数据字段，确保提交面干净。
+
+### 主要改动
+
+- `apps/admin/src/components/question-editor-modal.tsx`
+  - 删除旧的题目弹窗编辑组件，当前题目编辑已统一为独立页面。
+- `apps/admin/src/app/users/[userId]/page.tsx`
+  - 删除没有入口的用户详情页，当前“查看会话”统一跳转到会话列表并自动按用户 ID 过滤。
+- `apps/admin/src/components/user-sessions-table.tsx`
+  - 随用户详情页一并删除其专用表格组件。
+- `apps/admin/src/components/questions-table-card.tsx`
+  - 移除题库列表行模型中不再使用的字段。
+- `apps/admin/src/app/questions/page.tsx`
+  - 列表查询结果仅保留表格实际需要的数据，减少无用序列化字段。
+
+### 迁移/破坏性变更
+
+- `/users/[userId]` 页面不再提供。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.12（2026-03-21）：移除题库上传功能
+
+### 目标
+
+- 后台题库暂时只保留单题维护能力，移除“上传题库”功能。
+
+### 主要改动
+
+- `apps/admin/src/components/questions-table-card.tsx`
+  - 移除“上传题库”入口按钮。
+  - 题库空状态文案改为“题库暂无题目，请先新建。”。
+- `apps/admin/src/app/questions/upload/page.tsx`
+  - 删除上传题库页面。
+- `apps/admin/src/app/questions/upload/upload-form.tsx`
+  - 删除上传表单实现。
+- `apps/admin/src/components/question-upload-view.tsx`
+  - 删除上传视图组件。
+- `apps/admin/src/app/api/question-bank/import/route.ts`
+  - 删除题库导入接口。
+- `docs/QuestionBank.md`
+  - 当前能力调整为单题新建，上传 markdown + AI 解析改为后续扩展项。
+
+### 迁移/破坏性变更
+
+- `/questions/upload` 页面与 `/api/question-bank/import` 接口不再提供。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.05（2026-03-15）：题库方向并入标签
+
+### 目标
+
+- 合并题库“方向/标签”，仅保留标签字段并支持预置 + 自定义。
+
+### 主要改动
+
+- `packages/db/prisma/schema.prisma`
+  - 移除 `QuestionBankItem.topic` 字段。
+- `packages/db/prisma/migrations/20260315130000_merge_question_topic_into_tags/migration.sql`
+  - 迁移历史 `topic` 到 `tags` 并清理后删除列。
+- `packages/shared/src/types/index.ts`
+  - `InterviewQuestion` 改为可选 `topic`，题目主字段以 `tags` 为准。
+- `packages/interview-engine/src/question-plan.ts`
+  - 抽题逻辑改为按标签匹配配置方向并派生主方向。
+- `packages/interview-engine/src/scoring.ts`
+  - 评分记录支持可选 `topic`。
+- `apps/admin/src/app/questions/page.tsx`
+  - 列表筛选改为标签过滤。
+- `apps/admin/src/components/question-editor-form.tsx`
+  - 移除方向字段，标签支持预置 + 自定义。
+- `apps/admin/src/components/question-bank-options.ts`
+  - 统一标签预置与规范化函数。
+- `apps/admin/src/app/api/question-bank/*`
+  - 新建/更新/导入接口移除方向字段并规范化标签。
+- `apps/web/src/lib/server/question-bank-repository.ts`
+  - 题库读取去除 `topic` 字段映射。
+
+### 迁移/破坏性变更
+
+- 需要执行 Prisma 迁移以删除 `QuestionBankItem.topic` 列并回填标签。
+
+### 下一步
+
+- 如需更精细的标签分层，再考虑标签分组与统计。
+
+## Iteration 4.04（2026-03-14）：新建题目页滚动条贴边
+
+### 目标
+
+- 新建题目页主滚动条贴近浏览器右侧边框。
+
+### 主要改动
+
+- `apps/admin/src/app/questions/new/page.tsx`
+  - 内容区移除右侧内边距，避免滚动条内缩。
+- `apps/admin/src/components/question-create-view.tsx`
+  - 将内边距下沉到内容容器，保持标题与卡片对齐。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 无。
+
+## Iteration 4.03（2026-03-14）：去除控件聚焦阴影
+
+### 目标
+
+- 进一步减弱表单控件聚焦时的厚重感。
+
+### 主要改动
+
+- `apps/admin/src/app/globals.css`
+  - 将 Ant Design 控件聚焦时的 `box-shadow` 置为 `none`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需轻微聚焦提示，可改为 1px 半透明描边。
+
+## Iteration 4.02（2026-03-14）：收敛表单聚焦外圈
+
+### 目标
+
+- 降低表单控件聚焦外圈的视觉厚度。
+
+### 主要改动
+
+- `apps/admin/src/app/globals.css`
+  - 覆盖 Ant Design 输入/选择/按钮等聚焦样式，减少 box-shadow 厚度并调整边框色。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如仍偏厚，可进一步移除按钮聚焦阴影。
+
+## Iteration 4.01（2026-03-14）：移除全局聚焦外圈
+
+### 目标
+
+- 去掉全局 `outline` 聚焦外圈，避免表单边框显得过粗。
+
+### 主要改动
+
+- `apps/admin/src/app/globals.css`
+  - 移除 `outline-ring/50` 的全局应用。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需保留可访问性焦点样式，可改为仅对非 antd 元素启用 `:focus-visible`。
+
+## Iteration 4.00（2026-03-14）：题目标签下拉预选项
+
+### 目标
+
+- 新建题目标签下拉提供与列表筛选一致的预选项。
+
+### 主要改动
+
+- `apps/admin/src/components/question-bank-options.ts`
+  - 新增 `QUESTION_TAG_OPTIONS`，基于方向选项生成标签预选。
+- `apps/admin/src/components/question-editor-form.tsx`
+  - 标签选择器接入预选项，保持可自由输入。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 无。
+
+## Iteration 3.98（2026-03-14）：新建题目页改为 Flex 布局
+
+### 目标
+
+- 头部高度 56px、标题 20px。
+- 页面使用 Flex 布局，header/footer 固定高度，中间主体可滚动。
+
+### 主要改动
+
+- `apps/admin/src/components/question-create-view.tsx`
+  - 新建题目页改为 Flex 布局，header/footer 定高，主区域滚动。
+  - 底部操作按钮水平居中。
+- `apps/admin/src/app/questions/new/page.tsx`
+  - 自定义内容区样式，避免外层滚动干扰。
+- `apps/admin/src/components/admin-shell.tsx`
+  - 支持传入 `contentStyle` 覆盖内容区样式。
+- `apps/admin/src/components/question-create-form.tsx`
+  - 删除旧的表单容器组件（已合并到视图组件）。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 无。
+
+## Iteration 3.97（2026-03-14）：新建题目页头部固定定位调整
+
+### 目标
+
+- 新建题目页头部固定在内容区顶部，返回与标题合并展示。
+
+### 主要改动
+
+- `apps/admin/src/components/question-create-view.tsx`
+  - 头部改为固定定位并补充背景/分隔线。
+  - 调整容器偏移，避免与内容区顶边距叠加。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 无。
+
+## Iteration 3.96（2026-03-14）：新建题目页组件拆分与渲染修复
+
+### 目标
+
+- 修复新建题目页渲染时组件类型异常问题。
+
+### 主要改动
+
+- `apps/admin/src/components/question-create-view.tsx`
+  - 新增客户端视图组件，承载头部与卡片布局。
+- `apps/admin/src/app/questions/new/page.tsx`
+  - 页面改为引用客户端视图组件，避免在服务端直接渲染 Antd 组件。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 无。
+
+## Iteration 3.95（2026-03-14）：新建题目页头部与底部操作区调整
+
+### 目标
+
+- 返回按钮使用图标并与会话详情一致。
+- 新建题目页头部改为绝对定位，底部操作按钮水平居中。
+- 去掉表单底部额外留白。
+
+### 主要改动
+
+- `apps/admin/src/components/back-button.tsx`
+  - 返回按钮改为 `LeftOutlined` 图标。
+- `apps/admin/src/app/questions/new/page.tsx`
+  - 自定义绝对定位头部，包含返回按钮与标题。
+  - 通过 `hideHeader` 关闭默认头部渲染。
+- `apps/admin/src/components/admin-shell.tsx`
+  - 新增 `hideHeader` 以支持页面自定义头部。
+- `apps/admin/src/components/question-create-form.tsx`
+  - 移除底部 `padding-bottom`，按钮居中显示。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 无。
+
+## Iteration 3.94（2026-03-14）：题库新建页返回与底部操作栏对齐
+
+### 目标
+
+- 新建题目页返回按钮与会话详情一致。
+- 底部操作按钮改为固定 footer，不随页面滚动。
+
+### 主要改动
+
+- `apps/admin/src/components/back-button.tsx`
+  - 返回按钮仅显示 `<`，与会话详情页保持一致。
+- `apps/admin/src/components/question-create-form.tsx`
+  - 保存操作区改为底部 footer 包裹并固定在底部。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 无。
+
+## Iteration 3.93（2026-03-14）：题库管理一期（模型字段 + 管理端 CRUD）
+
+### 目标
+
+- 题库模型扩展为可运营/可评分结构，并在后台完成基础 CRUD 与筛选。
+
+### 主要改动
+
+- `packages/db/prisma/schema.prisma`
+  - 题库新增 `answer/tags/rubric/order` 字段。
+- `packages/db/prisma/migrations/20260314120000_question_bank_upgrade/migration.sql`
+  - 新增题库字段迁移。
+- `packages/shared/src/types/index.ts`
+  - `InterviewQuestion` 增加 `answer/tags/rubric` 可选字段。
+- `apps/web/src/lib/server/question-bank-repository.ts`
+  - 题库读取增加 `tags/rubric/answer` 映射与排序字段。
+- `apps/admin/src/app/questions/page.tsx`
+  - 题库列表支持筛选与分页。
+- `apps/admin/src/components/questions-filter.tsx`
+  - 新增筛选表单（方向/难度/状态/关键词）。
+- `apps/admin/src/components/questions-table-card.tsx`
+  - 新增新建/编辑/删除/批量删除/启用开关与表格展示。
+- `apps/admin/src/components/question-editor-modal.tsx`
+  - 新增题目编辑弹窗。
+- `apps/admin/src/components/question-editor-form.tsx`
+  - 表单字段拆分以控制文件规模。
+- `apps/admin/src/components/question-row-actions.tsx`
+  - 行操作菜单组件。
+- `apps/admin/src/app/api/question-bank/items/route.ts`
+  - 新增创建题目接口。
+- `apps/admin/src/app/api/question-bank/items/[id]/route.ts`
+  - 新增更新/删除题目接口。
+- `apps/admin/src/app/api/question-bank/batch-delete/route.ts`
+  - 新增批量删除接口。
+- `apps/admin/src/app/api/question-bank/import/route.ts`
+  - 导入支持 `answer/tags/rubric/order` 字段。
+- `docs/QuestionBank.md`
+  - 同步更新题库设计（字段与阶段方案）。
+
+### 迁移/破坏性变更
+
+- 需要执行 Prisma 迁移以新增题库字段。
+
+### 下一步
+
+- 如果需要简历匹配与 RAG，进入题库二期。
+
+## Iteration 3.92（2026-03-12）：移除管理员 name 字段
+
+### 目标
+
+- 管理员账号仅保留邮箱与密码，不再存储 name。
+
+### 主要改动
+
+- `packages/db/prisma/schema.prisma`
+  - 移除 `AdminUser.name`。
+- `packages/db/prisma/migrations/20260312164000_remove_admin_user_name/migration.sql`
+  - 新增迁移，删除 `AdminUser.name` 列。
+- `apps/admin/src/lib/admin-auth.ts`
+  - 移除 `name` 相关类型与 token 字段。
+- `apps/admin/src/app/api/admin/login/route.ts`
+  - 查询与 session payload 不再包含 `name`。
+- `scripts/create-admin-user.mjs`
+  - 移除 `name` 参数与写入。
+- `apps/admin/src/components/admin-shell.tsx`
+  - `adminUser` 类型不再包含 `name`。
+
+### 迁移/破坏性变更
+
+- 需要执行一次 Prisma 迁移以删除 `AdminUser.name` 列。
+
+### 下一步
+
+- 若已有旧脚本或数据依赖 name，需同步清理。
+
+## Iteration 3.91（2026-03-12）：移除表格标题列的 Antd Tooltip 以修复水合
+
+### 目标
+
+- 修复会话表格标题列的 hydration mismatch。
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-table.tsx`
+  - 标题列改为原生省略 + `title`，不再用 Antd `Typography.Text` 的 tooltip。
+- `apps/admin/src/components/user-sessions-table.tsx`
+  - 标题列改为原生省略 + `title`。
+- `apps/admin/src/app/globals.css`
+  - 新增 `.admin-ellipsis` 统一省略样式。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要自定义 tooltip，可改为客户端渲染或受控组件。
+
+## Iteration 3.90（2026-03-12）：会话标题存全，UI 负责省略
+
+### 目标
+
+- 会话标题不再在数据层写入 `...`，仅在 UI 中做省略展示。
+
+### 主要改动
+
+- `packages/interview-engine/src/session-core.ts`
+  - 会话标题生成不再截断。
+- `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - 前端会话标题生成不再截断。
+- `apps/web/src/lib/server/chat-store.ts`
+  - 服务端会话标题生成不再截断。
+- `apps/web/src/lib/server/chat-session-model.ts`
+  - 持久化会话标题生成不再截断。
+- `apps/web/src/app/chat/lib/chat-local-session.ts`
+  - 游客会话标题生成不再截断。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/route.ts`
+  - 标题重命名不再强制截断。
+- `apps/web/src/app/chat/lib/chat-local-storage.ts`
+  - 本地重命名不再强制截断。
+- `apps/admin/src/components/sessions-table.tsx`
+  - 标题列改为 UI 省略展示（Tooltip 提示完整内容）。
+- `apps/admin/src/components/user-sessions-table.tsx`
+  - 标题列改为 UI 省略展示（Tooltip 提示完整内容）。
+- `apps/web/src/app/chat/lib/chat-message-mutations.test.ts`
+  - 测试断言调整为完整标题。
+
+### 迁移/破坏性变更
+
+- 既有会话标题仍为历史截断值，无法自动恢复。
+
+### 下一步
+
+- 如需修复历史标题，可按“首条用户消息”回填一次性脚本。
+
+## Iteration 3.89（2026-03-12）：账号菜单样式强制覆盖
+
+### 目标
+
+- 确保账号下拉菜单为黑底白字，不被 Antd 主题覆盖。
+
+### 主要改动
+
+- `apps/admin/src/app/globals.css`
+  - 对账号下拉菜单背景、边框、阴影增加 `!important`。
+  - 菜单项颜色与背景强制覆盖，避免还原为白底。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需更细化，仅对退出项做高亮可再加 class。
+
+## Iteration 3.88（2026-03-12）：账号名称省略与菜单黑底白字
+
+### 目标
+
+- 账号名称超长时省略显示。
+- 退出菜单项黑底白字。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 账号按钮结构拆分为图标、名称、箭头，便于文本省略。
+- `apps/admin/src/app/globals.css`
+  - 账号区域新增专用样式，确保省略生效并增强菜单文字对比度。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需箭头随展开状态旋转，可改为受控 `open` 状态。
+
+## Iteration 3.87（2026-03-12）：侧栏账号箭头与菜单配色调整
+
+### 目标
+
+- 账号名称超长保持省略显示，右侧箭头向上。
+- 下拉菜单黑底白字。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 账号区域箭头图标改为向上。
+- `apps/admin/src/app/globals.css`
+  - 下拉菜单背景与文字色调整为黑底白字。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需箭头随展开状态旋转，可再加受控 `open` 状态。
+
+## Iteration 3.86（2026-03-12）：禁止 Body 滚动避免侧栏留白
+
+### 目标
+
+- 页面滚动时左侧导航不出现底部留白。
+
+### 主要改动
+
+- `apps/admin/src/app/globals.css`
+  - `html/body` 设为 `height: 100%` 且 `overflow: hidden`，仅内容区滚动。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若仍出现空白，可进一步检查内容区高度计算与内层滚动容器。
+
+## Iteration 3.85（2026-03-12）：侧栏账号信息固定到底部
+
+### 目标
+
+- 账号信息始终贴在左侧导航的浏览器窗口最底部。
+
+### 主要改动
+
+- `apps/admin/src/app/globals.css`
+  - 为 Sider 子容器设置纵向 flex，确保底部区域可以吸底。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若仍有偏移，考虑关闭侧栏内容区域的滚动或进一步收敛内边距。
+
+## Iteration 3.84（2026-03-12）：侧栏账号信息对齐参考样式
+
+### 目标
+
+- 登录后账号信息固定在左侧导航最底部，样式与 image1.png/image2.png 对齐。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 账号块放到侧栏底部，按钮结构增加用户图标与下拉指示。
+  - Dropdown 调整为 `topLeft` 弹出，并使用自定义 class。
+- `apps/admin/src/app/globals.css`
+  - 新增账号按钮与下拉菜单样式（背景、边框、hover）。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若仍需更精细的像素对齐，可微调按钮高度与内边距。
+
+## Iteration 3.59（2026-03-12）：后台会话详情展示系统消息
+
+### 目标
+
+- 会话详情页的对话记录包含 system 角色消息，便于完整排查上下文。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 新增 system 角色展示：使用灰色 Tag 标记为“系统”。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要，可进一步按角色提供筛选/折叠能力。
+
+## Iteration 3.60（2026-03-12）：后台导航水合一致性修复
+
+### 目标
+
+- 修复 Admin 侧栏导航在 SSR/CSR 首帧选择态不一致导致的 hydration warning。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 首帧不渲染选中态，等待客户端挂载后再设置 `selectedKeys`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若仍出现 hydration warning，进一步定位具体组件与差异 DOM。
+
+## Iteration 3.61（2026-03-12）：移除 question-bank 包并收敛到 interview-engine
+
+### 目标
+
+- 彻底移除 `packages/question-bank`，避免和“题库入库”路线冲突。
+
+### 主要改动
+
+- 新增 `packages/interview-engine/src/question-plan.ts`，承接题目规划算法。
+- `apps/web` 与 `packages/interview-engine` 改为引用 `interview-engine` 内部的 `buildQuestionPlan`。
+- 移除 `packages/question-bank` 包与 `apps/web` 的 transpile 配置。
+
+### 迁移/破坏性变更
+
+- 需要重新执行 `pnpm install` 以刷新 lockfile 中的 workspace 依赖。
+
+### 下一步
+
+- 如需对题目规划算法做可视化调参，可再补后台配置入口。
+
+## Iteration 3.62（2026-03-12）：会话详情将系统提示与对话记录拆分展示
+
+### 目标
+
+- 避免会话记录首条显示系统提示造成“AI 先发起”的误解。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - system 消息改为“系统提示”独立展示，不再混入对话记录列表。
+  - “消息数”统计仅计算用户与 AI 消息。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需彻底隐藏系统提示，可直接移除该区块。
+
+## Iteration 3.63（2026-03-12）：后台详情页隐藏 system 消息
+
+### 目标
+
+- 系统提示不混入对话记录，避免产生“AI 先发起”的误解。
+
+### 主要改动
+
+- `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - 归一化消息时保留 `kind` 字段。
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 过滤 `role === 'system'` 或 `kind === 'system'` 的消息。
+  - “消息数”统计仅含用户与 AI 消息。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需展示系统提示，可改为折叠区块或开关。
+
+## Iteration 3.64（2026-03-12）：兼容历史会话的 system 欢迎语过滤
+
+### 目标
+
+- 兼容历史会话中缺少 `kind=system` 的欢迎语，避免统计与展示异常。
+
+### 主要改动
+
+- `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - 在归一化阶段识别欢迎语内容并强制标记为 `kind=system`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需彻底去掉系统欢迎语，可考虑迁移数据时清理该消息。
+
+## Iteration 3.65（2026-03-12）：移除会话初始系统欢迎语
+
+### 目标
+
+- 新建会话不再写入系统欢迎语，数据库只保留真实对话内容。
+
+### 主要改动
+
+- `apps/web/src/lib/server/chat-session-model.ts`
+  - 新建会话默认消息列表改为空数组。
+- `apps/web/src/app/chat/lib/chat-local-session.ts`
+  - 游客会话不再注入系统消息。
+- `packages/interview-engine/src/session-factory.ts`
+  - 引擎新会话默认消息列表为空。
+- `apps/admin/src/app/sessions/page.tsx`
+  - 会话列表消息数排除 system / 欢迎语。
+- 测试同步调整：
+  - `apps/web/src/app/chat/lib/chat-local-session.test.ts`
+  - `packages/interview-engine/src/index.test.ts`
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需清理历史记录中的欢迎语，可额外补一次性清理脚本。
+
+## Iteration 3.66（2026-03-12）：会话列表操作按钮改为 hover 显示
+
+### 目标
+
+- 会话列表的操作按钮仅在 hover/聚焦时显示，降低视觉噪音。
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-table.tsx`
+  - 操作按钮包裹 `admin-row-actions` 容器。
+- `apps/admin/src/app/globals.css`
+  - 表格行 hover/聚焦时展示操作按钮。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需统一用户列表操作显示方式，可复用同一规则。
+
+## Iteration 3.67（2026-03-12）：会话列表操作菜单改为 hover 触发
+
+### 目标
+
+- 会话列表操作菜单与用户列表一致，hover 即展开。
+
+### 主要改动
+
+- `apps/admin/src/components/session-row-actions.tsx`
+  - Dropdown 触发方式由 click 改为 hover。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要更精细的 hover 延迟，可补 `mouseEnterDelay`/`mouseLeaveDelay`。
+
+## Iteration 3.68（2026-03-12）：移除侧栏提示文案并收紧全局圆角
+
+### 目标
+
+- 去掉“仅限内部管理使用”文案。
+- 全局圆角略微收紧，减少过圆视觉。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 移除侧栏底部提示文案。
+- `apps/admin/src/components/admin-providers.tsx`
+  - ConfigProvider `borderRadius` 从 10 调整为 6。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要细化到组件级圆角，可在 `theme.components` 中覆盖。
+
+## Iteration 3.69（2026-03-12）：Admin 侧栏固定，内容区独立滚动
+
+### 目标
+
+- 滚动时仅右侧内容区滚动，左侧导航栏保持不动。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - Layout 设为 `100vh` 且 `overflow: hidden`。
+  - 侧栏固定高度并 `position: sticky`。
+  - 内容区开启独立滚动 `overflow: auto`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需侧栏折叠，可在此基础上补充。
+
+## Iteration 3.70（2026-03-12）：总数文案移动到分页器
+
+### 目标
+
+- 用户/会话列表的“共 X 条”文案放到分页器区域展示。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-pagination.tsx`
+  - 新增 `totalLabel` 并使用 `showTotal` 显示总数文案。
+- `apps/admin/src/app/users/page.tsx`
+  - 传入 `totalLabel="位用户"`。
+- `apps/admin/src/app/sessions/page.tsx`
+  - 传入 `totalLabel="条会话"`。
+- `apps/admin/src/components/users-table.tsx`
+  - 移除表格上方总数文案。
+- `apps/admin/src/components/sessions-table.tsx`
+  - 移除表格上方总数文案。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需 showTotal 同时展示区间范围，可扩展 `showTotal` 格式。
+
+## Iteration 3.71（2026-03-12）：移除页面描述文案
+
+### 目标
+
+- 去掉各页面标题下的说明文案，保持界面简洁。
+
+### 主要改动
+
+- 移除以下页面的 `description`：
+  - `apps/admin/src/app/page.tsx`
+  - `apps/admin/src/app/users/page.tsx`
+  - `apps/admin/src/app/sessions/page.tsx`
+  - `apps/admin/src/app/questions/page.tsx`
+  - `apps/admin/src/app/templates/page.tsx`
+  - `apps/admin/src/app/users/[userId]/page.tsx`
+  - `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需对某些页面保留轻量提示，可改为分区标题或空状态提示。
+
+## Iteration 3.72（2026-03-12）：分页器右下对齐
+
+### 目标
+
+- 分页器放在表格右下角对齐展示。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-pagination.tsx`
+  - 使用容器 `flex-end` 对齐，确保分页器在右下角。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需与表格左右边距进一步对齐，可加统一的表格容器 padding。
+
+## Iteration 3.73（2026-03-12）：会话筛选右对齐与分页器可选页数
+
+### 目标
+
+- 会话筛选表单右对齐。
+- 分页器支持 10/20/30/50/100 的页数切换。
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-filter.tsx`
+  - 表单 `justifyContent: flex-end` 右对齐。
+- `apps/admin/src/components/admin-pagination.tsx`
+  - 启用 `showSizeChanger`，并设置 `pageSizeOptions`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要记住用户的 pageSize 偏好，可引入 query 或本地存储。
+
+## Iteration 3.74（2026-03-12）：筛选清空自动触发
+
+### 目标
+
+- 筛选项清空时自动触发筛选。
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-filter.tsx`
+  - 增加 `onValuesChange`，字段变更（含清空）即触发筛选。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需避免频繁跳转，可加防抖。
+
+## Iteration 3.75（2026-03-12）：会话/用户操作文案与详情滚动
+
+### 目标
+
+- 统一操作菜单文案，并限制对话记录区域高度。
+
+### 主要改动
+
+- `apps/admin/src/components/user-row-actions.tsx`
+  - 删除文案改为“删除用户”。
+- `apps/admin/src/components/session-row-actions.tsx`
+  - 查看改为“查看详情”，删除改为“删除会话”。
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 对话记录加入可滚动容器，避免页面滚动过长。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需可配置高度，可抽成常量或 token。
+
+## Iteration 3.76（2026-03-12）：对话记录滚动条贴边
+
+### 目标
+
+- 对话记录滚动条贴近右侧边框展示。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 去掉滚动容器右侧内边距。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要滚动条样式优化，可增加自定义 scrollbar 样式。
+
+## Iteration 3.77（2026-03-12）：对话记录滚动容器改为 Card body
+
+### 目标
+
+- 滚动条贴近卡片右边框，同时保留内容内边距。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 使用 `Card` 的 `bodyStyle` 取消默认内边距。
+  - 将滚动容器放在卡片 body，内容内边距移入内层包裹。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要统一滚动高度，可抽出常量。
+
+## Iteration 3.78（2026-03-12）：对话记录内边距调整
+
+### 目标
+
+- 对话记录内容内边距从 16 调整为 24。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 内层容器 padding 改为 24。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需进一步统一卡片内边距，考虑抽取到样式变量。
+
+## Iteration 3.79（2026-03-12）：Card bodyStyle 迁移为 styles.body
+
+### 目标
+
+- 修复 Antd Card `bodyStyle` 弃用警告。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - `bodyStyle` 替换为 `styles.body`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需统一卡片样式，考虑抽为共享样式对象。
+
+## Iteration 3.80（2026-03-12）：后台整体背景改为白色
+
+### 目标
+
+- 全局背景色从 `#f5f7fb` 调整为 `#fff`。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-providers.tsx`
+  - `colorBgBase` 改为 `#ffffff`。
+- `apps/admin/src/app/layout.tsx`
+  - `body` 背景改为 `#ffffff`。
+- `apps/admin/src/components/admin-shell.tsx`
+  - Layout 背景改为 `#ffffff`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需统一卡片与页面留白层级，可再做微调。
+
+## Iteration 3.81（2026-03-12）：用户/会话表格显示边框
+
+### 目标
+
+- 用户与会话表格开启边框显示。
+
+### 主要改动
+
+- `apps/admin/src/components/users-table.tsx`
+  - 表格 `bordered` 开启。
+- `apps/admin/src/components/sessions-table.tsx`
+  - 表格 `bordered` 开启。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需统一表格 header 背景色，可在主题 token 里微调。
+
+## Iteration 3.82（2026-03-12）：对话记录高度按视口计算
+
+### 目标
+
+- 对话记录滚动区域高度按视口计算，底部与窗口保持 24px 间距。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 使用 `useLayoutEffect` 根据元素位置与窗口高度计算 `maxHeight`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要随内容区滚动实时更新，可补充滚动监听。
+
+## Iteration 3.83（2026-03-12）：对话记录高度基于内容区计算
+
+### 目标
+
+- 避免全局滚动条，改为基于内容滚动容器计算对话记录高度。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 内容区域增加 `admin-content-scroll` 标识。
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 使用内容容器高度计算 `maxHeight`，并监听容器尺寸变化。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需更精细的高度控制，可改为 CSS `calc` 常量方案。
+
+## Iteration 3.84（2026-03-12）：对话记录底部留白容错
+
+### 目标
+
+- 避免偶发全局滚动条，允许底部留白略大于 24px。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 计算高度时额外收紧底部间距（从 24 调整为 48）。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若仍出现滚动条，可改为固定 max-height 或改为 CSS `calc`。
+
+## Iteration 3.85（2026-03-12）：操作菜单去除图标
+
+### 目标
+
+- 操作菜单项不显示前置图标，保持简洁。
+
+### 主要改动
+
+- `apps/admin/src/components/user-row-actions.tsx`
+  - 去掉“查看会话 / 删除用户”菜单图标。
+- `apps/admin/src/components/session-row-actions.tsx`
+  - 去掉“查看详情 / 删除会话”菜单图标。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需调整菜单项间距，可继续微调。
+
+## Iteration 3.86（2026-03-12）：侧栏导航图标与配色优化
+
+### 目标
+
+- 左侧导航加入图标并优化配色层级。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 导航项增加图标，侧栏背景与文字色调整。
+- `apps/admin/src/app/globals.css`
+  - 优化暗色侧栏的 hover/selected 背景与文字色。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需折叠侧栏或收起仅图标模式，可继续扩展。
+
+## Iteration 3.87（2026-03-12）：侧栏标题左内边距调整
+
+### 目标
+
+- 侧栏标题“面试通”左侧内边距改为 28px。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 标题 padding-left 调整为 28px。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.88（2026-03-12）：会话操作按钮常驻
+
+### 目标
+
+- 会话管理表格的“...”操作按钮常驻显示。
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-table.tsx`
+  - 移除 `admin-row-actions` 容器，操作按钮常驻。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.89（2026-03-12）：侧栏菜单水合告警规避
+
+### 目标
+
+- 修复 antd Menu 在 SSR/CSR 生成 Tooltip id 不一致导致的 hydration warning。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 仅在客户端挂载后渲染 Menu，避免首帧 id 不一致。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.90（2026-03-12）：后台管理员登录与侧栏显示
+
+### 目标
+
+- 后台加入登录能力（无注册），管理员由数据库预置。
+- 登录后在侧栏底部展示管理员信息，并支持退出登录。
+
+### 主要改动
+
+- Prisma 新增 `AdminUser` 模型，并增加迁移。
+- 新增后台登录页与登录/退出 API：
+  - `apps/admin/src/app/login/page.tsx`
+  - `apps/admin/src/app/api/admin/login/route.ts`
+  - `apps/admin/src/app/api/admin/logout/route.ts`
+- 新增管理员会话签名与校验逻辑：
+  - `apps/admin/src/lib/admin-auth.ts`
+- 新增密码哈希辅助脚本：
+  - `scripts/hash-admin-password.mjs`
+- 新增管理员账号创建脚本：
+  - `scripts/create-admin-user.mjs`
+- 所有后台页面与操作 API 加入管理员校验，并把管理员信息传入侧栏：
+  - `apps/admin/src/components/admin-shell.tsx`
+  - `apps/admin/src/app/**/*`
+- `env.example` 新增 `ADMIN_AUTH_SECRET`。
+
+### 迁移/破坏性变更
+
+- 新增 `AdminUser` 表，需要执行数据库迁移。
+
+### 下一步
+
+- 如需更强安全策略，可加登录失败次数限制与日志审计。
+
+## Iteration 3.91（2026-03-12）：管理员创建脚本修复依赖解析
+
+### 目标
+
+- 修复 `create-admin-user` 脚本无法解析 `@prisma/client` 的问题。
+
+### 主要改动
+
+- `scripts/create-admin-user.mjs`
+  - 使用 `createRequire` 指向 `packages/db` 的 `package.json` 来解析 Prisma Client。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.92（2026-03-12）：管理员创建脚本适配 Prisma 7
+
+### 目标
+
+- 修复 Prisma 7 需要 Adapter 配置导致的初始化失败。
+
+### 主要改动
+
+- `scripts/create-admin-user.mjs`
+  - 使用 `PrismaPg` 并传入连接串初始化 `PrismaClient`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.93（2026-03-12）：管理员会话读取兼容 Next 16
+
+### 目标
+
+- 修复 Next 16 `cookies()` 返回 Promise 导致的 `get is not a function` 报错。
+
+### 主要改动
+
+- `apps/admin/src/lib/admin-auth.ts`
+  - `getAdminSession` 改为异步并 `await cookies()`。
+  - 相关调用链改为 await。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.94（2026-03-12）：登录页 message 上下文修复
+
+### 目标
+
+- 修复 antd message 静态方法导致的上下文告警。
+
+### 主要改动
+
+- `apps/admin/src/app/login/page.tsx`
+  - 使用 `App.useApp().message` 替代静态 `message`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.95（2026-03-12）：侧栏管理员信息区样式优化
+
+### 目标
+
+- 优化侧栏底部管理员信息区的排版与间距。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 调整管理员信息区的布局、文字溢出与退出按钮样式。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.96（2026-03-12）：管理员信息改为邮箱 + 退出菜单
+
+### 目标
+
+- 侧栏只显示管理员邮箱，点击后弹出退出菜单。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 管理员信息改为邮箱按钮 + Dropdown 菜单，仅含“退出登录”。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.97（2026-03-12）：修复 Dropdown TS 语法兼容
+
+### 目标
+
+- 修复 Turbopack 不支持 `satisfies` 的解析错误。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 移除 `satisfies MenuProps`，改为直接传 `menu`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+## Iteration 3.73（2026-03-12）：会话概览标签列宽与去冒号
+
+### 目标
+
+- 会话概览 label 固定宽度 100px，去掉 label 后的冒号。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - `Descriptions` 设置 `colon={false}` 与 `styles.label` 宽度。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需要更细粒度的对齐，可改为 `items` API 并逐项设置 span。
+
+## Iteration 3.74（2026-03-12）：详情页标题与返回按钮同排
+
+### 目标
+
+- 优化会话详情页返回按钮样式，并将其放在标题左侧。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 标题与 `headerPrefix` 同排布局。
+- `apps/admin/src/components/back-button.tsx`
+  - 调整按钮尺寸与内边距，增强对齐效果。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需进一步调整 icon 与标题间距，可微调 `gap`。
+
+## Iteration 3.75（2026-03-12）：返回按钮改为纯图标
+
+### 目标
+
+- 返回按钮仅显示图标，不显示“返回”文字。
+
+### 主要改动
+
+- `apps/admin/src/components/back-button.tsx`
+  - 使用 `LeftOutlined` 图标，移除文字内容。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 若需改为圆形背景按钮，可在此基础上增加样式。
+
+## Iteration 3.76（2026-03-12）：返回图标改为箭头并放大
+
+### 目标
+
+- 返回按钮使用 “<-” 风格图标，并调整尺寸为 16px。
+
+### 主要改动
+
+- `apps/admin/src/components/back-button.tsx`
+  - 图标改为 `ArrowLeftOutlined`，并设置 `fontSize: 16`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需 hover 背景或圆角按钮，再补样式。
+
+## Iteration 3.77（2026-03-12）：返回按钮尺寸调整
+
+### 目标
+
+- 返回按钮宽度改为 32px，图标更粗体。
+
+### 主要改动
+
+- `apps/admin/src/components/back-button.tsx`
+  - 宽度设为 32px，高度保持 24px，图标字号 16px，并设置 `fontWeight: 700`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 下一步
+
+- 如需更明显的粗体效果，可更换为 `ArrowLeftFilled` 或自定义 SVG。
+
+## Iteration 3.58（2026-03-11）：后台改用 shadcn ui + Tailwind
+
+### 目标
+
+- Admin 与 Web 技术栈对齐，统一使用 shadcn/ui 与 Tailwind CSS。
+
+### 主要改动
+
+- `apps/admin` 接入 Tailwind v4：
+  - 新增 `postcss.config.mjs`，更新 `globals.css` 使用 `@import 'tailwindcss'`。
+- 新增 admin 侧 shadcn ui 组件与工具：
+  - `components/ui/*`（button/card/badge/input/textarea/table/select/checkbox）
+  - `lib/utils.ts`（`cn`）
+- Admin 页面改为 Tailwind + shadcn 组件：
+  - 概览、用户、会话、题库、模板页统一改为 Card/Table/Badge/Button 结构。
+  - 表单与上传入口改为 shadcn Input/Select/Checkbox。
+- 移除 admin 原有 CSS Modules 样式文件。
+
+### 迁移/破坏性变更
+
+- 无接口变更，仅前端渲染层重构。
+
+### 下一步
+
+- 可补 admin 主题切换与响应式收敛。
+
+## Iteration 3.57（2026-03-11）：后台 MVP 初始化与题库数据库化
+
+### 目标
+
+- 按“用户管理 + 会话管理 + 题库上传 + 模板配置”的顺序落地后台最小可用能力。
+- 题库不再放在单独 package 数据里，转为数据库存储。
+
+### 主要改动
+
+- 后台页面结构与基础功能：
+  - 新增 `AdminShell` 与统一布局，覆盖概览/用户/会话/题库/模板页面。
+  - 概览页展示用户、会话、题库、模板数量。
+  - 用户页与会话页支持基础列表查看。
+  - 题库页支持上传入口与题目列表查看。
+  - 模板页支持创建模板与模板列表查看。
+- 题库数据库化：
+  - Prisma 新增 `QuestionBankItem`、`InterviewTemplate` 模型。
+  - 新增后台上传接口 `/api/question-bank/import` 写入题库。
+  - `buildQuestionPlan` 支持传入题库数据，默认不再内置题库。
+  - `createDraftSession` 在服务端创建会话时加载题库并生成 `questionPlan`。
+- 清理题库 package 中的本地存储与 JSON 数据文件，避免数据冗余。
+
+### 迁移/破坏性变更
+
+- 新增 Prisma 模型需要执行迁移后才能在本地数据库生效。
+
+### 下一步
+
+- 根据需要补齐题库删除/禁用、模板编辑与筛选能力。
+- 增加后台权限与审计日志。
 
 ## Iteration 3.56（2026-03-11）：新增面试通 favicon SVG
 
@@ -3619,3 +5202,983 @@
   - `pnpm format:check`
   - `pnpm lint`
   - `pnpm typecheck`
+
+## Iteration 3.59（2026-03-11）：补齐 Prisma 生成以修复 Admin 启动报错
+
+### 目标
+
+- 修复 `pnpm dev:admin` 运行时报 `Cannot read properties of undefined (reading 'count')` 的问题。
+- 避免因 Prisma Client 未生成导致 Admin 页面无法启动。
+
+### 主要改动
+
+- `package.json`
+  - `dev:admin` 增加 `pnpm db:generate` 前置执行，确保 Prisma Client 与最新 schema 同步。
+  - 新增 `db:generate` 脚本，便于单独生成 Prisma Client。
+
+### 迁移/破坏性变更
+
+- 无。仅补充脚本。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.60（2026-03-11）：补齐 Prisma 生成时的 DATABASE_URL 默认值
+
+### 目标
+
+- 修复 `pnpm db:generate` 因 `DATABASE_URL` 缺失导致的失败。
+
+### 主要改动
+
+- `package.json`
+  - `db:generate` 增加默认 `DATABASE_URL`，与 `db:migrate` 保持一致。
+
+### 迁移/破坏性变更
+
+- 无。仅脚本调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm db:generate`
+
+## Iteration 3.61（2026-03-11）：用户详情页参数兜底
+
+### 目标
+
+- 修复 `/users/[userId]` 进入时 `params.userId` 缺失导致的 Prisma 校验错误。
+
+### 主要改动
+
+- `apps/admin/src/app/users/[userId]/page.tsx`
+  - 在调用 Prisma 前校验 `userId`，缺失时直接 `notFound()`。
+
+### 迁移/破坏性变更
+
+- 无。仅兜底处理。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.62（2026-03-11）：用户/会话列表分页
+
+### 目标
+
+- 用户列表与会话列表统一使用 Table 渲染，并支持分页。
+
+### 主要改动
+
+- `apps/admin/src/components/ui/pagination.tsx`
+  - 新增 shadcn 风格分页组件（Next.js Link 适配）。
+- `apps/admin/src/lib/pagination.ts`
+  - 新增分页参数解析与分页元数据工具。
+- `apps/admin/src/app/users/page.tsx`
+  - 支持 `page/pageSize` 查询参数分页。
+  - 页脚增加分页导航。
+- `apps/admin/src/app/sessions/page.tsx`
+  - 支持 `page/pageSize` 查询参数分页。
+  - 页脚增加分页导航。
+
+### 迁移/破坏性变更
+
+- 无。仅列表展示逻辑更新。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.63（2026-03-11）：分页按钮可点击性修正
+
+### 目标
+
+- 修复分页“上一页/下一页”点击无响应的问题。
+
+### 主要改动
+
+- `apps/admin/src/components/ui/pagination.tsx`
+  - `PaginationLink` 增加 `size` 参数，`Previous/Next` 使用 `size="default"`，避免固定宽度影响点击区域。
+- `apps/admin/src/app/users/page.tsx`
+  - 数字页码明确使用 `size="icon"`。
+- `apps/admin/src/app/sessions/page.tsx`
+  - 数字页码明确使用 `size="icon"`。
+
+### 迁移/破坏性变更
+
+- 无。仅样式/交互调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.64（2026-03-11）：修复 Next 16 searchParams 异步访问警告
+
+### 目标
+
+- 解决 `/users` 与 `/sessions` 访问分页参数时出现的 `searchParams is a Promise` 警告。
+
+### 主要改动
+
+- `apps/admin/src/app/users/page.tsx`
+  - 使用 `await searchParams` 后再读取分页参数。
+- `apps/admin/src/app/sessions/page.tsx`
+  - 使用 `await searchParams` 后再读取分页参数。
+
+### 迁移/破坏性变更
+
+- 无。仅兼容 Next 16 动态 API 访问方式。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.65（2026-03-11）：Admin favicon 对齐 Web 图标
+
+### 目标
+
+- Admin favicon 使用 Web 的 `icon.svg` 造型，并改为后台深色背景。
+
+### 主要改动
+
+- `apps/admin/src/app/icon.svg`
+  - 新增与 Web 同款 M 字图标，但背景改为深色渐变。
+
+### 迁移/破坏性变更
+
+- 无。仅新增静态资源。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.66（2026-03-11）：后台侧栏品牌文案调整
+
+### 目标
+
+- 左上角品牌文案从“面试通 Admin”改为“面试通”。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 更新侧栏标题文案。
+
+### 迁移/破坏性变更
+
+- 无。仅文案调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.67（2026-03-11）：用户列表展示数据库 ID
+
+### 目标
+
+- 用户列表增加数据库 `id` 展示，便于定位数据。
+
+### 主要改动
+
+- `apps/admin/src/app/users/page.tsx`
+  - 新增 ID 列并使用等宽字体显示。
+
+### 迁移/破坏性变更
+
+- 无。仅表格展示调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.68（2026-03-11）：会话列表筛选与用户跳转筛选
+
+### 目标
+
+- 会话列表展示会话 ID，并支持按用户 ID、用户名（邮箱）、标题筛选。
+- 用户列表点击“查看会话”时跳转到会话页并携带用户 ID 过滤。
+
+### 主要改动
+
+- `apps/admin/src/app/sessions/page.tsx`
+  - 增加会话 ID 列与筛选表单。
+  - `userId/user/title` 查询参数驱动筛选与分页保持。
+- `apps/admin/src/app/users/page.tsx`
+  - “查看会话”跳转改为 `/sessions?userId=...`。
+- `apps/admin/src/lib/pagination.ts`
+  - `buildPageHref` 支持附加筛选参数。
+
+### 迁移/破坏性变更
+
+- 无。仅展示与筛选逻辑更新。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.69（2026-03-11）：用户列表操作菜单与删除
+
+### 目标
+
+- 用户列表操作改为“...菜单”，支持“查看会话/删除”。
+- 删除需要二次确认，确认后删除数据库用户与会话记录。
+
+### 主要改动
+
+- `apps/admin/src/components/ui/dropdown-menu.tsx`
+  - 新增 Dropdown Menu 组件。
+- `apps/admin/src/components/ui/alert-dialog.tsx`
+  - 新增 Alert Dialog 组件。
+- `apps/admin/src/components/user-row-actions.tsx`
+  - 新增用户操作菜单与删除确认逻辑。
+- `apps/admin/src/app/api/users/[userId]/route.ts`
+  - 新增删除用户 API（级联删除会话）。
+- `apps/admin/src/app/users/page.tsx`
+  - 操作列改为菜单组件。
+- `apps/admin/package.json`
+  - 新增 radix 依赖：`@radix-ui/react-dropdown-menu`、`@radix-ui/react-alert-dialog`。
+
+### 迁移/破坏性变更
+
+- 无。仅新增 UI 与 API。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.70（2026-03-11）：修正 Radix 依赖版本
+
+### 目标
+
+- 修正 `@radix-ui/react-alert-dialog` 与 `@radix-ui/react-dropdown-menu` 版本号，避免安装失败。
+
+### 主要改动
+
+- `apps/admin/package.json`
+  - `@radix-ui/react-alert-dialog` 固定为 `1.1.15`。
+  - `@radix-ui/react-dropdown-menu` 固定为 `2.1.16`。
+
+### 迁移/破坏性变更
+
+- 无。仅依赖版本调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm install`
+
+## Iteration 3.71（2026-03-11）：Admin UI 切换为 Ant Design
+
+### 目标
+
+- Admin 不再使用 shadcn/ui，统一改为 Ant Design，并启用暗黑主题。
+- 用户列表操作改为 Ant Design Dropdown + Modal 确认删除。
+
+### 主要改动
+
+- `apps/admin/package.json`
+  - 新增 `antd`、`@ant-design/icons`、`@ant-design/nextjs-registry`。
+  - 移除 shadcn/ui 相关依赖（Radix、cva、clsx、tailwind-merge）。
+- `apps/admin/src/app/layout.tsx`
+  - 接入 `AntdRegistry` + `ConfigProvider` 暗黑主题。
+- `apps/admin/src/components/admin-providers.tsx`
+  - 新增 Ant Design 主题与 App provider。
+- `apps/admin/src/components/admin-shell.tsx`
+  - 侧栏与布局改为 Ant Design `Layout/Menu`。
+- `apps/admin/src/app/page.tsx`
+  - 使用 Ant Design `Card/Statistic/List` 重构概览页。
+- `apps/admin/src/app/users/page.tsx`
+  - 使用 Ant Design `Table/Tag` 重构用户列表。
+- `apps/admin/src/components/user-row-actions.tsx`
+  - 使用 Ant Design `Dropdown/Modal` 实现“查看会话/删除”。
+- `apps/admin/src/app/users/[userId]/page.tsx`
+  - 使用 Ant Design `Table/Tag/Button` 重构用户详情。
+- `apps/admin/src/app/sessions/page.tsx`
+  - 使用 Ant Design `Table/Tag` 重构会话列表与筛选。
+- `apps/admin/src/components/sessions-filter.tsx`
+  - 新增会话筛选表单（Ant Design Form）。
+- `apps/admin/src/components/admin-pagination.tsx`
+  - 新增分页组件（Ant Design Pagination）。
+- `apps/admin/src/app/questions/page.tsx`
+  - 使用 Ant Design `Card/Table` 重构题库页。
+- `apps/admin/src/app/questions/upload/page.tsx`
+  - 使用 Ant Design `Card/Typography/Button` 重构上传页。
+- `apps/admin/src/app/questions/upload/upload-form.tsx`
+  - 使用 Ant Design `Upload/Button` 实现文件上传。
+- `apps/admin/src/app/templates/page.tsx`
+  - 使用 Ant Design `Card/Table` 重构模板页。
+- `apps/admin/src/app/templates/template-form.tsx`
+  - 使用 Ant Design `Form/Input/Select/Checkbox` 重构模板表单。
+- `apps/admin/src/components/ui/*`
+  - 删除 shadcn/ui 组件文件。
+
+### 迁移/破坏性变更
+
+- Admin UI 组件切换为 Ant Design，需重新安装依赖并更新 lockfile。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm install`
+  - `pnpm dev:admin`
+
+## Iteration 3.72（2026-03-12）：修复 Server/Client 函数传递错误
+
+### 目标
+
+- 解决 Ant Design Table columns `render` 作为函数在 Server Component 中定义导致的报错。
+
+### 主要改动
+
+- `apps/admin/src/components/users-table.tsx`
+- `apps/admin/src/components/sessions-table.tsx`
+- `apps/admin/src/components/user-sessions-table.tsx`
+- `apps/admin/src/components/questions-table-card.tsx`
+- `apps/admin/src/components/templates-panel.tsx`
+  - 将包含 `columns.render` 的表格定义下沉到 Client Components。
+- `apps/admin/src/app/users/page.tsx`
+- `apps/admin/src/app/sessions/page.tsx`
+- `apps/admin/src/app/users/[userId]/page.tsx`
+- `apps/admin/src/app/questions/page.tsx`
+- `apps/admin/src/app/templates/page.tsx`
+  - 改为传递序列化后的数据到 Client Components 渲染。
+- `apps/admin/src/lib/format.ts`
+  - `formatDateTime` 支持 `string | Date`。
+
+### 迁移/破坏性变更
+
+- 无。仅渲染层拆分。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.73（2026-03-12）：概览页 List 渲染改为 Client
+
+### 目标
+
+- 解决概览页 `List` 的 `renderItem` 函数在 Server Component 中定义导致的报错。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-overview.tsx`
+  - 新增 Client 组件封装统计卡片与建议列表。
+- `apps/admin/src/app/page.tsx`
+  - Server 仅传递数据，渲染交给 `AdminOverview`。
+
+### 迁移/破坏性变更
+
+- 无。仅渲染拆分。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.74（2026-03-12）：优化 Admin 暗黑主题配色
+
+### 目标
+
+- 调整 Admin 暗黑主题色板，使整体更柔和、更统一。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-providers.tsx`
+  - 更新 Ant Design 主题 token（背景、文本、边框、主色）。
+- `apps/admin/src/components/admin-shell.tsx`
+  - 侧栏与布局背景色调整为新暗黑色板。
+- `apps/admin/src/app/layout.tsx`
+  - body 背景/文字色与主题一致。
+
+### 迁移/破坏性变更
+
+- 无。仅主题配色调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.75（2026-03-12）：Admin 切回浅色主题
+
+### 目标
+
+- 将 Admin 主题切换为浅色，并优化主色、背景与边框层次。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-providers.tsx`
+  - 使用浅色 token 配置 Ant Design 主题。
+- `apps/admin/src/components/admin-shell.tsx`
+  - 侧栏改为浅色样式并补充细边框。
+- `apps/admin/src/app/layout.tsx`
+  - body 背景/文字色切换为浅色。
+
+### 迁移/破坏性变更
+
+- 无。仅主题配色调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.78（2026-03-12）：侧栏 hover 背景增强
+
+### 目标
+
+- 提升左侧暗色导航 hover 背景对比度，确保可见性。
+
+### 主要改动
+
+- `apps/admin/src/app/globals.css`
+  - 针对 `ant-menu-dark` 增强 hover / selected 背景色。
+
+### 迁移/破坏性变更
+
+- 无。仅样式调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.79（2026-03-12）：侧栏 hover/selected 背景强制生效
+
+### 目标
+
+- 修复侧栏 hover 与选中态背景未生效的问题。
+
+### 主要改动
+
+- `apps/admin/src/app/globals.css`
+  - 增加 `.ant-menu-item-active` 与 `.ant-menu-item-selected` 的强制背景色，并提高样式优先级。
+
+### 迁移/破坏性变更
+
+- 无。仅样式调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.80（2026-03-12）：会话管理操作与详情页
+
+### 目标
+
+- 会话列表增加操作列（查看/删除）并支持删除确认。
+- 新增会话详情页，展示用户与 AI 对话记录（只读）。
+
+### 主要改动
+
+- `apps/admin/src/components/session-row-actions.tsx`
+  - 新增会话操作菜单（查看/删除）。
+- `apps/admin/src/components/sessions-table.tsx`
+  - 增加操作列。
+- `apps/admin/src/app/api/sessions/[sessionId]/route.ts`
+  - 新增删除会话 API。
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 新增会话详情展示组件（只读消息列表）。
+- `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - 新增会话详情页。
+
+### 迁移/破坏性变更
+
+- 无。仅新增功能。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.81（2026-03-12）：会话详情 404 兜底与菜单跳转修复
+
+### 目标
+
+- 修复会话详情点击进入 404 的问题。
+
+### 主要改动
+
+- `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - 移除 `notFound()`，缺失或不存在时展示友好提示。
+- `apps/admin/src/components/session-row-actions.tsx`
+  - “查看”菜单改为 `router.push` 跳转，避免菜单内 Link 失效。
+
+### 迁移/破坏性变更
+
+- 无。仅交互与兜底调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.82（2026-03-12）：会话详情 ID 编码修复
+
+### 目标
+
+- 修复会话详情页因 ID 含特殊字符导致查询不到的问题。
+
+### 主要改动
+
+- `apps/admin/src/app/sessions/page.tsx`
+  - 会话 ID 在列表中编码为 URL 安全格式。
+- `apps/admin/src/components/session-row-actions.tsx`
+  - “查看”跳转时对 sessionId 编码。
+- `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - 详情页解码 sessionId 再查询。
+
+### 迁移/破坏性变更
+
+- 无。仅 URL 编解码调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.83（2026-03-12）：修复会话详情 params Promise 警告
+
+### 目标
+
+- 解决 `/sessions/[sessionId]` 读取 `params` 时的 Promise 警告。
+
+### 主要改动
+
+- `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - `params` 改为 Promise 并通过 `await` 解包。
+
+### 迁移/破坏性变更
+
+- 无。仅兼容 Next 16 动态 API 访问方式。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.84（2026-03-12）：会话详情返回按钮调整
+
+### 目标
+
+- 将“返回会话列表”按钮改为左上角的“< 返回”样式，点击返回上一页。
+
+### 主要改动
+
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 顶部新增返回按钮，使用 `router.back()`。
+  - 移除卡片右上角返回按钮。
+
+### 迁移/破坏性变更
+
+- 无。仅 UI 调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.85（2026-03-12）：返回按钮上移到标题上方
+
+### 目标
+
+- 将会话详情页的返回按钮放到标题上方。
+
+### 主要改动
+
+- `apps/admin/src/components/back-button.tsx`
+  - 新增可复用的返回按钮组件。
+- `apps/admin/src/components/admin-shell.tsx`
+  - 增加 `headerPrefix` 插槽，用于标题上方的内容。
+- `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - 通过 `headerPrefix` 注入返回按钮。
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 移除卡片内部返回按钮。
+
+### 迁移/破坏性变更
+
+- 无。仅 UI 调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.86（2026-03-12）：修复 AdminShell headerPrefix 引用
+
+### 目标
+
+- 修复 `AdminShell` 中 `headerPrefix` 未解构导致的运行时报错。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 在组件参数中解构 `headerPrefix`。
+
+### 迁移/破坏性变更
+
+- 无。仅运行时修复。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.76（2026-03-12）：修复 Ant Design React 19 兼容警告
+
+### 目标
+
+- 解决 antd v5 在 React 19 下的兼容性警告提示。
+
+### 主要改动
+
+- `apps/admin/package.json`
+  - 新增 `@ant-design/v5-patch-for-react-19` 依赖。
+- `apps/admin/src/app/layout.tsx`
+  - 引入 `@ant-design/v5-patch-for-react-19`。
+
+### 迁移/破坏性变更
+
+- 无。仅兼容补丁引入。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm install`
+  - `pnpm dev:admin`
+
+## Iteration 3.77（2026-03-12）：补丁迁移到 Client 入口
+
+### 目标
+
+- 解决补丁未进入客户端 bundle 导致的 antd React 19 兼容警告。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-providers.tsx`
+  - 在 Client Provider 中引入 `@ant-design/v5-patch-for-react-19`。
+- `apps/admin/src/app/layout.tsx`
+  - 移除 server 入口处的补丁 import。
+
+### 迁移/破坏性变更
+
+- 无。仅补丁加载位置调整。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm dev:admin`
+
+## Iteration 3.94（2026-03-14）：Prisma 读取根目录环境变量
+
+### 目标
+
+- 解决在 `packages/db` 执行 Prisma 命令时无法读取根目录 `.env.local` 导致的 `DATABASE_URL` 缺失问题。
+
+### 主要改动
+
+- `packages/db/prisma.config.ts`
+  - 自动加载仓库根目录的 `.env.local` / `.env`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 验证
+
+- 未执行（建议运行）：
+  - `pnpm -C packages/db exec prisma migrate dev --schema prisma/schema.prisma`
+
+## Iteration 3.95（2026-03-14）：题库与测试稳定性收敛
+
+### 目标
+
+- 修复类型检查与单测失败，保证题库与会话逻辑改动后的工程检查可通过。
+
+### 主要改动
+
+- `packages/db/package.json`
+  - 新增 `dotenv` 依赖，确保 Prisma 配置可解析根目录环境变量。
+- `packages/shared/src/types/index.ts`
+  - `InterviewQuestion` 增加可选 `order` 字段。
+- `apps/admin/src/app/api/question-bank/*`
+  - 题库 `rubric` 字段使用 Prisma JSON 输入类型，避免类型报错。
+- `apps/admin/src/app/api/sessions/[sessionId]/route.ts`
+  - 路由参数按 Promise 读取，匹配 Next 16 动态 API 约束。
+- `apps/admin/src/app/api/users/[userId]/route.ts`
+  - 路由参数按 Promise 读取，匹配 Next 16 动态 API 约束。
+- `apps/admin/src/app/page.tsx`
+  - 概览卡片移除 `as const`，避免只读数组类型报错。
+- `packages/interview-engine/src/index.test.ts`
+  - 调整题目样例类型与追问触发条件。
+- `apps/web/src/app/chat/lib/chat-local-session.test.ts`
+  - 更新编辑消息后的消息数断言。
+- `apps/web/src/app/chat/lib/chat-message-mutations.test.ts`
+  - 更新移除 optimistic 消息后的长度断言。
+- `cspell.json`
+  - 增补 `sider`、`upserted` 词条。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 3.96（2026-03-14）：题库字段收敛（去评分规则、可选要点/追问）
+
+### 目标
+
+- 去掉题库评分规则字段；
+- 要点与追问改为可选；
+- 题目描述改为可选；
+- 标签改为必填。
+
+### 主要改动
+
+- `packages/db/prisma/schema.prisma`
+  - 移除 `rubric` 字段。
+  - `prompt` 改为可空。
+  - `tags` 改为必填并设置默认值 `[]`。
+  - `keyPoints` / `followUps` 设置默认值 `[]`。
+- `packages/db/prisma/migrations/20260314170000_question_bank_adjust/migration.sql`
+  - 删除 `rubric` 列并调整 `prompt/tags` 约束与默认值。
+- `packages/shared/src/types/index.ts`
+  - `InterviewQuestion` 中移除 `rubric`，`keyPoints/followUps/prompt` 改为可选，`tags` 改为必填。
+- `apps/admin/src/components/question-editor-form.tsx`
+  - 题目描述可选，标签必填；要点/追问改为可选；移除评分规则输入。
+- `apps/admin/src/components/question-editor-modal.tsx`
+  - 删除 rubric 处理与校验，调整标签校验与 prompt 逻辑。
+- `apps/admin/src/app/api/question-bank/*`
+  - 去除 rubric 读写；导入与增删改支持可选要点/追问，标签必填。
+- `apps/web/src/lib/server/question-bank-repository.ts`
+  - 题库读取去除 rubric 映射，prompt 兜底标题，标签必填输出。
+- `packages/interview-engine/src/process-helpers.ts`
+  - 没有要点时不触发追问。
+- `packages/interview-engine/src/scoring.ts`
+  - 没有要点时按空列表评分。
+- `packages/llm/src/mock-provider.ts`
+  - 题目描述缺失时回退标题，追问缺失时使用默认文案。
+- `docs/QuestionBank.md`
+  - 字段说明更新为“题目描述可选、要点/追问可选、标签必填”。
+
+### 迁移/破坏性变更
+
+- 题库 `rubric` 字段已移除（需要执行 Prisma 迁移）。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 3.97（2026-03-14）：题库新建页与连续添加
+
+### 目标
+
+- 新建题目使用独立页面而非弹窗；
+- 支持“保存并继续添加”，并保留方向/难度/标签/启用字段。
+
+### 主要改动
+
+- `apps/admin/src/app/questions/new/page.tsx`
+  - 新增题库新建页面。
+- `apps/admin/src/components/question-create-form.tsx`
+  - 新建题目表单逻辑，支持“保存并继续添加”保留指定字段。
+- `apps/admin/src/components/questions-table-card.tsx`
+  - 新建按钮改为跳转新建页面，编辑仍使用弹窗。
+- `apps/admin/src/components/question-editor-modal.tsx`
+  - 新建/编辑提示词描述可空，保存时传入 `null`。
+- `apps/admin/src/app/api/question-bank/items/[id]/route.ts`
+  - 更新时 `prompt` 空值写入 `null`，不再强制回填标题。
+- `apps/admin/src/app/api/question-bank/items/route.ts`
+  - 创建题目时由系统生成 `questionId`，不再接受用户输入。
+- `apps/admin/src/app/api/question-bank/import/route.ts`
+  - 导入题库时 `id` 改为可选，由系统生成 `questionId`。
+- `apps/admin/src/components/question-editor-form.tsx`
+  - 移除题目 ID 输入框。
+- `apps/admin/src/components/question-editor-modal.tsx`
+  - 创建/编辑不再提交题目 ID。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+- `pnpm spellcheck`
+
+## Iteration 4.06（2026-03-15）：题库编辑改为独立页面
+
+### 目标
+
+- 题库列表“编辑”跳转到独立页面，移除弹窗编辑。
+
+### 主要改动
+
+- `apps/admin/src/components/questions-table-card.tsx`
+  - 编辑操作改为跳转 `/questions/[id]/edit`，移除编辑弹窗。
+- `apps/admin/src/app/questions/[id]/edit/page.tsx`
+  - 新增题库编辑页面，服务端加载题目数据。
+- `apps/admin/src/components/question-edit-view.tsx`
+  - 复用表单组件构建编辑视图，保存后返回题库列表。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+- `pnpm spellcheck`
+
+## Iteration 4.07（2026-03-15）：题库参考答案默认高度
+
+### 目标
+
+- 参考答案文本域默认最小高度为 10 行。
+
+### 主要改动
+
+- `apps/admin/src/components/question-editor-form.tsx`
+  - 参考答案文本域默认 `rows=10`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 验证
+
+- 未执行（按需运行 `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm spellcheck`）。
+
+## Iteration 4.08（2026-03-15）：题库表格序号列
+
+### 目标
+
+- 题库表格首列显示序号（排序序号），不展示题目 ID。
+- 新建/编辑页“排序序号”字段改名为“序号”。
+
+### 主要改动
+
+- `apps/admin/src/components/questions-table-card.tsx`
+  - 表格首列改为“序号”，移除“题目 ID”列。
+- `apps/admin/src/components/question-editor-form.tsx`
+  - 排序序号字段 label 改为“序号”。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 验证
+
+- 未执行（按需运行 `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm spellcheck`）。
+
+## Iteration 4.09（2026-03-15）：分页与题库菜单文案
+
+### 目标
+
+- 表格分页的 “page” 文案改为中文“页”。
+- 题库操作菜单文案调整为“编辑题目 / 删除题目”。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-pagination.tsx`
+  - Pagination 使用 antd 的中文 locale（`antd/locale/zh_CN`），统一分页文案。
+- `apps/admin/src/components/question-row-actions.tsx`
+  - 调整题库操作菜单项文案。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 验证
+
+- 未执行（按需运行 `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm spellcheck`）。
+
+## Iteration 4.10（2026-03-21）：移除模板模块
+
+### 目标
+
+- 管理端移除模板管理模块，题库为唯一后台功能入口。
+- 数据库模型移除 `InterviewTemplate`。
+
+### 主要改动
+
+- `apps/admin/src/components/admin-shell.tsx`
+  - 侧栏移除模板导航项。
+- `apps/admin/src/app/page.tsx`
+  - 概览卡片移除模板数量，调整建议文案。
+- `apps/admin/src/app/templates/*`
+  - 移除模板页面与表单实现。
+- `apps/admin/src/app/api/interview-templates/route.ts`
+  - 移除模板管理 API。
+- `packages/db/prisma/schema.prisma`
+  - 删除 `InterviewTemplate` 模型。
+- `packages/db/prisma/migrations/20260321120000_remove_interview_template/migration.sql`
+  - 新增迁移删除 `InterviewTemplate` 表。
+- `packages/db/src/index.ts`
+  - 移除 `InterviewTemplate` 类型导出。
+
+### 迁移/破坏性变更
+
+- 需要执行 Prisma 迁移以删除 `InterviewTemplate` 表。
+
+### 验证
+
+- 未执行（按需运行 `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm spellcheck`）。
+
+## Iteration 4.11（2026-03-21）：修复题库上传页渲染异常
+
+### 目标
+
+- 修复“上传题库”页面打开即报 `Element type is invalid` 的问题。
+
+### 主要改动
+
+- `apps/admin/src/app/questions/upload/page.tsx`
+  - 上传页 Server Component 仅保留鉴权与页面壳，具体上传 UI 改为独立 Client 组件承载。
+- `apps/admin/src/components/question-upload-view.tsx`
+  - 新增题库上传视图组件，承载 antd 的 `Card`、`Typography.Paragraph`、返回按钮与 `UploadForm`。
+
+### 迁移/破坏性变更
+
+- 无。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`

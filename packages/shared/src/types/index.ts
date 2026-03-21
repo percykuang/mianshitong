@@ -22,12 +22,15 @@ export interface InterviewConfig {
 
 export interface InterviewQuestion {
   id: string;
-  topic: InterviewTopic;
   level: InterviewLevel;
   title: string;
-  prompt: string;
-  keyPoints: string[];
-  followUps: string[];
+  prompt?: string | null;
+  answer?: string | null;
+  keyPoints?: string[];
+  followUps?: string[];
+  tags: string[];
+  order?: number | null;
+  topic?: InterviewTopic | null;
 }
 
 export interface AssessmentScores {
@@ -43,7 +46,7 @@ export type DimensionScores = AssessmentScores;
 export interface QuestionAssessment {
   questionId: string;
   questionTitle: string;
-  topic: InterviewTopic;
+  topic?: InterviewTopic | null;
   summary: string;
   scores: AssessmentScores;
   matchedPoints: string[];

@@ -1,38 +1,36 @@
-import styles from './page.module.css';
+import { prisma } from '@mianshitong/db';
+import { AdminShell } from '@/components/admin-shell';
+import { AdminOverview } from '@/components/admin-overview';
+import { requireAdminUser } from '@/lib/admin-auth';
 
-export default function Home() {
+function formatNumber(value: number): string {
+  return value.toLocaleString('zh-CN');
+}
+
+export default async function Home() {
+  const adminUser = await requireAdminUser();
+  const [userCount, sessionCount, questionCount] = await Promise.all([
+    prisma.authUser.count(),
+    prisma.chatSessionRecord.count(),
+    prisma.questionBankItem.count(),
+  ]);
+
   const cards = [
-    { label: '会话总量', value: 'MVP 阶段内存态' },
-    { label: '题库状态', value: '12 道初始题 + 可扩展' },
-    { label: '模型接入', value: 'Mock Provider / DeepSeek 待接入' },
-  ] as const;
+    { label: '注册用户', value: formatNumber(userCount) },
+    { label: '会话总量', value: formatNumber(sessionCount) },
+    { label: '题库题目', value: formatNumber(questionCount) },
+  ];
 
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <section className={styles.header}>
-          <h1>面试通后台（Admin）</h1>
-          <p>用于后续管理题库、会话记录、模型配置。当前阶段先提供管理壳，确保架构可扩展。</p>
-        </section>
-
-        <section className={styles.grid}>
-          {cards.map((card) => (
-            <article key={card.label} className={styles.card}>
-              <h2>{card.label}</h2>
-              <p>{card.value}</p>
-            </article>
-          ))}
-        </section>
-
-        <section className={styles.roadmap}>
-          <h2>下一步计划</h2>
-          <ol>
-            <li>接入 PostgreSQL + Prisma 持久化会话与题库。</li>
-            <li>补充题库 CRUD、标签筛选、难度分级。</li>
-            <li>支持 DeepSeek Provider 配置与可观测指标面板。</li>
-          </ol>
-        </section>
-      </main>
-    </div>
+    <AdminShell title="概览" adminUser={adminUser}>
+      <AdminOverview
+        cards={cards}
+        suggestions={[
+          '先完成题库上传与标签规范，保证出题可控。',
+          '补充用户会话筛选（按时间、状态、模型）。',
+          '再接入模型与配额策略，避免成本失控。',
+        ]}
+      />
+    </AdminShell>
   );
 }

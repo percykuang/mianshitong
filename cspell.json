@@ -45,6 +45,15 @@
     "upvote",
     "downvote",
     "Upvoted",
-    "Downvoted"
+    "Downvoted",
+    "AdminShell",
+    "AdminUser",
+    "questionBank",
+    "questionBankItem",
+    "interviewTemplate",
+    "questionCount",
+    "scrypt",
+    "sider",
+    "upserted"
   ]
 }
