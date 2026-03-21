@@ -12,13 +12,11 @@ function createBaseSession(): ChatSession {
 }
 
 describe('chat-local-session', () => {
-  it('新会话会包含系统欢迎消息', () => {
+  it('新会话默认不包含系统消息', () => {
     const session = createBaseSession();
 
     expect(session.title).toBe('新的对话');
-    expect(session.messages).toHaveLength(1);
-    expect(session.messages[0]?.role).toBe('assistant');
-    expect(session.messages[0]?.kind).toBe('system');
+    expect(session.messages).toHaveLength(0);
   });
 
   it('首次追加用户与助手消息后会更新标题与时间', () => {
@@ -50,9 +48,9 @@ describe('chat-local-session', () => {
     });
 
     expect(rebuilt?.title).toBe('帮我准备一下面试中的自我介绍');
-    expect(rebuilt?.messages).toHaveLength(3);
-    expect(rebuilt?.messages[1]?.content).toBe('帮我准备一下面试中的自我介绍');
-    expect(rebuilt?.messages[2]?.content).toBe('好的，我先给你一个 1 分钟版本。');
+    expect(rebuilt?.messages).toHaveLength(2);
+    expect(rebuilt?.messages[0]?.content).toBe('帮我准备一下面试中的自我介绍');
+    expect(rebuilt?.messages[1]?.content).toBe('好的，我先给你一个 1 分钟版本。');
   });
 
   it('构造流式上下文时会过滤 report 类型消息', () => {
@@ -75,10 +73,7 @@ describe('chat-local-session', () => {
       },
     ]);
 
-    expect(turns).toHaveLength(2);
-    expect(turns.map((item) => item.content)).toEqual([
-      '你好，我是面试通 AI 面试官。你可以直接说“开始模拟面试”，或先让我帮你优化简历/拆解面试题。',
-      '开始模拟面试',
-    ]);
+    expect(turns).toHaveLength(1);
+    expect(turns.map((item) => item.content)).toEqual(['开始模拟面试']);
   });
 });

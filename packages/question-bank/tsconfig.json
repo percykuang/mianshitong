@@ -1,4 +1,0 @@
-{
-  "extends": "@mianshitong/config/tsconfig/package.json",
-  "include": ["src/**/*.ts", "src/**/*.test.ts"]
-}

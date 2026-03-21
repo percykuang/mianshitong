@@ -16,6 +16,7 @@ import {
   truncateSessionForEdit,
   type SessionRecord,
 } from './chat-session-model';
+import { listActiveQuestionBank } from './question-bank-repository';
 
 function toSessionOrNull(record: SessionRecord | null): ChatSession | null {
   return record ? toSession(record) : null;
@@ -121,7 +122,8 @@ export async function createUserSession(
   input?: CreateSessionInput,
   sessionId?: string | null,
 ): Promise<ChatSession> {
-  const session = createDraftSession(input, sessionId);
+  const questionBank = await listActiveQuestionBank();
+  const session = createDraftSession(input, sessionId, questionBank);
   const created = await createUserSessionRecord(userId, session);
   if (!created) {
     throw new Error('会话创建失败');
@@ -152,8 +154,9 @@ export async function appendUserSessionExchange(
   input: { userContent: string; assistantContent: string; now?: string; modelId?: ModelId },
 ): Promise<ChatSession | null> {
   const current = await getUserSession(userId, sessionId);
+  const questionBank = current ? [] : await listActiveQuestionBank();
   const nextSession = appendSessionMessages(
-    current ?? createDraftSession({ modelId: input.modelId }, sessionId),
+    current ?? createDraftSession({ modelId: input.modelId }, sessionId, questionBank),
     input,
   );
 

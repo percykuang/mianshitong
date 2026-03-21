@@ -10,7 +10,6 @@ const nextConfig: NextConfig = {
     '@mianshitong/db',
     '@mianshitong/interview-engine',
     '@mianshitong/llm',
-    '@mianshitong/question-bank',
     '@mianshitong/shared',
   ],
 };

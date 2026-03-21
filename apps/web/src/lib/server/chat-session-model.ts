@@ -1,10 +1,12 @@
 import { Prisma } from '@mianshitong/db';
+import { buildQuestionPlan } from '@mianshitong/interview-engine';
 import {
   MODEL_OPTIONS,
   normalizeInterviewConfig,
   type ChatMessage,
   type ChatSession,
   type CreateSessionInput,
+  type InterviewQuestion,
   type ModelId,
   type SessionStatus,
   type SessionSummary,
@@ -41,7 +43,7 @@ function toTitle(content: string): string {
     return '新的对话';
   }
 
-  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
+  return normalized;
 }
 
 function resolveModelId(modelId: string): ModelId {
@@ -70,8 +72,11 @@ function parseSessionStatus(value: string): SessionStatus {
 export function createDraftSession(
   input?: CreateSessionInput,
   sessionId?: string | null,
+  questionBank?: InterviewQuestion[],
 ): ChatSession {
   const now = new Date().toISOString();
+  const config = normalizeInterviewConfig(input?.config);
+  const questionPlan = buildQuestionPlan(config, questionBank);
 
   return {
     id: resolveSessionId(sessionId),
@@ -79,10 +84,10 @@ export function createDraftSession(
     modelId: input?.modelId ?? 'deepseek-chat',
     isPrivate: input?.isPrivate ?? true,
     status: 'idle',
-    config: normalizeInterviewConfig(input?.config),
+    config,
     report: null,
     runtime: {
-      questionPlan: [],
+      questionPlan,
       currentQuestionIndex: 0,
       followUpRound: 0,
       activeQuestionAnswers: [],
@@ -91,15 +96,7 @@ export function createDraftSession(
     createdAt: now,
     updatedAt: now,
     pinnedAt: null,
-    messages: [
-      createMessage({
-        role: 'assistant',
-        kind: 'system',
-        content:
-          '你好，我是面试通 AI 面试官。你可以直接说“开始模拟面试”，或先让我帮你优化简历/拆解面试题。',
-        createdAt: now,
-      }),
-    ],
+    messages: [],
   };
 }
 

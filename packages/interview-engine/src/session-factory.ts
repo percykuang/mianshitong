@@ -2,18 +2,21 @@ import {
   normalizeInterviewConfig,
   type ChatSession,
   type CreateSessionInput,
+  type InterviewQuestion,
   type SessionSummary,
 } from '@mianshitong/shared';
-import { createMessage, createRuntimeState } from './session-core';
+import { createRuntimeState } from './session-core';
 
 function createSessionId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function createInterviewSession(input?: CreateSessionInput & { now?: string }): ChatSession {
+export function createInterviewSession(
+  input?: CreateSessionInput & { now?: string; questionBank?: InterviewQuestion[] },
+): ChatSession {
   const now = input?.now ?? new Date().toISOString();
   const config = normalizeInterviewConfig(input?.config);
-  const runtime = createRuntimeState(config);
+  const runtime = createRuntimeState(config, input?.questionBank);
 
   return {
     id: createSessionId(),
@@ -27,15 +30,7 @@ export function createInterviewSession(input?: CreateSessionInput & { now?: stri
     createdAt: now,
     updatedAt: now,
     pinnedAt: null,
-    messages: [
-      createMessage({
-        role: 'assistant',
-        kind: 'system',
-        content:
-          '你好，我是面试通 AI 面试官。你可以直接说“开始模拟面试”，或先让我帮你优化简历/拆解面试题。',
-        createdAt: now,
-      }),
-    ],
+    messages: [],
   };
 }
 

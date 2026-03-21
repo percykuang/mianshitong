@@ -83,16 +83,15 @@ export function maybeAskFollowUp(input: {
   assistantMessages: ChatMessage[];
   now: string;
 }): boolean {
+  const keyPoints = input.currentQuestion.keyPoints ?? [];
+  if (keyPoints.length === 0) {
+    return false;
+  }
+
   const mergedAnswer = input.session.runtime.activeQuestionAnswers.join('\n');
-  const matchedPoints = input.currentQuestion.keyPoints.filter((item) =>
-    includesKeyword(mergedAnswer, item),
-  );
-  const missingPoints = input.currentQuestion.keyPoints.filter(
-    (item) => !includesKeyword(mergedAnswer, item),
-  );
-  const coverage = input.currentQuestion.keyPoints.length
-    ? matchedPoints.length / input.currentQuestion.keyPoints.length
-    : 0;
+  const matchedPoints = keyPoints.filter((item) => includesKeyword(mergedAnswer, item));
+  const missingPoints = keyPoints.filter((item) => !includesKeyword(mergedAnswer, item));
+  const coverage = matchedPoints.length / keyPoints.length;
 
   if (input.session.runtime.followUpRound >= 1 || coverage >= 0.55 || missingPoints.length === 0) {
     return false;

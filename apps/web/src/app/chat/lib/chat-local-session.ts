@@ -22,7 +22,7 @@ function toTitle(content: string): string {
     return '新的对话';
   }
 
-  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
+  return normalized;
 }
 
 export function createMessage(input: {
@@ -68,15 +68,7 @@ export function createDraftLocalSession(modelId: ModelId, sessionId?: string | n
     createdAt: now,
     updatedAt: now,
     pinnedAt: null,
-    messages: [
-      createMessage({
-        role: 'assistant',
-        kind: 'system',
-        content:
-          '你好，我是面试通 AI 面试官。你可以直接说“开始模拟面试”，或先让我帮你优化简历/拆解面试题。',
-        createdAt: now,
-      }),
-    ],
+    messages: [],
   };
 }
 

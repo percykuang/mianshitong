@@ -10,10 +10,10 @@ import {
 } from './chat-message-mutations';
 
 describe('chat-message-mutations', () => {
-  it('会规范化会话标题并在过长时截断', () => {
+  it('会规范化会话标题并保留完整文本', () => {
     expect(toSessionTitle('   帮我优化  简历   ')).toBe('帮我优化 简历');
     expect(toSessionTitle('请帮我优化一下前端简历项目描述和亮点表达')).toBe(
-      '请帮我优化一下前端简历项目描述和亮点...',
+      '请帮我优化一下前端简历项目描述和亮点表达',
     );
   });
 
@@ -49,7 +49,7 @@ describe('chat-message-mutations', () => {
     const removed = removeOptimisticMessages(withDelta, [optimisticAssistant.id]);
 
     expect(withDelta?.messages.at(-1)?.content).toBe('hello');
-    expect(removed?.messages).toHaveLength(1);
+    expect(removed?.messages).toHaveLength(0);
     expect(removed?.status).toBe('idle');
   });
 

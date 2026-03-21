@@ -31,12 +31,13 @@ export function buildAssessment(
   question: InterviewRuntimeState['questionPlan'][number],
   answer: string,
 ): QuestionAssessment {
-  const matchedPoints = question.keyPoints.filter((item) => includesKeyword(answer, item));
-  const missingPoints = question.keyPoints.filter((item) => !includesKeyword(answer, item));
+  const keyPoints = question.keyPoints ?? [];
+  const matchedPoints = keyPoints.filter((item) => includesKeyword(answer, item));
+  const missingPoints = keyPoints.filter((item) => !includesKeyword(answer, item));
   const scores = deriveScores({
     answer,
     matchedCount: matchedPoints.length,
-    keyPointCount: question.keyPoints.length,
+    keyPointCount: keyPoints.length,
   });
   const averageScore =
     (scores.correctness +
@@ -56,7 +57,7 @@ export function buildAssessment(
   return {
     questionId: question.id,
     questionTitle: question.title,
-    topic: question.topic,
+    topic: question.topic ?? null,
     summary,
     matchedPoints,
     missingPoints,

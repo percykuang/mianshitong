@@ -6,7 +6,7 @@ export function toSessionTitle(content: string): string {
     return '新的对话';
   }
 
-  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
+  return normalized;
 }
 
 export function appendOptimisticMessages(

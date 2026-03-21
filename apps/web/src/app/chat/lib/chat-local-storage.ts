@@ -108,7 +108,7 @@ function normalizeTitle(title: string): string {
     throw new Error('请输入有效的会话名称');
   }
 
-  return normalized.slice(0, 60);
+  return normalized;
 }
 
 export async function listLocalSessions(): Promise<SessionSummary[]> {

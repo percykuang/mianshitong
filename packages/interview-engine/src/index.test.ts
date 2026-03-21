@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest';
+import type { InterviewQuestion } from '@mianshitong/shared';
 import { createInterviewSession, processSessionMessage } from './index';
 
+const questionBank: InterviewQuestion[] = [
+  {
+    id: 'js_event_loop',
+    level: 'mid',
+    title: '事件循环与任务调度',
+    prompt: '请你讲一下浏览器事件循环里宏任务和微任务的执行顺序。',
+    keyPoints: ['Promise', '宏任务', '微任务'],
+    followUps: ['Node.js 里的 nextTick 和 Promise 微任务顺序有什么差异？'],
+    tags: ['javascript', 'JavaScript'],
+  },
+];
+
 describe('interview engine', () => {
-  it('starts in idle status with welcome message', () => {
+  it('starts in idle status without welcome message', () => {
     const session = createInterviewSession();
 
     expect(session.status).toBe('idle');
-    expect(session.messages.length).toBe(1);
-    expect(session.messages[0]?.role).toBe('assistant');
+    expect(session.messages.length).toBe(0);
   });
 
   it('can start and finish a single-question interview', () => {
@@ -18,6 +30,7 @@ describe('interview engine', () => {
         questionCount: 1,
         feedbackMode: 'per_question',
       },
+      questionBank: [...questionBank],
     });
 
     const started = processSessionMessage({
@@ -30,7 +43,7 @@ describe('interview engine', () => {
 
     const followUpRound = processSessionMessage({
       session: started,
-      content: '我知道 Promise 和宏任务。',
+      content: '我知道 Promise。',
     }).session;
 
     expect(followUpRound.runtime.followUpRound).toBe(1);

@@ -1,9 +1,10 @@
-import { buildQuestionPlan } from '@mianshitong/question-bank';
+import { buildQuestionPlan } from './question-plan';
 import {
   normalizeInterviewConfig,
   type ChatMessage,
   type ChatSession,
   type CreateSessionInput,
+  type InterviewQuestion,
   type InterviewRuntimeState,
   type MessageKind,
   type MessageRole,
@@ -65,11 +66,14 @@ function cloneRuntime(runtime: InterviewRuntimeState): InterviewRuntimeState {
   };
 }
 
-export function createRuntimeState(config: CreateSessionInput['config']): InterviewRuntimeState {
+export function createRuntimeState(
+  config: CreateSessionInput['config'],
+  questionBank?: InterviewQuestion[],
+): InterviewRuntimeState {
   const normalizedConfig = normalizeInterviewConfig(config);
 
   return {
-    questionPlan: buildQuestionPlan(normalizedConfig),
+    questionPlan: buildQuestionPlan(normalizedConfig, questionBank),
     currentQuestionIndex: 0,
     followUpRound: 0,
     activeQuestionAnswers: [],
@@ -121,5 +125,5 @@ export function toTitle(content: string): string {
     return '新的对话';
   }
 
-  return normalized.length > 18 ? `${normalized.slice(0, 18)}...` : normalized;
+  return normalized;
 }

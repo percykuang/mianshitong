@@ -14,7 +14,7 @@ function normalizeTitle(value: unknown): string | null {
   }
 
   const title = value.replace(/\s+/g, ' ').trim();
-  return title ? title.slice(0, 60) : null;
+  return title || null;
 }
 
 export async function GET(

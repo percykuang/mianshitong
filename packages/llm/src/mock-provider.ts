@@ -85,14 +85,15 @@ export class MockLlmProvider implements LlmProvider {
     index: number;
     total: number;
   }): string {
+    const topicLabel = input.question.topic ?? input.question.tags?.[0] ?? '综合';
     return [
-      `问题 ${input.index}/${input.total}（${input.question.topic}）`,
-      input.question.prompt,
+      `问题 ${input.index}/${input.total}（${topicLabel}）`,
+      input.question.prompt ?? input.question.title,
     ].join('\n\n');
   }
 
   generateFollowUpMessage(input: { question: InterviewQuestion; missingPoint: string }): string {
-    const fallback = input.question.followUps[0] ?? '你可以补充一下这块在真实项目里的落地方式。';
+    const fallback = input.question.followUps?.[0] ?? '你可以补充一下这块在真实项目里的落地方式。';
     return ['我补一个追问：', fallback, `（你上一轮没有展开：${input.missingPoint}）`].join('\n');
   }
 
