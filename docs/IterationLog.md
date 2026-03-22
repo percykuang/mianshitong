@@ -7,6 +7,40 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.34（2026-03-22）：修复 CI test job 的 Prisma Client 生成前置条件
+
+### 目标
+
+- 修复 GitHub Actions `test` job 在 `typecheck` 阶段找不到 `@prisma/client` 导出类型的问题，消除 Prisma Client 生成产物对环境状态的隐式依赖。
+
+### 主要改动
+
+- `package.json`
+  - 根 `typecheck` 脚本改为先执行 `pnpm db:generate`，再递归执行 workspace `typecheck`。
+  - 这样无论在本地还是 CI，只要跑根 `pnpm typecheck`，都会先保证 Prisma Client 已生成。
+- `.github/workflows/ci.yml`
+  - `test` job 在 `pnpm install --frozen-lockfile` 后显式新增 `pnpm db:generate`。
+  - 这样即使后续有人单独调整 `typecheck` 脚本，CI 仍保留一层明确的初始化步骤。
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无业务逻辑变更。
+- 仅补齐 Prisma 生成流程与 CI 初始化顺序。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 推送到 GitHub 后，优先观察 `test` job 是否已越过 `packages/db` 的类型错误；如果通过，再继续看后续远端 E2E 节点是否有环境差异问题。
+
 ## Iteration 4.33（2026-03-22）：补齐 CI 手动触发并消除 pnpm 版本冲突
 
 ### 目标
