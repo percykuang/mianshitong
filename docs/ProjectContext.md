@@ -79,6 +79,7 @@
 - Admin 端现在已有一条真实浏览器烟测覆盖会话详情页三段 Trace；测试会通过临时种入管理员账号和完整 trace 会话来验证页面渲染，不依赖手工准备数据。Playwright 配置也已支持按 `PLAYWRIGHT_SCOPE` 只启动所需服务，避免单跑 Admin 用例时被 Web 服务拖慢或阻塞。
 - 这条 Admin Trace 烟测现已接入 GitHub Actions 默认 CI：CI 会启 `pgvector` 数据库服务、非交互执行 `db:migrate:deploy`、安装 Playwright Chromium，并只运行 Admin 项目；同时 Playwright 配置已支持“本地用 Chrome、CI 用 Chromium”的环境分流，减少 CI 浏览器依赖风险。
 - Web 侧 smoke 现也已拆成独立 CI job：通过 `pnpm test:e2e:web` 只运行 `web-chrome` 项目，和 `admin-e2e` 并行挂在 `test` 之后，避免后续 E2E 数量增长时单个 job 串行时间过长。
+- CI 工作流现已补齐 `workflow_dispatch`，可在 GitHub Actions 页面手动触发；同时 `pnpm/action-setup` 不再单独声明版本，统一以根 `package.json` 的 `packageManager` 作为 pnpm 唯一版本源，避免再次出现版本冲突。
 
 ### 2026-02-26
 

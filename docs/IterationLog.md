@@ -7,6 +7,38 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.33（2026-03-22）：补齐 CI 手动触发并消除 pnpm 版本冲突
+
+### 目标
+
+- 让 GitHub Actions 的 `ci` 工作流支持页面手动触发，并修复 `pnpm/action-setup` 与 `packageManager` 同时声明版本导致的启动失败。
+
+### 主要改动
+
+- `.github/workflows/ci.yml`
+  - 在 `on` 下新增 `workflow_dispatch`，支持在 GitHub Actions 页面手动运行 `ci`。
+  - 移除三个 job 中 `pnpm/action-setup@v4` 的 `with.version` 配置。
+  - 现在统一以根 `package.json` 中的 `packageManager: pnpm@10.18.2` 作为 pnpm 唯一版本来源，避免 CI 与仓库声明漂移。
+
+### 迁移/破坏性变更
+
+- 无业务逻辑变更。
+- 无数据库 schema 变更。
+- 仅调整 CI 触发方式与 pnpm 版本解析策略。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 推送到 GitHub 后，可直接在 `Actions -> ci -> Run workflow` 手动验证远端执行是否通过。
+
 ## Iteration 4.32（2026-03-22）：将 Web smoke 烟测拆为独立 CI Job
 
 ### 目标
