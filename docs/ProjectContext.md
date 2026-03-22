@@ -46,6 +46,13 @@
 
 ### 2026-03-22
 
+- 为修复真实 `deploy` workflow 在 `Build and push web image` 阶段失败的问题，Web 端运行时依赖已进一步收口为“按需初始化”：
+  - `packages/db` 的 Prisma Client 不再在模块 import 时立即构造，而是改成首次访问时才初始化，避免 `next build` 在收集 `/api/health`、`/api/auth/register` 等路由元数据时因为缺少 `DATABASE_URL` 直接失败。
+  - `apps/web` 的 NextAuth 配置也已从顶层常量改为 `getAuthOptions()` 工厂函数；`/api/auth/[...nextauth]` 路由与 `getServerSession` 都会在请求期再解析 `AUTH_SECRET`，不再阻塞镜像构建。
+- 在继续做真实生产构建验证时，又额外发现 Next 16 对 `/login` 页面提出了新的构建约束：`useSearchParams()` 不能直接落在 page 组件里。当前已把登录页调整为“服务端 page 读取 `searchParams` + 客户端表单消费 props”的结构，避免再次触发 `missing-suspense-with-csr-bailout`。
+- 这次调整的边界是：
+  - 构建阶段不再强依赖生产运行时 secret；
+  - 运行阶段仍然保持严格校验，缺少 `DATABASE_URL` / `AUTH_SECRET` 时依旧会抛错，避免把配置问题静默吞掉。
 - 生产上线策略已明确采用“GitHub-hosted runner + GHCR + 单机 Docker Compose + Caddy”的自动部署方案，先不让生产机充当 self-hosted runner。
 - 该方案的目标是：`main` 合入后自动部署、构建与部署职责分离、数据库迁移进入镜像交付链，并为后续 `staging` / 回滚 / 蓝绿发布保留扩展空间。
 - 已新增 `docs/ProductionDeploymentPlan.md` 作为后续部署落地的设计依据；正式实施前需要先补齐：生产 compose、Caddyfile、deploy workflow、migrate 镜像与健康检查接口。

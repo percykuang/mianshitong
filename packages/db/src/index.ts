@@ -1,4 +1,4 @@
-export { prisma } from './client';
+export { getPrismaClient, prisma } from './client';
 export { Prisma } from '@prisma/client';
 export type {
   AdminUser,

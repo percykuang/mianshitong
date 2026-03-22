@@ -7,6 +7,58 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.55（2026-03-22）：修复生产构建期过早初始化 Prisma / NextAuth
+
+### 目标
+
+- 修复真实 `deploy` workflow 在 `Build and push web image` 阶段失败的问题，避免 `next build` 在收集 `/api/auth/register`、`/api/health` 等路由数据时，因为顶层初始化 Prisma 或鉴权配置而提前要求 `DATABASE_URL` / `AUTH_SECRET`。
+
+### 主要改动
+
+- `packages/db/src/client.ts`
+  - Prisma Client 改为惰性初始化：
+    - 新增 `getPrismaClient()`
+    - `prisma` 改为 `Proxy` 代理，在首次属性访问时才真正构造客户端
+  - 保留开发态单例复用，避免热更新下重复创建连接
+- `packages/db/src/index.ts`
+  - 补充导出 `getPrismaClient`
+- `apps/web/src/lib/server/auth-options.ts`
+  - `authOptions` 顶层常量改为 `getAuthOptions()` 工厂函数
+  - `AUTH_SECRET` 解析与生产校验改为运行时触发
+- `apps/web/src/app/api/auth/[...nextauth]/route.ts`
+  - 改为在每次请求进入时调用 `NextAuth(request, context, getAuthOptions())`
+  - 不再在模块加载阶段创建 NextAuth handler
+- `apps/web/src/lib/server/auth-session.ts`
+  - `getServerSession()` 改为读取 `getAuthOptions()`
+- `apps/web/src/app/login/page.tsx`
+  - 登录页改为服务端 page 读取 `searchParams`
+  - `callbackUrl` 通过 props 传给新的客户端表单组件，移除 page 组件里的 `useSearchParams()`，兼容 Next 16 生产构建
+- `apps/web/src/app/login/login-form.tsx`
+  - 新增独立客户端登录表单组件，承接 `signIn`、跳转与错误处理
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 构建阶段不再要求生产环境变量齐全；但运行阶段仍要求：
+  - `DATABASE_URL`
+  - `AUTH_SECRET` / `NEXTAUTH_SECRET`
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+  - `pnpm -C apps/web build`
+  - `pnpm -C apps/admin build`
+
+### 下一步
+
+- 完成五件套与 `apps/web build` 验证后，重新触发 `deploy` workflow，确认 GHCR 镜像构建恢复正常。
+
 ## Iteration 4.54（2026-03-22）：修复生产镜像构建残留的 `question-bank` 依赖
 
 ### 目标

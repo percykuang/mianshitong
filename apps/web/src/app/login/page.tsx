@@ -1,59 +1,23 @@
-'use client';
+import { LoginForm } from './login-form';
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { AuthCard } from '@/components/auth/auth-card';
-import { toSafeCallbackPath } from '@/lib/auth-redirect';
+interface LoginPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
 
-export default function LoginPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function getCallbackUrl(
+  searchParams: Record<string, string | string[] | undefined>,
+): string | null {
+  const callbackUrl = searchParams.callbackUrl;
 
-  const handleSubmit = async () => {
-    const callbackPath = toSafeCallbackPath(
-      searchParams.get('callbackUrl'),
-      window.location.origin,
-    );
-    setPending(true);
-    setError(null);
+  if (Array.isArray(callbackUrl)) {
+    return callbackUrl[0] ?? null;
+  }
 
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-      callbackUrl: callbackPath,
-    });
+  return callbackUrl ?? null;
+}
 
-    setPending(false);
-    if (result?.error) {
-      setError('邮箱或密码错误');
-      return;
-    }
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const resolvedSearchParams = await searchParams;
 
-    router.push(callbackPath);
-    router.refresh();
-  };
-
-  return (
-    <AuthCard
-      title="Sign In"
-      description="Use your email and password to sign in"
-      submitLabel="Sign in"
-      email={email}
-      password={password}
-      error={error}
-      pending={pending}
-      footerText="Don't have an account?"
-      footerLinkText="Sign up"
-      footerLinkHref="/register"
-      onEmailChange={setEmail}
-      onPasswordChange={setPassword}
-      onSubmit={handleSubmit}
-    />
-  );
+  return <LoginForm callbackUrl={getCallbackUrl(resolvedSearchParams)} />;
 }
