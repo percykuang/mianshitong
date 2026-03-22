@@ -1,0 +1,9 @@
+{$WEB_DOMAIN} {
+  encode zstd gzip
+  reverse_proxy web:3000
+}
+
+{$ADMIN_DOMAIN} {
+  encode zstd gzip
+  reverse_proxy admin:3000
+}

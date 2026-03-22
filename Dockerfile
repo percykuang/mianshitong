@@ -5,6 +5,7 @@
 # Build:
 #   docker build --build-arg APP=web -t mianshitong-web .
 #   docker build --build-arg APP=admin -t mianshitong-admin .
+#   docker build --target migrator -t mianshitong-migrate .
 #
 # Run (example):
 #   docker run --rm -p 3000:3000 mianshitong-web
@@ -30,6 +31,8 @@ COPY packages/config/package.json packages/config/package.json
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/llm/package.json packages/llm/package.json
+COPY packages/retrieval/package.json packages/retrieval/package.json
+COPY packages/agent-skills/package.json packages/agent-skills/package.json
 COPY packages/interview-engine/package.json packages/interview-engine/package.json
 COPY packages/question-bank/package.json packages/question-bank/package.json
 
@@ -42,7 +45,16 @@ ENV NODE_ENV=production
 
 COPY . .
 
-RUN pnpm -C apps/${APP} build
+RUN pnpm db:generate && pnpm -C apps/${APP} build
+
+FROM deps AS migrator
+ENV NODE_ENV=production
+
+COPY . .
+
+RUN pnpm db:generate
+
+CMD ["pnpm", "db:migrate:deploy"]
 
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
 WORKDIR /app

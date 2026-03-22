@@ -7,6 +7,209 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.53（2026-03-22）：修正生产默认域名示例为 `mianshitong.chat`
+
+### 目标
+
+- 修正生产部署文档与默认配置示例中的域名占位，避免继续误导为 `mianshitong.com`，与当前真实域名 `mianshitong.chat` 保持一致。
+
+### 主要改动
+
+- `deploy/.env.prod.example`
+  - 默认 `WEB_DOMAIN` 改为 `mianshitong.chat`
+  - 默认 `ADMIN_DOMAIN` 改为 `admin.mianshitong.chat`
+  - 默认 `NEXTAUTH_URL` 改为 `https://mianshitong.chat`
+- `docs/ProductionDeploymentPlan.md`
+  - 文档中的主站/Admin 域名示例统一调整为 `.chat`
+- `docs/ProductionDeploymentChecklist.md`
+  - `.env.prod` 模板、DNS 验证、健康检查 URL、页面验证 URL 统一调整为 `.chat`
+- `docs/ProjectContext.md`
+  - 记录本次修正的边界：仓库逻辑不依赖写死域名，真正线上值仍以服务器 `.env.prod` 为准
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无代码运行逻辑变更。
+- 需要你手动把服务器 `/opt/mianshitong/.env.prod` 中的域名从 `.com` 改成 `.chat`。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 你在服务器上修正 `.env.prod` 后，继续配置 `mianshitong.chat` 与 `admin.mianshitong.chat` 的 DNS 解析。
+
+## Iteration 4.51（2026-03-22）：落地生产自动部署骨架
+
+### 目标
+
+- 把上一轮确定的“GitHub Actions + GHCR + Docker Compose + Caddy”方案从纯设计稿推进到可执行骨架，补齐部署编排、远程脚本、数据库迁移入口和应用健康检查。
+
+### 主要改动
+
+- `Dockerfile`
+  - 补齐最新 workspace 依赖清单：
+    - `packages/retrieval`
+    - `packages/agent-skills`
+  - `builder` 阶段在构建前显式执行 `pnpm db:generate`
+  - 新增 `migrator` 目标，用于生产执行 `pnpm db:migrate:deploy`
+- `apps/web/src/app/api/health/route.ts`
+- `apps/admin/src/app/api/health/route.ts`
+  - 为 Web/Admin 新增最小健康检查接口
+  - 当前检查内容为：
+    - 路由可用
+    - Prisma 数据库连通
+- `deploy/`
+  - 新增 `compose.prod.yml`
+    - 包含：
+      - `db`
+      - `migrate`
+      - `web`
+      - `admin`
+      - `caddy`
+    - 补齐：
+      - 应用 healthcheck
+      - `depends_on` 健康依赖
+      - `host.docker.internal:host-gateway`
+  - 新增 `Caddyfile`
+  - 新增 `.env.prod.example`
+  - 新增远程脚本：
+    - `deploy/scripts/deploy.sh`
+    - `deploy/scripts/rollback.sh`
+- `.github/workflows/deploy.yml`
+  - 新增生产部署 workflow
+  - 在 `main` push / `workflow_dispatch` 时：
+    - 构建并推送 `web/admin/migrate` 镜像到 GHCR
+    - 通过 SSH 同步 `deploy/` 文件到服务器
+    - 触发远程部署脚本
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无现有本地开发命令变更。
+- 本次新增的是生产部署骨架；要真正上线，还需要你在服务器侧补：
+  - `.env.prod`
+  - GHCR 登录
+  - Docker / Compose / Caddy 运行环境
+  - GitHub Secrets
+
+### 验证
+
+- 已执行：
+  - `docker compose -f deploy/compose.prod.yml --env-file deploy/.env.prod config`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 继续完成服务器侧初始化与首次真实发布：
+  - 配 DNS
+  - 配 GitHub Secrets
+  - 在服务器创建 `.env.prod`
+  - 登录 GHCR
+  - 触发第一次 deploy workflow
+
+## Iteration 4.52（2026-03-22）：补齐生产首发操作清单
+
+### 目标
+
+- 为第一次真实发布补一份可直接照着执行的服务器与 GitHub 配置清单，避免部署骨架已经存在，但落地时还要临时猜目录、Secrets、命令和验证步骤。
+
+### 主要改动
+
+- 新增 [`docs/ProductionDeploymentChecklist.md`](/Users/percy/Desktop/mianshitong/docs/ProductionDeploymentChecklist.md)
+  - 明确了首次上线的执行顺序：
+    - 服务器安装 Docker / Compose
+    - 初始化 `/opt/mianshitong`
+    - 创建 `.env.prod`
+    - 服务器登录 GHCR
+    - GitHub Secrets 配置
+    - DNS 配置
+    - 手动触发第一次 `deploy` workflow
+  - 给出 `.env.prod` 建议模板
+  - 给出 `PROD_SSH_*` 与 `PROD_DEPLOY_PATH` 的具体说明
+  - 补充首发后的验证动作、常见故障排查与回滚命令
+- 更新 [`docs/ProjectContext.md`](/Users/percy/Desktop/mianshitong/docs/ProjectContext.md)
+  - 记录当前已经有一份面向首次上线的执行清单
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无代码运行行为变更。
+- 本次为交付操作文档补全。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 你按清单完成服务器与 GitHub 配置后，我再继续协助你做第一次真实 deploy 联调。
+
+## Iteration 4.50（2026-03-22）：补齐生产自动部署设计稿
+
+### 目标
+
+- 为“面试通”补一套可落地的生产自动部署设计，目标是让 `main` 分支合入后能自动触发线上发布，同时保持构建、测试、发布、部署职责分离。
+
+### 主要改动
+
+- 新增 [`docs/ProductionDeploymentPlan.md`](/Users/percy/Desktop/mianshitong/docs/ProductionDeploymentPlan.md)
+  - 明确对比三种方案：
+    - 服务器直接 `git pull`
+    - GitHub Actions + GHCR + Docker Compose
+    - self-hosted runner
+  - 结论收敛为：
+    - `GitHub-hosted runner -> GHCR -> 单机 Docker Compose -> Caddy`
+  - 补齐了面向当前仓库的生产部署设计：
+    - 域名规划
+    - 容器拓扑
+    - 镜像命名与 tag 策略
+    - CI/CD 流程
+    - GitHub Secrets / Environment 设计
+    - 数据库迁移策略
+    - 回滚、健康检查、备份建议
+    - 分阶段落地清单
+- 更新 [`docs/ProjectContext.md`](/Users/percy/Desktop/mianshitong/docs/ProjectContext.md)
+  - 记录当前已确定的生产部署方向与后续实施前置项
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无运行时代码变更。
+- 本次为设计与文档沉淀，不直接改变现有部署行为。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 进入部署落地阶段，优先顺序：
+  - `deploy/compose.prod.yml`
+  - `deploy/Caddyfile`
+  - `.github/workflows/deploy.yml`
+  - `migrate` 镜像与健康检查接口
+
 ## Iteration 4.49（2026-03-22）：修复 Web planning smoke 的 Next.js dev lock 冲突
 
 ### 目标
