@@ -7,6 +7,66 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.57（2026-03-23）：将 deploy 切换为可配置镜像仓库，当前优先支持 ACR
+
+### 目标
+
+- 解决国内服务器在 `Trigger remote deploy` 阶段拉取 `ghcr.io` 镜像过慢的问题，把当前 deploy 链路收敛为“镜像仓库可配置，优先使用阿里云 ACR”。
+
+### 主要改动
+
+- `.github/workflows/deploy.yml`
+  - `Compute image metadata` 改为支持：
+    - `REGISTRY_HOST`
+    - `REGISTRY_NAMESPACE`
+  - 本地镜像登录不再写死 GHCR，改为：
+    - GHCR 默认回退
+    - 自定义仓库显式校验 `REGISTRY_USERNAME / REGISTRY_PASSWORD`
+  - Web/Admin/Migrate 三个镜像 tag 改为基于 `${registry_host}/${image_namespace}` 生成
+  - 新增远程 `docker login` 步骤，部署前会通过 SSH 在服务器执行一次镜像仓库登录
+- `deploy/scripts/deploy.sh`
+  - 默认拉取镜像收敛为：
+    - `web`
+    - `admin`
+    - `migrate`
+  - 不再每次都拉 `caddy`
+  - 如需显式刷新基础设施镜像，可通过 `PULL_INFRA_IMAGES=1` 打开
+- `deploy/.env.prod.example`
+  - `IMAGE_NAMESPACE` 改为通用仓库格式示例
+  - 增加 ACR 个人版与 GHCR 的示例注释
+- `docs/ProductionDeploymentPlan.md`
+  - 生产部署设计从“默认 GHCR”调整为“镜像仓库可配置，当前推荐 ACR”
+  - 补充 ACR 个人版与企业版的取舍边界
+- `docs/ProductionDeploymentChecklist.md`
+  - 首发清单改为以 ACR 为主线
+  - 删除服务器 `cp .env.prod.example` 与手工登录 GHCR 的过期步骤
+  - 新增 `REGISTRY_*` GitHub Secrets 说明
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无应用代码变更。
+- deploy workflow 新增仓库级 secrets 依赖：
+  - `REGISTRY_HOST`
+  - `REGISTRY_NAMESPACE`
+  - `REGISTRY_USERNAME`
+  - `REGISTRY_PASSWORD`
+- 服务器 `.env.prod` 需要把 `IMAGE_NAMESPACE` 改成 ACR 实际命名空间。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+  - `bash -n deploy/scripts/deploy.sh`
+
+### 下一步
+
+- 你在阿里云 ACR 控制台创建个人版实例、命名空间和三个仓库，并配置 `REGISTRY_*` GitHub Secrets 后，再触发一次 deploy workflow 验证远端拉取速度改善。
+
 ## Iteration 4.56（2026-03-23）：补齐容器内 OpenSSL 依赖，消除 Prisma 警告
 
 ### 目标

@@ -20,6 +20,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 export IMAGE_TAG="$IMAGE_TAG_VALUE"
+PULL_INFRA_IMAGES_VALUE="${PULL_INFRA_IMAGES:-0}"
 
 compose() {
   docker compose \
@@ -30,7 +31,11 @@ compose() {
 }
 
 echo "[deploy] 拉取镜像..."
-compose pull web admin migrate caddy
+images_to_pull=(web admin migrate)
+if [[ "$PULL_INFRA_IMAGES_VALUE" == "1" ]]; then
+  images_to_pull+=(caddy)
+fi
+compose pull "${images_to_pull[@]}"
 
 echo "[deploy] 启动数据库..."
 compose up -d --wait db

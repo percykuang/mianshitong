@@ -38,9 +38,9 @@
   - 回滚差
   - 工程展示价值有限
 
-### 方案 B：GitHub Actions 构建镜像，推送 GHCR，服务器拉镜像部署
+### 方案 B：GitHub Actions 构建镜像，推送镜像仓库，服务器拉镜像部署
 
-- 流程：CI 通过后，GitHub Actions 构建并推送镜像到 GitHub Container Registry，服务器只执行 `docker compose pull` 和 `docker compose up`
+- 流程：CI 通过后，GitHub Actions 构建并推送镜像到独立镜像仓库，服务器只执行 `docker compose pull` 和 `docker compose up`
 - 优点：
   - 构建与部署职责分离
   - 回滚简单
@@ -64,7 +64,7 @@
 
 选择方案 B：
 
-`GitHub Actions -> GHCR -> 服务器 Docker Compose -> Caddy`
+`GitHub Actions -> 镜像仓库 -> 服务器 Docker Compose -> Caddy`
 
 推荐原因：
 
@@ -72,6 +72,26 @@
 - 足够接近真实公司的自动化上线流程
 - 构建留在 GitHub-hosted runner，部署留在生产机，职责明确
 - 后续要加 `staging`、回滚、蓝绿发布时，迁移成本低
+
+镜像仓库推荐：
+
+- 中国内地服务器：优先阿里云 ACR
+- 海外服务器：可继续使用 GHCR
+
+当前项目判断：
+
+- 你的生产服务器在中国内地，部署慢的主瓶颈是远端 `docker pull ghcr.io/...`
+- 因此当前推荐链路收敛为：
+  - `GitHub Actions -> 阿里云 ACR -> 服务器 Docker Compose -> Caddy`
+- deploy workflow 已改成“镜像仓库可配置”，因此仍兼容 GHCR 作为回退方案
+
+关于 ACR 版本：
+
+- ACR 个人版：
+  - 适合当前个人项目 / MVP
+  - 官方说明为“公测限额免费”，但“仅限开发测试使用、无 SLA”
+- ACR 企业版：
+  - 更适合正式生产，稳定性预期更高，但需要付费
 
 ## 4. 目标拓扑
 
@@ -81,7 +101,7 @@ GitHub PR / Merge to main
         v
 GitHub Actions
   - ci
-  - build & push images to GHCR
+  - build & push images to registry
   - ssh trigger deploy on server
         |
         v
@@ -148,9 +168,16 @@ DNS 设计：
 
 推荐命名：
 
-- `ghcr.io/<owner>/mianshitong-web`
-- `ghcr.io/<owner>/mianshitong-admin`
-- `ghcr.io/<owner>/mianshitong-migrate`
+- `<registry>/<namespace>/mianshitong-web`
+- `<registry>/<namespace>/mianshitong-admin`
+- `<registry>/<namespace>/mianshitong-migrate`
+
+示例：
+
+- ACR 个人版：
+  - `crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com/<namespace>/mianshitong-web`
+- GHCR：
+  - `ghcr.io/<owner>/mianshitong-web`
 
 ### 6.2 Tag 策略
 
@@ -184,7 +211,7 @@ DNS 设计：
    - `web-e2e`
 3. 分支保护要求上述检查全部通过后才允许合入 `main`
 4. 合入 `main` 后触发独立 `deploy.yml`
-5. `deploy.yml` 构建并推送镜像到 GHCR
+5. `deploy.yml` 构建并推送镜像到指定仓库（当前推荐 ACR）
 6. `deploy.yml` 通过 SSH 登录服务器执行部署脚本
 7. 服务器拉取指定 SHA 镜像，执行数据库迁移，再更新 `web/admin`
 8. 健康检查通过后标记部署成功
@@ -249,11 +276,18 @@ GitHub 侧建议准备：
 - `PROD_SSH_USER`
 - `PROD_SSH_PRIVATE_KEY`
 - `PROD_DEPLOY_PATH`
+- `REGISTRY_HOST`
+- `REGISTRY_NAMESPACE`
+- `REGISTRY_USERNAME`
+- `REGISTRY_PASSWORD`
 
 说明：
 
 - 部署 workflow 通过 SSH 连接生产服务器
 - workflow 本身不需要知道数据库密码，只需要触发服务器上的部署动作
+- workflow 需要持有镜像仓库凭证，以便：
+  - 在 GitHub Runner 上 `docker login`
+  - 通过 SSH 在服务器上执行一次 `docker login`
 
 ### 9.2 服务器本地 Secrets
 
@@ -274,12 +308,9 @@ GitHub 侧建议准备：
 
 以及镜像拉取所需：
 
-- 服务器本机执行一次 `docker login ghcr.io`
+- `IMAGE_NAMESPACE`
 
-如果镜像是私有的：
-
-- 服务器拉取 GHCR 私有镜像通常需要 `read:packages` 的 PAT classic
-- 这个凭证建议只存服务器，不经由每次 workflow 传输
+当前 deploy workflow 已支持在远程服务器上自动执行 `docker login`，因此服务器不再要求你预先手工登录镜像仓库；手工 `docker login` 只作为排查和验收手段保留。
 
 ## 10. 数据库迁移策略
 
@@ -289,7 +320,7 @@ GitHub 侧建议准备：
 
 使用独立 `migrate` 镜像，在部署时先执行：
 
-1. `docker compose pull`
+1. `docker compose pull web admin migrate`
 2. `docker compose run --rm migrate`
 3. `docker compose up -d --wait web admin caddy`
 
@@ -339,7 +370,7 @@ GitHub 侧建议准备：
 
 1. 切换到部署目录
 2. 导入 `.env.prod`
-3. `docker compose pull web admin migrate caddy`
+3. `docker compose pull web admin migrate`
 4. `docker compose run --rm migrate`
 5. `docker compose up -d --remove-orphans --wait web admin caddy`
 6. 本地健康检查
@@ -349,6 +380,7 @@ GitHub 侧建议准备：
 
 - Docker 官方文档说明 `pull` 只拉镜像，不启动容器
 - `up --wait` 会等待服务达到 `running|healthy`
+- `caddy` 作为基础设施镜像通常不会频繁变更，日常业务发布不必每次都拉；如需显式刷新，可在部署脚本中通过 `PULL_INFRA_IMAGES=1` 打开
 
 ## 13. 健康检查设计
 
@@ -419,7 +451,7 @@ GitHub 侧建议准备：
 - SSH 只允许密钥登录
 - 部署用户尽量专用，不直接用日常账号
 - 生产 secrets 只放服务器，不写入仓库
-- 如果仓库是私有的，GHCR 镜像拉取权限单独控制
+- 如果使用私有镜像仓库，拉取权限与访问凭证需要单独控制
 
 ## 17. 分阶段落地计划
 
@@ -498,8 +530,8 @@ GitHub 侧建议准备：
 - 尚未完成：
   - 服务器初始化
   - 生产 `.env.prod`
-  - GHCR 登录
-  - GitHub Secrets 配置
+  - ACR 实例 / 命名空间 / 仓库创建
+  - `REGISTRY_*` GitHub Secrets 配置
   - 第一次真实域名发布验证
 
 ## 20. 参考资料
@@ -516,6 +548,10 @@ GitHub 侧建议准备：
   - https://docs.github.com/actions/guides/publishing-docker-images
 - GitHub Container Registry
   - https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry
+- 阿里云 ACR 产品页
+  - https://www.aliyun.com/product/acr
+- 阿里云 ACR 个人版限制说明
+  - https://help.aliyun.com/zh/acr/product-overview/container-image-service-acr-personal-edition-upload-and-download-restrictions
 - Docker GitHub Actions
   - https://docs.docker.com/build/ci/github-actions/
 - Docker Compose Pull

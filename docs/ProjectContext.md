@@ -88,6 +88,17 @@
 - `ReportSkill` 的 LLM 输出不会直接覆盖 trace 的来源结构，而是先与现有 strengths/gaps sources 做对齐，尽量保留“哪一道题支撑了这个结论”的可解释性，当前“规划 Skill + 执行 Skill + 报告 Skill”三段边界与第一阶段 LLM 能力已经闭环。
 - `packages/evals` 现已新增一层 Skill 级离线回归基线：通过代表性的结构化推断 fixture 来验证 `ResumeProfileSkill / AssessmentSkill / ReportSkill` 的 merge、canonicalize、trace 对齐与 fallback 稳定性。
 - 这层新基线不依赖真实模型，也不尝试评估 prompt 的绝对好坏；它的职责是“在改 prompt / 改 merge 逻辑 / 改 fallback 逻辑后，及时发现 contract regression”，当前项目已经形成：
+
+### 2026-03-23
+
+- 生产部署的镜像仓库策略已从“默认 GHCR”调整为“镜像仓库可配置，当前优先推荐阿里云 ACR”，核心原因是中国内地服务器在 `Trigger remote deploy` 阶段拉取 `ghcr.io` 镜像过慢。
+- `.github/workflows/deploy.yml` 现已支持：
+  - 通过 `REGISTRY_HOST / REGISTRY_NAMESPACE / REGISTRY_USERNAME / REGISTRY_PASSWORD` 配置自定义镜像仓库
+  - GitHub Runner 侧自动 `docker login`
+  - 远程服务器侧通过 SSH 自动执行一次 `docker login`
+- `deploy/scripts/deploy.sh` 也已补一条小型加速策略：默认只拉 `web/admin/migrate` 三个业务镜像，不再每次都拉 `caddy`；如果后续需要显式升级代理镜像，可在服务器上用 `PULL_INFRA_IMAGES=1 IMAGE_TAG=<tag> bash scripts/deploy.sh` 打开基础设施镜像拉取。
+- 生产运行时的 `.env.prod` 仍只需要维护 `IMAGE_NAMESPACE`，不会引入新的应用级环境变量；镜像仓库选择被限制在 deploy workflow 与服务器部署配置层，不侵入应用代码。
+- 部署文档现已同步为“当前推荐 ACR 个人版，GHCR 作为回退”，并明确记录了 ACR 个人版的边界：适合当前个人项目/MVP，但官方说明为“公测限额免费、仅限开发测试、无 SLA”，后续若转向更正式生产环境，应优先考虑 ACR 企业版。
   - 题单规划 eval
   - 报告 trace eval
   - 三段 Skill regression eval

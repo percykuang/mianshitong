@@ -60,7 +60,11 @@
     "getaddrinfo",
     "reactjs",
     "pgvector",
+    "acr",
+    "aliyuncs",
+    "crpi",
     "nomic",
+    "percykuang",
     "rerank",
     "hnsw",
     "zstd"

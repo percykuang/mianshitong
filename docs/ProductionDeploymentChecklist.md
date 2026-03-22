@@ -5,7 +5,7 @@
 - 单台 Linux 服务器
 - 自有域名
 - GitHub 仓库
-- GitHub Container Registry
+- 可配置镜像仓库（当前推荐阿里云 ACR）
 - Docker Compose + Caddy
 
 ## 1. 执行顺序总览
@@ -15,11 +15,21 @@
 1. 服务器基础环境安装
 2. 服务器部署目录初始化
 3. 服务器生成生产 `.env.prod`
-4. 服务器登录 GHCR
+4. 准备镜像仓库（当前推荐 ACR 个人版）
 5. GitHub Secrets 配置
 6. DNS 配置
 7. 手动触发第一次 deploy workflow
 8. 验证 Web / Admin / HTTPS / 数据库迁移
+
+补充说明：
+
+- 当前 deploy 脚本默认只拉 `web/admin/migrate` 三个业务镜像
+- 如需显式刷新 `caddy`，在服务器执行：
+
+```bash
+cd /opt/mianshitong
+PULL_INFRA_IMAGES=1 IMAGE_TAG=main-latest bash scripts/deploy.sh
+```
 
 ## 2. 服务器基础环境
 
@@ -75,21 +85,14 @@ sudo chown -R <your_user>:<your_user> /opt/mianshitong
 
 ## 4. 服务器创建生产环境文件
 
-在服务器上执行：
-
-```bash
-cd /opt/mianshitong
-cp .env.prod.example .env.prod
-```
-
-或者你也可以直接手写 `.env.prod`。
+当前 workflow 不会把 `.env.prod.example` 同步到服务器，所以这里请直接手写 `.env.prod`。
 
 ### 4.1 推荐的 `.env.prod` 模板
 
 下面是基于你当前项目的建议值，你只需要把占位符换成真实值：
 
 ```env
-IMAGE_NAMESPACE=ghcr.io/<your-github-owner>
+IMAGE_NAMESPACE=crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com/<your-namespace>
 IMAGE_TAG=main-latest
 
 WEB_DOMAIN=mianshitong.chat
@@ -136,39 +139,61 @@ openssl rand -base64 48
 - `AUTH_SECRET`
 - `ADMIN_AUTH_SECRET`
 
-## 5. GHCR 登录
+## 5. 准备镜像仓库（当前推荐 ACR 个人版）
 
-服务器需要有权限拉取 GHCR 镜像。
+推荐原因：
 
-### 5.1 建议做法
+- 你的生产服务器在中国内地
+- 当前部署最慢的瓶颈是远端 `docker pull ghcr.io/...`
+- 阿里云 ACR 对国内服务器拉取更稳定、通常也更快
 
-使用一个 GitHub Personal Access Token 登录 `ghcr.io`。
+当前建议：
 
-推荐权限最小化为：
+- 个人项目 / MVP：先用 `ACR 个人版`
+- 以后如果你要追求更稳定的线上保障，再切 `ACR 企业版`
 
-- `read:packages`
+注意：
 
-如果仓库/包权限策略要求，也可能需要：
+- 阿里云官方当前说明里，`ACR 个人版` 为“公测限额免费”
+- 但同样明确写了“仅限个人开发者使用、仅限开发测试、无 SLA”
 
-- `repo`
+### 5.1 你在阿里云控制台要做什么
 
-### 5.2 登录命令
+1. 开通容器镜像服务 ACR
+2. 创建个人版实例
+3. 创建命名空间
+4. 创建 3 个镜像仓库：
+   - `mianshitong-web`
+   - `mianshitong-admin`
+   - `mianshitong-migrate`
+5. 在 ACR 控制台生成固定登录密码
 
-在服务器执行：
+### 5.2 你需要记下的 4 个值
+
+- `REGISTRY_HOST`
+  - 例如：`crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com`
+- `REGISTRY_NAMESPACE`
+  - 例如：`percykuang`
+- `REGISTRY_USERNAME`
+  - ACR 登录用户名
+- `REGISTRY_PASSWORD`
+  - ACR 固定登录密码
+
+### 5.3 服务器还要不要手工 `docker login`
+
+当前 deploy workflow 已支持：
+
+- GitHub Runner 自动登录镜像仓库
+- 通过 SSH 在服务器自动执行一次 `docker login`
+
+所以：
+
+- 正常自动部署时，不再要求你提前在服务器手工登录 ACR
+- 只有排查拉取问题时，才建议你手工执行：
 
 ```bash
-echo '<your_pat>' | docker login ghcr.io -u <your_github_username> --password-stdin
+echo '<registry_password>' | docker login <registry_host> -u <registry_username> --password-stdin
 ```
-
-登录后会写入当前用户的 Docker config。
-
-验证是否登录成功：
-
-```bash
-docker pull ghcr.io/<your-github-owner>/mianshitong-web:main-latest
-```
-
-如果当前镜像还没发布过，第一次可能拉不到；这是正常的。此时重点是先确认登录没有权限错误。
 
 ## 6. GitHub Secrets 配置
 
@@ -188,6 +213,14 @@ docker pull ghcr.io/<your-github-owner>/mianshitong-web:main-latest
   - 服务器 SSH host key
 - `PROD_DEPLOY_PATH`
   - 例如 `/opt/mianshitong`
+- `REGISTRY_HOST`
+  - 例如：`crpi-xxxx.cn-hangzhou.personal.cr.aliyuncs.com`
+- `REGISTRY_NAMESPACE`
+  - 例如：`percykuang`
+- `REGISTRY_USERNAME`
+  - ACR 登录用户名
+- `REGISTRY_PASSWORD`
+  - ACR 固定登录密码
 
 ### 6.2 如何生成 `PROD_SSH_KNOWN_HOSTS`
 
@@ -246,6 +279,7 @@ chmod +x scripts/*.sh 2>/dev/null || true
 
 - 第一次 workflow 执行时会同步 `deploy/` 下的文件到服务器
 - `.env.prod` 不会被 workflow 自动覆盖，你需要自己保留并维护这个文件
+- 第一次 workflow 执行时也会在服务器上自动执行一次镜像仓库登录
 
 ## 9. 第一次触发部署
 
@@ -319,9 +353,12 @@ curl -i https://admin.mianshitong.chat/api/health
 
 优先检查：
 
-- 服务器是否执行了 `docker login ghcr.io`
-- PAT 是否有 `read:packages`
-- `IMAGE_NAMESPACE` 是否和 GitHub owner 一致
+- `REGISTRY_HOST / REGISTRY_NAMESPACE / REGISTRY_USERNAME / REGISTRY_PASSWORD` 是否配置正确
+- `.env.prod` 中的 `IMAGE_NAMESPACE` 是否和 registry 实际命名空间一致
+- ACR 仓库是否已创建：
+  - `mianshitong-web`
+  - `mianshitong-admin`
+  - `mianshitong-migrate`
 
 ### 11.2 Caddy 没拿到证书
 
@@ -385,7 +422,7 @@ cd /opt/mianshitong
 bash scripts/rollback.sh <old_git_sha>
 ```
 
-前提是对应 SHA 镜像已经存在于 GHCR 中。
+前提是对应 SHA 镜像已经存在于当前镜像仓库中。
 
 ## 14. 你现在最该做的动作
 
@@ -394,7 +431,7 @@ bash scripts/rollback.sh <old_git_sha>
 1. 在服务器安装 Docker / Compose
 2. 建 `/opt/mianshitong`
 3. 创建 `.env.prod`
-4. 服务器登录 GHCR
+4. 在阿里云 ACR 创建实例/命名空间/仓库并拿到登录凭证
 5. 配 GitHub Secrets
 6. 配 DNS
 7. 手动运行一次 `deploy` workflow
