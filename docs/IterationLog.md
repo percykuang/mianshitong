@@ -7,6 +7,40 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.54（2026-03-22）：修复生产镜像构建残留的 `question-bank` 依赖
+
+### 目标
+
+- 修复第一次真实触发 `deploy` workflow 时，在 `Build and push web image` 步骤因为 `packages/question-bank/package.json` 不存在而导致的 Docker 构建失败。
+
+### 主要改动
+
+- `Dockerfile`
+  - 删除过期的：
+    - `COPY packages/question-bank/package.json packages/question-bank/package.json`
+  - 当前镜像构建依赖清单与仓库现状重新对齐，不再引用已移除的 `packages/question-bank`
+- `docs/ProjectContext.md`
+  - 记录本次真实部署中暴露出的构建脚本陈旧问题及修复结果
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无运行时代码行为变更。
+- 本次仅修复生产镜像构建链。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 重新触发 `deploy` workflow，继续观察后续镜像构建与远程部署步骤。
+
 ## Iteration 4.53（2026-03-22）：修正生产默认域名示例为 `mianshitong.chat`
 
 ### 目标

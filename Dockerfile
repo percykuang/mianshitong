@@ -34,7 +34,6 @@ COPY packages/llm/package.json packages/llm/package.json
 COPY packages/retrieval/package.json packages/retrieval/package.json
 COPY packages/agent-skills/package.json packages/agent-skills/package.json
 COPY packages/interview-engine/package.json packages/interview-engine/package.json
-COPY packages/question-bank/package.json packages/question-bank/package.json
 
 RUN pnpm install --frozen-lockfile
 

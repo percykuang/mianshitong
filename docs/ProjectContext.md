@@ -56,6 +56,7 @@
   - `Dockerfile` 已补 `migrator` 目标与最新 workspace 依赖清单
 - 已新增 `docs/ProductionDeploymentChecklist.md`，把服务器初始化、GHCR 登录、GitHub Secrets、DNS、首发验证与回滚步骤收敛成可执行清单，作为第一次真实上线的操作手册。
 - 生产默认域名示例已从 `mianshitong.com` 统一修正为 `mianshitong.chat`；仓库里的 deploy/Caddy/Compose 逻辑本身不依赖写死域名，真正生效的仍是服务器上的 `.env.prod`。
+- 首次真实触发 `deploy` workflow 时，发现 `Dockerfile` 仍残留对已移除包 `packages/question-bank` 的复制语句，导致 GHCR 构建在 `Build and push web image` 步骤失败；该过期依赖清单现已移除。
 - Admin 端按 MVP 上线要求做了一轮加固：管理员登录增加服务端限流，并支持通过 `ADMIN_ALLOWED_IPS` 做可选 IP 白名单限制。
 - 题库新建/编辑接口补充服务端字段校验，确保 `level`、`tags`、`order` 等核心字段不会写入非法值，避免污染 Web 端抽题逻辑。
 - 用户详情页修复为 Next 16 兼容的异步 `params` 读取方式，并统一会话消息数统计口径，排除系统欢迎语。
