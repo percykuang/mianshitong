@@ -15,6 +15,12 @@
 
 ### 主要改动
 
+- `.github/workflows/deploy.yml`
+  - `Sync deploy files to server` 步骤不再上传 `deploy/.env.prod.example`
+  - 服务器真正依赖的是手工维护的 `.env.prod`，示例文件不再参与生产同步
+- `.gitignore`
+  - 新增 `!deploy/.env.prod.example`
+  - 允许部署示例环境文件进入版本库，避免本地存在但远端仓库缺失
 - `Dockerfile`
   - builder 阶段在构建前新增：
     - `mkdir -p apps/${APP}/public`

@@ -97,7 +97,7 @@ jobs:
           PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
         run: |
           ssh -p "$PROD_SSH_PORT" "$PROD_SSH_USER@$PROD_SSH_HOST" "mkdir -p '$PROD_DEPLOY_PATH/scripts'"
-          scp -P "$PROD_SSH_PORT" deploy/compose.prod.yml deploy/Caddyfile deploy/.env.prod.example "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_DEPLOY_PATH/"
+          scp -P "$PROD_SSH_PORT" deploy/compose.prod.yml deploy/Caddyfile "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_DEPLOY_PATH/"
           scp -P "$PROD_SSH_PORT" deploy/scripts/deploy.sh deploy/scripts/rollback.sh "$PROD_SSH_USER@$PROD_SSH_HOST:$PROD_DEPLOY_PATH/scripts/"
 
       - name: Trigger remote deploy
