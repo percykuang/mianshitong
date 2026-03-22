@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@mianshitong/agent-skills": "workspace:*",
     "@mianshitong/interview-engine": "workspace:*",
     "@mianshitong/shared": "workspace:*"
   },

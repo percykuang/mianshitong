@@ -1,70 +1,19 @@
+import { defaultFollowUpSkill, defaultReportSkill } from '@mianshitong/agent-skills';
 import type { LlmProvider } from '@mianshitong/llm';
 import type { QuestionRetriever } from '@mianshitong/retrieval';
 import type {
   ChatMessage,
   ChatSession,
-  InterviewFollowUpTrace,
   InterviewPlanningStrategy,
   InterviewQuestion,
   PostMessageResult,
 } from '@mianshitong/shared';
 import { planInterviewFromSource } from './interview-planning';
-import { buildInterviewReportResult } from './scoring';
 import {
   extractInterviewPlanningText,
-  includesKeyword,
   pushAssistantMessage,
   shouldStartInterview,
 } from './session-core';
-
-function buildAnswerPreview(answer: string): string {
-  const normalized = answer.replace(/\s+/g, ' ').trim();
-  return normalized.length > 180 ? `${normalized.slice(0, 180)}...` : normalized;
-}
-
-function buildFollowUpTrace(input: {
-  session: ChatSession;
-  currentQuestion: ChatSession['runtime']['questionPlan'][number];
-  now: string;
-}): InterviewFollowUpTrace {
-  const keyPoints = input.currentQuestion.keyPoints ?? [];
-  const mergedAnswer = input.session.runtime.activeQuestionAnswers.join('\n');
-  const matchedPoints = keyPoints.filter((item) => includesKeyword(mergedAnswer, item));
-  const missingPoints = keyPoints.filter((item) => !includesKeyword(mergedAnswer, item));
-  const coverage = keyPoints.length > 0 ? matchedPoints.length / keyPoints.length : 0;
-
-  let decision: InterviewFollowUpTrace['decision'] = 'ask_follow_up';
-  let askedMissingPoint: string | null = missingPoints[0] ?? null;
-
-  if (keyPoints.length === 0) {
-    decision = 'skip_no_key_points';
-    askedMissingPoint = null;
-  } else if (input.session.runtime.followUpRound >= 1) {
-    decision = 'skip_max_round';
-    askedMissingPoint = null;
-  } else if (missingPoints.length === 0) {
-    decision = 'skip_all_points_covered';
-    askedMissingPoint = null;
-  } else if (coverage >= 0.55) {
-    decision = 'skip_coverage_sufficient';
-    askedMissingPoint = null;
-  }
-
-  return {
-    questionId: input.currentQuestion.id,
-    questionTitle: input.currentQuestion.title,
-    round: input.session.runtime.followUpRound + 1,
-    answerPreview: buildAnswerPreview(mergedAnswer),
-    answerLength: mergedAnswer.length,
-    keyPointCount: keyPoints.length,
-    matchedPoints,
-    missingPoints,
-    coverage: Number(coverage.toFixed(3)),
-    decision,
-    askedMissingPoint,
-    createdAt: input.now,
-  };
-}
 
 export function handleEmptyInput(
   session: ChatSession,
@@ -191,17 +140,22 @@ export async function handleIdleSession(input: {
   return { session: input.session, assistantMessages: input.assistantMessages };
 }
 
-export function maybeAskFollowUp(input: {
+export async function maybeAskFollowUp(input: {
   session: ChatSession;
   currentQuestion: ChatSession['runtime']['questionPlan'][number];
   provider: LlmProvider;
   assistantMessages: ChatMessage[];
   now: string;
-}): boolean {
-  const trace = buildFollowUpTrace(input);
-  input.session.runtime.followUpTrace.push(trace);
+}): Promise<boolean> {
+  const result = await defaultFollowUpSkill.execute({
+    question: input.currentQuestion,
+    answers: input.session.runtime.activeQuestionAnswers,
+    followUpRound: input.session.runtime.followUpRound,
+    now: input.now,
+  });
+  input.session.runtime.followUpTrace.push(result.trace);
 
-  if (trace.decision !== 'ask_follow_up') {
+  if (!result.shouldAskFollowUp) {
     return false;
   }
 
@@ -210,7 +164,7 @@ export function maybeAskFollowUp(input: {
     kind: 'question',
     content: input.provider.generateFollowUpMessage({
       question: input.currentQuestion,
-      missingPoint: trace.askedMissingPoint ?? '',
+      missingPoint: result.trace.askedMissingPoint ?? '',
     }),
     now: input.now,
   });
@@ -218,17 +172,17 @@ export function maybeAskFollowUp(input: {
   return true;
 }
 
-export function completeInterview(input: {
+export async function completeInterview(input: {
   session: ChatSession;
   provider: LlmProvider;
   assistantMessages: ChatMessage[];
   now: string;
-}): PostMessageResult {
+}): Promise<PostMessageResult> {
   input.session.status = 'completed';
-  const { report, trace } = buildInterviewReportResult(
-    input.session.runtime.assessments,
-    input.now,
-  );
+  const { report, trace } = await defaultReportSkill.execute({
+    assessments: input.session.runtime.assessments,
+    createdAt: input.now,
+  });
   input.session.report = report;
   input.session.runtime.reportTrace = trace;
 

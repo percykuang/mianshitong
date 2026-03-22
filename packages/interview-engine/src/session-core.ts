@@ -2,6 +2,7 @@ import {
   type ChatMessage,
   type ChatSession,
   type CreateSessionInput,
+  type InterviewQuestion,
   type InterviewRuntimeState,
   type MessageKind,
   type MessageRole,
@@ -55,65 +56,84 @@ function cloneReport(report: ChatSession['report']): ChatSession['report'] {
   };
 }
 
+function cloneQuestion(question: InterviewQuestion): InterviewQuestion {
+  return {
+    ...question,
+    keyPoints: [...(question.keyPoints ?? [])],
+    followUps: [...(question.followUps ?? [])],
+    tags: [...(question.tags ?? [])],
+  };
+}
+
 function cloneRuntime(runtime: InterviewRuntimeState): InterviewRuntimeState {
+  const questionPlan = Array.isArray(runtime.questionPlan) ? runtime.questionPlan : [];
+  const activeQuestionAnswers = Array.isArray(runtime.activeQuestionAnswers)
+    ? runtime.activeQuestionAnswers
+    : [];
+  const assessments = Array.isArray(runtime.assessments) ? runtime.assessments : [];
+  const followUpTrace = Array.isArray(runtime.followUpTrace) ? runtime.followUpTrace : [];
+  const assessmentTrace = Array.isArray(runtime.assessmentTrace) ? runtime.assessmentTrace : [];
+
   return {
     ...runtime,
-    questionPlan: [...runtime.questionPlan],
-    activeQuestionAnswers: [...runtime.activeQuestionAnswers],
-    assessments: runtime.assessments.map((item) => ({
+    questionPlan: questionPlan.map(cloneQuestion),
+    activeQuestionAnswers: [...activeQuestionAnswers],
+    assessments: assessments.map((item) => ({
       ...item,
-      matchedPoints: [...item.matchedPoints],
-      missingPoints: [...item.missingPoints],
+      matchedPoints: [...(item.matchedPoints ?? [])],
+      missingPoints: [...(item.missingPoints ?? [])],
       scores: { ...item.scores },
     })),
-    followUpTrace: runtime.followUpTrace.map((item) => ({
+    followUpTrace: followUpTrace.map((item) => ({
       ...item,
-      matchedPoints: [...item.matchedPoints],
-      missingPoints: [...item.missingPoints],
+      matchedPoints: [...(item.matchedPoints ?? [])],
+      missingPoints: [...(item.missingPoints ?? [])],
     })),
-    assessmentTrace: runtime.assessmentTrace.map((item) => ({
+    assessmentTrace: assessmentTrace.map((item) => ({
       ...item,
-      matchedPoints: [...item.matchedPoints],
-      missingPoints: [...item.missingPoints],
+      matchedPoints: [...(item.matchedPoints ?? [])],
+      missingPoints: [...(item.missingPoints ?? [])],
       scores: { ...item.scores },
     })),
     resumeProfile: runtime.resumeProfile
       ? {
           ...runtime.resumeProfile,
-          primaryTags: runtime.resumeProfile.primaryTags.map((item) => ({ ...item })),
-          secondaryTags: runtime.resumeProfile.secondaryTags.map((item) => ({ ...item })),
-          projectTags: [...runtime.resumeProfile.projectTags],
-          strengths: [...runtime.resumeProfile.strengths],
-          riskFlags: [...runtime.resumeProfile.riskFlags],
-          evidence: [...runtime.resumeProfile.evidence],
+          primaryTags: (runtime.resumeProfile.primaryTags ?? []).map((item) => ({ ...item })),
+          secondaryTags: (runtime.resumeProfile.secondaryTags ?? []).map((item) => ({ ...item })),
+          projectTags: [...(runtime.resumeProfile.projectTags ?? [])],
+          strengths: [...(runtime.resumeProfile.strengths ?? [])],
+          riskFlags: [...(runtime.resumeProfile.riskFlags ?? [])],
+          evidence: [...(runtime.resumeProfile.evidence ?? [])],
         }
       : null,
     interviewBlueprint: runtime.interviewBlueprint
       ? {
           ...runtime.interviewBlueprint,
           difficultyDistribution: { ...runtime.interviewBlueprint.difficultyDistribution },
-          tagDistribution: runtime.interviewBlueprint.tagDistribution.map((item) => ({ ...item })),
-          mustIncludeTags: [...runtime.interviewBlueprint.mustIncludeTags],
-          optionalTags: [...runtime.interviewBlueprint.optionalTags],
-          avoidTags: [...runtime.interviewBlueprint.avoidTags],
-          strategyNotes: [...runtime.interviewBlueprint.strategyNotes],
+          tagDistribution: (runtime.interviewBlueprint.tagDistribution ?? []).map((item) => ({
+            ...item,
+          })),
+          mustIncludeTags: [...(runtime.interviewBlueprint.mustIncludeTags ?? [])],
+          optionalTags: [...(runtime.interviewBlueprint.optionalTags ?? [])],
+          avoidTags: [...(runtime.interviewBlueprint.avoidTags ?? [])],
+          strategyNotes: [...(runtime.interviewBlueprint.strategyNotes ?? [])],
         }
       : null,
     planningTrace: runtime.planningTrace
       ? {
           ...runtime.planningTrace,
           levelQuota: { ...runtime.planningTrace.levelQuota },
-          steps: runtime.planningTrace.steps.map((step) => ({
+          steps: (runtime.planningTrace.steps ?? []).map((step) => ({
             ...step,
-            uncoveredMustTags: [...step.uncoveredMustTags],
-            preferredTags: step.preferredTags.map((item) => ({ ...item })),
-            candidates: step.candidates.map((candidate) => ({
+            uncoveredMustTags: [...(step.uncoveredMustTags ?? [])],
+            preferredTags: (step.preferredTags ?? []).map((item) => ({ ...item })),
+            candidates: (step.candidates ?? []).map((candidate) => ({
               ...candidate,
-              tags: [...candidate.tags],
-              matchedTags: [...candidate.matchedTags],
-              matchedMustIncludeTags: [...candidate.matchedMustIncludeTags],
-              matchedOptionalTags: [...candidate.matchedOptionalTags],
-              lexicalOverlap: [...candidate.lexicalOverlap],
+              tags: [...(candidate.tags ?? [])],
+              matchedTags: [...(candidate.matchedTags ?? [])],
+              matchedMustIncludeTags: [...(candidate.matchedMustIncludeTags ?? [])],
+              matchedOptionalTags: [...(candidate.matchedOptionalTags ?? [])],
+              lexicalOverlap: [...(candidate.lexicalOverlap ?? [])],
               breakdown: { ...candidate.breakdown },
             })),
           })),
@@ -123,21 +143,21 @@ function cloneRuntime(runtime: InterviewRuntimeState): InterviewRuntimeState {
       ? {
           ...runtime.reportTrace,
           dimensionSummary: { ...runtime.reportTrace.dimensionSummary },
-          dimensionTraces: runtime.reportTrace.dimensionTraces.map((item) => ({
+          dimensionTraces: (runtime.reportTrace.dimensionTraces ?? []).map((item) => ({
             ...item,
-            sources: item.sources.map((source) => ({ ...source })),
+            sources: (item.sources ?? []).map((source) => ({ ...source })),
           })),
-          strengths: runtime.reportTrace.strengths.map((item) => ({
+          strengths: (runtime.reportTrace.strengths ?? []).map((item) => ({
             ...item,
-            sources: item.sources.map((source) => ({ ...source })),
+            sources: (item.sources ?? []).map((source) => ({ ...source })),
           })),
-          gaps: runtime.reportTrace.gaps.map((item) => ({
+          gaps: (runtime.reportTrace.gaps ?? []).map((item) => ({
             ...item,
-            sources: item.sources.map((source) => ({ ...source })),
+            sources: (item.sources ?? []).map((source) => ({ ...source })),
           })),
-          nextSteps: runtime.reportTrace.nextSteps.map((item) => ({
+          nextSteps: (runtime.reportTrace.nextSteps ?? []).map((item) => ({
             ...item,
-            sources: item.sources.map((source) => ({ ...source })),
+            sources: (item.sources ?? []).map((source) => ({ ...source })),
           })),
         }
       : null,

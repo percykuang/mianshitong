@@ -752,6 +752,14 @@ interface AgentSkill<I, O> {
 当前已落地：
 
 - `packages/interview-engine` 已用 LangGraphJS 承接 `ResumeProfile -> InterviewBlueprint -> QuestionPlan` 的规划骨架。
+- `packages/agent-skills` 已落地第一版显式 Skill 协议，当前先承接：
+  - `ResumeProfileSkill`
+  - `InterviewBlueprintSkill`
+  - 后续可以在不改 LangGraph 节点边界的前提下，替换为真实 LLM / Tool 驱动实现
+- `ResumeProfileSkill` 已优先升级为第一条“真实 LLM + fallback”链路：
+  - 当 `LLM_PROVIDER=deepseek` 且存在有效 `DEEPSEEK_API_KEY` 时，会调用 DeepSeek JSON 输出生成结构化候选人画像
+  - 若模型调用失败、结构无效或当前环境未启用 DeepSeek，则自动回退为规则版画像
+  - 当前 `packages/llm` 已补齐轻量 `DeepSeekJsonCompletionProvider`，后续可复用于 `AssessmentSkill` / `ReportSkill`
 - `packages/retrieval` 已落地 Hybrid RAG 第一阶段检索层，当前采用：
   - 元数据过滤
   - 词法召回
@@ -779,6 +787,28 @@ interface AgentSkill<I, O> {
 - 近期去重
 - 多场面试连续训练
 
+当前进展补充：
+
+- `追问 Skill` 已提前落地第一版规则实现：
+  - `packages/agent-skills` 提供 `FollowUpSkill`
+  - `interview-engine` 执行链路改为消费 Skill 输出的 `trace + shouldAskFollowUp`
+  - 当前仍复用现有 provider 生成追问文本，因此用户可见行为保持不变
+- `AssessmentSkill` 也已提前落地第一版规则实现：
+  - `packages/agent-skills` 提供 `AssessmentSkill`
+  - `interview-engine` 单题评分链路改为消费 Skill 输出的 `assessment + trace`
+  - 当前已升级为“DeepSeek 结构化评分 + 规则 fallback”混合实现：
+    - 在 `LLM_PROVIDER=deepseek` 且存在有效 `DEEPSEEK_API_KEY` 时，优先用 DeepSeek 输出结构化维度评分与总结
+    - 若模型调用失败、结构无效或当前环境未启用 DeepSeek，则自动回退为规则版评分
+    - 针对题库 `keyPoints` 可为空的现状，fallback 也已补齐无要点场景下的启发式评分
+- `ReportSkill` 也已提前落地第一版规则实现：
+  - `packages/agent-skills` 提供 `ReportSkill`
+  - `interview-engine` 在“完成面试 / 补报告”两个入口都改为消费 Skill 输出的 `report + trace`
+  - 当前已升级为“DeepSeek 结构化总结 + 规则 fallback”混合实现：
+    - `overallScore / level / dimensionSummary / dimensionTraces` 继续走规则聚合，保证可回归与可解释
+    - `overallSummary / strengths / gaps / nextSteps` 在 `LLM_PROVIDER=deepseek` 且存在有效 `DEEPSEEK_API_KEY` 时优先由 DeepSeek 结构化生成
+    - 若模型调用失败、结构无效或当前环境未启用 DeepSeek，则自动回退为规则版报告模板
+    - 叙述层输出会尽量对齐已有 strengths/gaps sources，避免 Admin Trace 丢失题目来源关系
+
 ### Phase 3：评测与展示版本
 
 范围：
@@ -792,6 +822,34 @@ interface AgentSkill<I, O> {
 
 - `packages/evals` 已作为离线题单评测基线存在。
 - 当前评测先覆盖“简历画像 -> 题单输出”的稳定性。
+- 当前又新增了一层 `skill regression evals`，用于验证：
+  - `ResumeProfileSkill`
+  - `AssessmentSkill`
+  - `ReportSkill`
+- 这层基线当前不做真实联网模型评测，而是通过代表性的结构化 inference fixture 来验证：
+  - merge 逻辑
+  - tag / point canonicalize
+  - trace 与最终结果一致性
+  - fallback 稳定性
+- 当前离线评测基线已形成三层：
+  - `question planning evals`
+  - `report trace evals`
+  - `skill regression evals`
+- 当前又新增了一层“手动触发的真实模型评测”：
+  - 默认不进入 CI
+  - 仅在 `RUN_LLM_EVALS=1` 时显式运行
+  - 当前先覆盖 `ResumeProfileSkill / AssessmentSkill / ReportSkill`
+  - 用途是做真实 DeepSeek smoke / capability check，而不是替代离线 regression baseline
+- Web 端当前还保留一条独立的“真实出题链路 smoke”：
+  - 入口为 `/api/chat/stream`
+  - 通过 `pnpm evals:web:planning:smoke` 手动执行
+  - 它不会依赖 DeepSeek，而是固定 `LLM_PROVIDER=ollama` / `EMBEDDING_PROVIDER=ollama`
+  - 目的不是评估模型文案质量，而是验证：
+    - `resumeProfile`
+    - `interviewBlueprint`
+    - `questionPlan`
+    - `planningTrace`
+      在真实 Web 端集成下是否完整、对齐、可解释
 - 后续可继续扩展为：
   - 检索质量评测
   - Prompt/Skill 回归评测

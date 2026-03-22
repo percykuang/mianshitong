@@ -1,3 +1,4 @@
+import { defaultAssessmentSkill, defaultReportSkill } from '@mianshitong/agent-skills';
 import { createMockLlmProvider, type LlmProvider } from '@mianshitong/llm';
 import type { QuestionRetriever } from '@mianshitong/retrieval';
 import type {
@@ -14,7 +15,6 @@ import {
   handleIdleSession,
   maybeAskFollowUp,
 } from './process-helpers';
-import { buildAssessmentResult, buildInterviewReportResult } from './scoring';
 import { cloneSession, createMessage, pushAssistantMessage, toTitle } from './session-core';
 
 function appendUserMessage(session: ChatSession, content: string, now: string): void {
@@ -28,15 +28,18 @@ function appendUserMessage(session: ChatSession, content: string, now: string): 
   );
 }
 
-function ensureCompletedReport(
+async function ensureCompletedReport(
   session: ChatSession,
   assistantMessages: ChatMessage[],
   provider: LlmProvider,
   now: string,
-): PostMessageResult {
+): Promise<PostMessageResult> {
   session.status = 'completed';
-  if (!session.report) {
-    const { report, trace } = buildInterviewReportResult(session.runtime.assessments, now);
+  if (!session.report || !session.runtime.reportTrace) {
+    const { report, trace } = await defaultReportSkill.execute({
+      assessments: session.runtime.assessments,
+      createdAt: now,
+    });
     session.report = report;
     session.runtime.reportTrace = trace;
   }
@@ -49,13 +52,13 @@ function ensureCompletedReport(
   return { session, assistantMessages };
 }
 
-function processInterviewingSession(input: {
+async function processInterviewingSession(input: {
   session: ChatSession;
   content: string;
   provider: LlmProvider;
   now: string;
   assistantMessages: ChatMessage[];
-}): PostMessageResult {
+}): Promise<PostMessageResult> {
   const currentQuestion =
     input.session.runtime.questionPlan[input.session.runtime.currentQuestionIndex];
   if (!currentQuestion) {
@@ -64,7 +67,7 @@ function processInterviewingSession(input: {
 
   input.session.runtime.activeQuestionAnswers.push(input.content);
   if (
-    maybeAskFollowUp({
+    await maybeAskFollowUp({
       session: input.session,
       currentQuestion,
       provider: input.provider,
@@ -76,7 +79,11 @@ function processInterviewingSession(input: {
   }
 
   const mergedAnswer = input.session.runtime.activeQuestionAnswers.join('\n');
-  const { assessment, trace } = buildAssessmentResult(currentQuestion, mergedAnswer, input.now);
+  const { assessment, trace } = await defaultAssessmentSkill.execute({
+    question: currentQuestion,
+    answer: mergedAnswer,
+    createdAt: input.now,
+  });
   input.session.runtime.assessments.push(assessment);
   input.session.runtime.assessmentTrace.push(trace);
   input.session.runtime.reportTrace = null;

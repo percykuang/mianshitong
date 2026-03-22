@@ -86,4 +86,34 @@ describe('interview engine', () => {
       finished.report?.gaps ?? [],
     );
   });
+
+  it('兼容缺少 trace 数组字段的旧 runtime 会话', async () => {
+    const legacySession = createInterviewSession({
+      config: {
+        topics: ['javascript'],
+        level: 'mid',
+        questionCount: 1,
+        feedbackMode: 'end_summary',
+      },
+      questionBank: [...questionBank],
+    });
+
+    delete (legacySession.runtime as Partial<typeof legacySession.runtime>).followUpTrace;
+    delete (legacySession.runtime as Partial<typeof legacySession.runtime>).assessmentTrace;
+    delete (legacySession.runtime as Partial<typeof legacySession.runtime>).planningTrace;
+    delete (legacySession.runtime as Partial<typeof legacySession.runtime>).reportTrace;
+
+    const started = (
+      await processSessionMessage({
+        session: legacySession,
+        content: '开始模拟面试',
+        questionBank: [...questionBank],
+      })
+    ).session;
+
+    expect(started.status).toBe('interviewing');
+    expect(started.runtime.followUpTrace).toEqual([]);
+    expect(started.runtime.assessmentTrace).toEqual([]);
+    expect(started.runtime.planningTrace?.steps).toHaveLength(1);
+  });
 });

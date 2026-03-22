@@ -55,6 +55,33 @@
 - 出题机制确定为 `ResumeProfile -> InterviewBlueprint -> Hybrid RAG -> QuestionPlan`，不采用纯数据库随机抽题，也不采用纯 RAG 直接决定所有题目。
 - 技术展示重点确定为：`LangGraphJS`、`Hybrid RAG`、`Skills`、`Memory`、`Trace`、`Eval`，并新增 `docs/InterviewAgentArchitecture.md` 作为后续实现依据。
 - Web 端 AI 面试 Agent 已开始落第一阶段骨架：`packages/interview-engine` 已接入 LangGraphJS 规划图，支持在“开始模拟面试”时基于历史输入生成 `ResumeProfile`、`InterviewBlueprint` 与题单，而不是在建会话时提前固化 `questionPlan`。
+- `packages/agent-skills` 现已正式落地为显式 Skill 层，当前先承接 `ResumeProfileSkill` 与 `InterviewBlueprintSkill` 两个规划能力；`interview-engine` 的 LangGraph 节点现在通过 Skill 协议调用它们，而不是继续把画像/蓝图逻辑内嵌在节点函数里。
+- `ResumeProfileSkill` 现已优先升级为“DeepSeek 结构化画像 + 规则 fallback”混合实现：当 `LLM_PROVIDER=deepseek` 且存在有效 `DEEPSEEK_API_KEY` 时，规划链路会先调用 DeepSeek 输出结构化候选人画像；若模型调用失败、结构无效或当前环境未启用 DeepSeek，则自动回退到原有规则版画像，不影响本地开发和 CI 稳定性。
+- 为支撑这一能力，`packages/llm` 新增了轻量 `DeepSeekJsonCompletionProvider`，当前先服务于 `ResumeProfileSkill`；后续若继续升级 `AssessmentSkill` / `ReportSkill`，可沿用这条“结构化输出 provider + Skill 合并/兜底”的实现路径。
+- 执行链路里的“是否追问”判定也已提升为 `FollowUpSkill`：流程层不再自己组装 `followUpTrace`，而是消费 Skill 输出的 `trace + shouldAskFollowUp` 结果；当前仍保持规则版实现，但后续切换到更复杂的 LLM/Tool 决策时不需要再改流程控制边界。
+- 单题评分链路现也已提升为 `AssessmentSkill`：`process-session-message` 不再直接依赖 `scoring.ts` 里的内联评估逻辑，而是消费 Skill 输出的 `assessment + trace`。
+- `AssessmentSkill` 现已进一步升级为“DeepSeek 结构化评分 + 规则 fallback”混合实现：当 `LLM_PROVIDER=deepseek` 且存在有效 `DEEPSEEK_API_KEY` 时，会优先让 DeepSeek 输出结构化维度评分、命中点、缺失点与总结；若模型调用失败、结构无效或当前环境未启用 DeepSeek，则自动回退为规则版评分。
+- 由于题库里的 `keyPoints` 现在允许为空，规则 fallback 也已补齐无要点场景下的启发式评分，避免 `AssessmentSkill` 在本地/无模型环境里对“无要点题”系统性低估。
+- 报告聚合链路现也已提升为 `ReportSkill`：完成面试和补报告两个入口都直接消费 Skill 输出的 `report + trace`；`scoring.ts` 仅保留兼容导出，内部改为复用 Skill helper。
+- `ReportSkill` 现也已升级为“DeepSeek 结构化总结 + 规则 fallback”混合实现：数值层继续使用规则聚合，保证 `overallScore / level / dimensionSummary` 稳定可回归；叙述层则在 `LLM_PROVIDER=deepseek` 且存在有效 `DEEPSEEK_API_KEY` 时，优先让 DeepSeek 输出 `overallSummary / strengths / gaps / nextSteps`，失败时回退规则版模板。
+- `ReportSkill` 的 LLM 输出不会直接覆盖 trace 的来源结构，而是先与现有 strengths/gaps sources 做对齐，尽量保留“哪一道题支撑了这个结论”的可解释性，当前“规划 Skill + 执行 Skill + 报告 Skill”三段边界与第一阶段 LLM 能力已经闭环。
+- `packages/evals` 现已新增一层 Skill 级离线回归基线：通过代表性的结构化推断 fixture 来验证 `ResumeProfileSkill / AssessmentSkill / ReportSkill` 的 merge、canonicalize、trace 对齐与 fallback 稳定性。
+- 这层新基线不依赖真实模型，也不尝试评估 prompt 的绝对好坏；它的职责是“在改 prompt / 改 merge 逻辑 / 改 fallback 逻辑后，及时发现 contract regression”，当前项目已经形成：
+  - 题单规划 eval
+  - 报告 trace eval
+  - 三段 Skill regression eval
+- `packages/evals` 现又补上一层手动触发的真实模型评测：通过 `RUN_LLM_EVALS=1` 显式开启，并要求 `LLM_PROVIDER=deepseek` 与有效 `DEEPSEEK_API_KEY`，用于本地验证三段 Skill 在真实 DeepSeek 下是否仍保留合理结构与区别于 fallback 的有效信号。
+- 根脚本现已同步补齐：
+  - `pnpm evals:skills:regression`
+  - `pnpm evals:skills:live`
+- 当前 Eval 体系已明确分层为：
+  - 默认离线回归基线（进 CI）
+  - 手动真实模型 smoke / capability check（不进默认 CI）
+- `pnpm evals:skills:live` 现已补齐本地环境加载：命令会自动读取仓库根目录 `.env` 与 `.env.local`，并强制固定 `RUN_LLM_EVALS=1` 与 `LLM_PROVIDER=deepseek`，避免被日常开发里的 `LLM_PROVIDER=ollama` 等配置污染。
+- 为便于排查本地配置问题，这个命令对应的启动脚本也支持 `node scripts/run-skill-live-evals.mjs --check-env`，只校验环境是否就绪，不发起真实模型请求。
+- live eval 所调用的三段 Skill 现已支持 strict 模式：通过 `fallbackOnInferenceError=false` 可以禁止静默 fallback，让真实模型请求失败、结构化解析失败或推断器未启用时直接抛错；当前 `pnpm evals:skills:live` 已默认使用这条 strict 路径，方便定位真实问题。
+- `ResumeProfileSkill` 的 live eval 断言现已明确收敛为 smoke 语义：允许 `mid | senior` 这类合理等级波动，重点校验“标签命中、evidence、confidence 是否合理”，避免把真实模型的轻微分级差异误判为链路失败。
+- `/api/chat/stream` 当前也已补齐对“旧/不完整 local runtime”的兼容：`interview-engine` 的 `cloneRuntime` 现会为缺失的 `followUpTrace / assessmentTrace / planningTrace / reportTrace` 等字段自动兜底，避免本地旧会话或最小 session payload 因 `undefined.map` 直接打挂面试规划链路。
 - Guest 本地流式链路现已和远端持久化会话一样支持切入 interview-engine：当用户开始模拟面试或已经处于 interviewing 状态时，本地 `/api/chat/stream` 也会直接返回 Agent 处理后的完整 session，普通聊天仍保留原有通用流式模型调用。
 - `packages/retrieval` 已落地为 Hybrid RAG 第一阶段检索层：当前先使用“元数据过滤 + 词法召回 + 标签/难度重排”，并把题库检索从 `packages/interview-engine/src/interview-planning.ts` 中抽离出来，后续可平滑替换为 `pgvector + embeddings`。
 - 当前题单生成已进入“规划层与检索层分离”状态：`interview-engine` 负责画像、蓝图、配额和编排，`retrieval` 负责候选文档构建、搜索、重排与补位。
@@ -69,6 +96,20 @@
 - Admin 端题库新增/编辑已自动同步检索元数据，并在题目内容变化时清空旧 embedding，避免向量索引与题目正文不一致。
 - 为了给 Hybrid RAG 做更贴近真实用户链路的验证，新增了 60 条前端题库 fixture 种子脚本与 `pnpm retrieval:seed-fixtures` 入口；当前推荐用“批量造数 + embedding 回填 + Web 端到端烟测”作为本地调优基线。
 - 原先尝试的“纯向量最近邻 smoke”已被放弃，因为它无法代表真实线上链路；当前唯一保留的回归基线是 `/api/chat/stream` 驱动的 Hybrid RAG 端到端烟测。
+- 这条 `/api/chat/stream` 驱动的 Web 端真实出题 smoke 现已补齐正式入口：
+  - `pnpm evals:web:planning:check-env`
+  - `pnpm evals:web:planning:smoke`
+  - `pnpm retrieval:smoke` 作为兼容别名继续保留
+- 该 smoke 命令会自动读取 `.env` / `.env.local`，并在运行时强制固定：
+  - `LLM_PROVIDER=ollama`
+  - `EMBEDDING_PROVIDER=ollama`
+    目的是让“画像/蓝图”走确定性的规则 fallback，让 smoke 聚焦验证 Web 集成、题库检索与规划 trace，而不是把 DeepSeek 波动混进这条基线里。
+- 这条 smoke 现在除了验证最终 `questionPlan` 外，也会校验：
+  - `resumeProfile`
+  - `interviewBlueprint`
+  - `planningTrace`
+    三段运行态是否完整且相互对齐。
+- 这条 smoke 现已进一步隔离 Next.js 开发态输出：运行时会为 `apps/web` 注入唯一的 `NEXT_DIST_DIR`，让 smoke 使用独立的 `.next-smoke/...` 目录启动 `next dev`，从而避免与你日常运行中的 `apps/web/.next/dev/lock` 冲突。
 - 面试规划层已补一条更符合产品直觉的规则：当题量达到 4 题及以上时，`mustIncludeTags` 会覆盖前三个核心标签，而不是固定只保留前两个，避免 `React + TypeScript + 工程化` 这类复合画像下被“双标签重叠题”长期挤占。
 - Admin 会话详情页已接入“面试规划 Trace”可视化面板，当前可以直接查看检索策略、候选人画像、题单蓝图、最终题单，以及每个题位的候选题与分数拆解，作为后续 RAG 调优和 LangGraph 链路展示的第一版观测面。
 - Admin 端为此新增了独立的 runtime 解码 helper，不再在详情页里直接信任原始 JSON 结构；后续若继续展示评分 trace、追问 trace，可沿用这条取数边界继续扩展。

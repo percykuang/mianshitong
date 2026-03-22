@@ -1,5 +1,9 @@
 import { Annotation, MemorySaver, START, StateGraph } from '@langchain/langgraph';
 import {
+  defaultInterviewBlueprintSkill,
+  defaultResumeProfileSkill,
+} from '@mianshitong/agent-skills';
+import {
   createLexicalQuestionRetriever,
   type QuestionRetriever,
   type QuestionRetrievalResult,
@@ -17,20 +21,6 @@ import type {
   ResumeProfile,
   WeightedTag,
 } from '@mianshitong/shared';
-
-const TAG_ALIASES: Record<string, string[]> = {
-  javascript: ['javascript', 'js', 'es6', 'esnext', '事件循环', '闭包', '原型'],
-  typescript: ['typescript', 'ts', '类型体操', '泛型', '类型系统'],
-  react: ['react', 'reactjs', 'hooks', 'hook', 'redux', 'zustand'],
-  vue: ['vue', 'vue2', 'vue3', 'pinia', 'vuex'],
-  nextjs: ['next', 'nextjs', 'next.js'],
-  engineering: ['工程化', 'webpack', 'vite', 'monorepo', 'ci/cd', 'eslint', 'prettier'],
-  performance: ['性能', 'performance', 'lcp', 'fcp', '首屏', '缓存', '懒加载'],
-  network: ['网络', 'http', 'https', 'websocket', 'tcp', 'cdn', '请求'],
-  browser: ['浏览器', 'render', '渲染', 'dom', 'bom'],
-  node: ['node', 'nodejs', 'node.js', 'express', 'nestjs', '服务端'],
-  css: ['css', 'scss', 'sass', 'tailwind', '样式'],
-};
 
 const LEVEL_WEIGHT: Record<InterviewLevel, number> = {
   junior: 1,
@@ -102,179 +92,6 @@ function resolveQuestionTopic(tags: string[]): InterviewTopic | null {
   }
 
   return null;
-}
-
-function detectYearsOfExperience(text: string): number | null {
-  const matched = text.match(/(\d+)\s*(?:年|years?|yrs?)/i);
-  if (!matched) {
-    return null;
-  }
-
-  const years = Number(matched[1]);
-  return Number.isFinite(years) ? years : null;
-}
-
-function detectSeniority(
-  text: string,
-  years: number | null,
-  fallback: InterviewLevel,
-): InterviewLevel {
-  const normalized = text.toLowerCase();
-
-  if (
-    normalized.includes('资深') ||
-    normalized.includes('高级') ||
-    normalized.includes('负责人') ||
-    normalized.includes('架构')
-  ) {
-    return 'senior';
-  }
-
-  if (
-    normalized.includes('应届') ||
-    normalized.includes('校招') ||
-    normalized.includes('实习') ||
-    normalized.includes('初级')
-  ) {
-    return 'junior';
-  }
-
-  if (years !== null) {
-    if (years >= 5) {
-      return 'senior';
-    }
-    if (years >= 2) {
-      return 'mid';
-    }
-    return 'junior';
-  }
-
-  return fallback;
-}
-
-function detectTagWeights(sourceText: string, config: InterviewConfig): WeightedTag[] {
-  const normalized = sourceText.toLowerCase();
-  const detected: WeightedTag[] = [];
-
-  for (const [canonicalTag, aliases] of Object.entries(TAG_ALIASES)) {
-    let hits = 0;
-    for (const alias of aliases) {
-      if (normalized.includes(alias.toLowerCase())) {
-        hits += 1;
-      }
-    }
-
-    if (hits > 0) {
-      detected.push({ tag: canonicalTag, weight: Math.min(1, 0.25 + hits * 0.18) });
-    }
-  }
-
-  if (detected.length === 0) {
-    for (const topic of config.topics) {
-      detected.push({ tag: topic, weight: 0.7 });
-    }
-  }
-
-  return uniqueWeightedTags(detected);
-}
-
-function splitPrimaryAndSecondaryTags(tags: WeightedTag[]): {
-  primaryTags: WeightedTag[];
-  secondaryTags: WeightedTag[];
-} {
-  if (tags.length <= 2) {
-    return { primaryTags: tags, secondaryTags: [] };
-  }
-
-  return {
-    primaryTags: tags.slice(0, 3),
-    secondaryTags: tags.slice(3, 6),
-  };
-}
-
-function buildResumeProfile(state: PlanningState): ResumeProfile {
-  const sourceText = state.sourceText.trim();
-  const yearsOfExperience = detectYearsOfExperience(sourceText);
-  const seniority = detectSeniority(sourceText, yearsOfExperience, state.config.level);
-  const detectedTags = detectTagWeights(sourceText, state.config);
-  const { primaryTags, secondaryTags } = splitPrimaryAndSecondaryTags(detectedTags);
-
-  return {
-    role: 'frontend',
-    targetRole: 'frontend-engineer',
-    seniority,
-    yearsOfExperience,
-    primaryTags,
-    secondaryTags,
-    projectTags: detectedTags.slice(0, 6).map((item) => item.tag),
-    strengths: primaryTags.map((item) => `${item.tag} 相关经验较明确`),
-    riskFlags:
-      sourceText.length < 40 ? ['简历/上下文信息较少，题目匹配将更多依赖默认前端题库策略'] : [],
-    evidence: [
-      ...(yearsOfExperience !== null ? [`识别到 ${yearsOfExperience} 年相关经验表述`] : []),
-      ...primaryTags.map((item) => `识别到 ${item.tag} 相关关键词`),
-    ],
-    confidence: sourceText.length >= 80 ? 0.82 : sourceText.length >= 30 ? 0.68 : 0.45,
-  };
-}
-
-function resolveDifficultyDistribution(level: InterviewLevel): Record<InterviewLevel, number> {
-  if (level === 'junior') {
-    return { junior: 0.6, mid: 0.3, senior: 0.1 };
-  }
-
-  if (level === 'senior') {
-    return { junior: 0.1, mid: 0.4, senior: 0.5 };
-  }
-
-  return { junior: 0.3, mid: 0.5, senior: 0.2 };
-}
-
-function resolveMustIncludeTagCount(questionCount: number): number {
-  if (questionCount <= 1) {
-    return 1;
-  }
-
-  if (questionCount <= 3) {
-    return 2;
-  }
-
-  return 3;
-}
-
-function buildInterviewBlueprintFromProfile(
-  profile: ResumeProfile,
-  config: InterviewConfig,
-): InterviewBlueprint {
-  const tagDistribution = uniqueWeightedTags([
-    ...profile.primaryTags,
-    ...profile.secondaryTags.map((item) => ({
-      ...item,
-      weight: Math.max(0.2, item.weight - 0.15),
-    })),
-  ]);
-  const mustIncludeTagCount = Math.min(
-    resolveMustIncludeTagCount(config.questionCount),
-    tagDistribution.length,
-  );
-
-  return {
-    questionCount: config.questionCount,
-    difficultyDistribution: resolveDifficultyDistribution(profile.seniority),
-    tagDistribution,
-    mustIncludeTags: tagDistribution.slice(0, mustIncludeTagCount).map((item) => item.tag),
-    optionalTags: tagDistribution.slice(mustIncludeTagCount, 6).map((item) => item.tag),
-    avoidTags: [],
-    strategyNotes: [
-      `优先考察 ${
-        tagDistribution
-          .slice(0, 3)
-          .map((item) => item.tag)
-          .join('、') || '通用前端能力'
-      }`,
-      `候选人画像判断为 ${profile.seniority}`,
-    ],
-  };
 }
 
 function buildLevelQuota(
@@ -611,18 +428,24 @@ function toPlanningCandidateTrace(
   };
 }
 
-function profileNode(state: PlanningState) {
-  const resumeProfile = buildResumeProfile(state);
+async function profileNode(state: PlanningState) {
+  const resumeProfile = await defaultResumeProfileSkill.execute({
+    sourceText: state.sourceText,
+    config: state.config,
+  });
   return { resumeProfile };
 }
 
-function blueprintNode(state: PlanningState) {
+async function blueprintNode(state: PlanningState) {
   if (!state.resumeProfile) {
     return { interviewBlueprint: null };
   }
 
   return {
-    interviewBlueprint: buildInterviewBlueprintFromProfile(state.resumeProfile, state.config),
+    interviewBlueprint: await defaultInterviewBlueprintSkill.execute({
+      profile: state.resumeProfile,
+      config: state.config,
+    }),
   };
 }
 

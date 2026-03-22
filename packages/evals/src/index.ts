@@ -14,3 +14,21 @@ export {
   type ReportTraceEvalResult,
 } from './report-trace-evals';
 export { REPORT_TRACE_EVAL_CASES } from './report-trace-fixtures';
+export {
+  runAssessmentSkillEvalCase,
+  runReportSkillEvalCase,
+  runResumeProfileEvalCase,
+  runSkillRegressionEvalSuite,
+  type SkillRegressionEvalResult,
+} from './skill-regression-evals';
+export {
+  ASSESSMENT_SKILL_EVAL_CASES,
+  REPORT_SKILL_EVAL_CASES,
+  RESUME_PROFILE_EVAL_CASES,
+  type AssessmentSkillEvalCase,
+  type AssessmentSkillEvalExpectations,
+  type ReportSkillEvalCase,
+  type ReportSkillEvalExpectations,
+  type ResumeProfileEvalCase,
+  type ResumeProfileEvalExpectations,
+} from './skill-regression-fixtures';

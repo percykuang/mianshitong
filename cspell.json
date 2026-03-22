@@ -56,6 +56,8 @@
     "sider",
     "upserted",
     "evals",
+    "ENOTFOUND",
+    "getaddrinfo",
     "reactjs",
     "pgvector",
     "nomic",

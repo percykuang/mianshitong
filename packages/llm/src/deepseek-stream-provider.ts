@@ -1,4 +1,5 @@
 import type { StreamChatInput, StreamChatProvider } from './contracts';
+import { resolveDeepSeekEndpoint } from './deepseek-utils';
 
 interface DeepSeekStreamChunk {
   choices?: Array<{
@@ -10,19 +11,6 @@ interface DeepSeekStreamChunk {
   error?: {
     message?: string;
   };
-}
-
-function resolveDeepSeekEndpoint(baseUrl: string): string {
-  const normalized = baseUrl.replace(/\/$/, '');
-  if (normalized.endsWith('/chat/completions')) {
-    return normalized;
-  }
-
-  if (normalized.endsWith('/v1')) {
-    return `${normalized}/chat/completions`;
-  }
-
-  return `${normalized}/v1/chat/completions`;
 }
 
 function extractSseData(rawEvent: string): string {

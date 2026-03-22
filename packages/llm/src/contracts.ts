@@ -38,6 +38,19 @@ export interface StreamChatProvider {
   streamChat(input: StreamChatInput): AsyncGenerator<string>;
 }
 
+export interface JsonCompletionInput {
+  messages: ChatTurn[];
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
+export interface JsonCompletionProvider {
+  readonly name: string;
+  completeJson(input: JsonCompletionInput): Promise<unknown>;
+}
+
 export interface EmbeddingInput {
   texts: string[];
   signal?: AbortSignal;
