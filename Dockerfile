@@ -13,7 +13,13 @@
 ARG NODE_VERSION=22.12.0
 ARG PNPM_VERSION=10.18.2
 
-FROM node:${NODE_VERSION}-bookworm-slim AS base
+FROM node:${NODE_VERSION}-bookworm-slim AS os-base
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /repo
+
+FROM os-base AS base
 WORKDIR /repo
 RUN npm i -g pnpm@${PNPM_VERSION}
 
@@ -57,7 +63,7 @@ RUN pnpm db:generate
 
 CMD ["pnpm", "db:migrate:deploy"]
 
-FROM node:${NODE_VERSION}-bookworm-slim AS runner
+FROM os-base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000

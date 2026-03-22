@@ -7,6 +7,47 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.56（2026-03-23）：补齐容器内 OpenSSL 依赖，消除 Prisma 警告
+
+### 目标
+
+- 修复生产首发后在 `migrate` 容器中出现的 Prisma OpenSSL/libssl 探测警告，避免把运行时系统依赖问题继续留在线上镜像里。
+
+### 主要改动
+
+- `Dockerfile`
+  - 新增 `os-base` 公共基础层
+  - 在公共基础层安装：
+    - `openssl`
+    - `ca-certificates`
+  - `base` 与 `runner` 统一改为复用 `os-base`
+  - 覆盖范围包括：
+    - builder
+    - migrator
+    - web/admin runner
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无部署命令变更。
+- 仅调整镜像内系统依赖，镜像体积会小幅增加，但换来 Prisma CLI/Client 运行环境更稳定。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+  - `docker build --target migrator -t mianshitong-migrate-smoke .`
+  - `docker run --rm --entrypoint bash mianshitong-migrate-smoke -lc 'cd /repo && DATABASE_URL=postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public pnpm db:generate'`
+  - `docker run --rm --entrypoint bash mianshitong-migrate-smoke -lc 'openssl version && cd /repo && DATABASE_URL=postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public pnpm db:generate'`
+
+### 下一步
+
+- 验证镜像内 Prisma 命令不再输出 OpenSSL 探测警告后，重新提交并触发一次 deploy workflow，让线上环境回到“全自动部署也能一把过”的状态。
+
 ## Iteration 4.55（2026-03-22）：修复生产构建期过早初始化 Prisma / NextAuth
 
 ### 目标
