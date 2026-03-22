@@ -44,7 +44,9 @@ ENV NODE_ENV=production
 
 COPY . .
 
-RUN pnpm db:generate && pnpm -C apps/${APP} build
+# Empty public directories are not tracked by Git, so ensure the path exists
+# before the runtime stage copies it from the builder output.
+RUN mkdir -p apps/${APP}/public && pnpm db:generate && pnpm -C apps/${APP} build
 
 FROM deps AS migrator
 ENV NODE_ENV=production

@@ -50,6 +50,7 @@
   - `packages/db` 的 Prisma Client 不再在模块 import 时立即构造，而是改成首次访问时才初始化，避免 `next build` 在收集 `/api/health`、`/api/auth/register` 等路由元数据时因为缺少 `DATABASE_URL` 直接失败。
   - `apps/web` 的 NextAuth 配置也已从顶层常量改为 `getAuthOptions()` 工厂函数；`/api/auth/[...nextauth]` 路由与 `getServerSession` 都会在请求期再解析 `AUTH_SECRET`，不再阻塞镜像构建。
 - 在继续做真实生产构建验证时，又额外发现 Next 16 对 `/login` 页面提出了新的构建约束：`useSearchParams()` 不能直接落在 page 组件里。当前已把登录页调整为“服务端 page 读取 `searchParams` + 客户端表单消费 props”的结构，避免再次触发 `missing-suspense-with-csr-bailout`。
+- 真实 `deploy` workflow 后续又暴露出 Docker 多阶段构建的另一个健壮性问题：最终镜像层会固定 `COPY /repo/apps/${APP}/public`，但空 `public` 目录不会被 Git 跟踪，导致远端构建上下文里目录缺失时直接失败。当前已在 builder 阶段统一补 `mkdir -p apps/${APP}/public`，把这类空目录问题收敛到 Dockerfile 内部处理。
 - 这次调整的边界是：
   - 构建阶段不再强依赖生产运行时 secret；
   - 运行阶段仍然保持严格校验，缺少 `DATABASE_URL` / `AUTH_SECRET` 时依旧会抛错，避免把配置问题静默吞掉。

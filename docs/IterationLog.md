@@ -15,6 +15,10 @@
 
 ### 主要改动
 
+- `Dockerfile`
+  - builder 阶段在构建前新增：
+    - `mkdir -p apps/${APP}/public`
+  - 解决空 `public` 目录未被 Git 跟踪时，运行时镜像层 `COPY --from=builder /repo/apps/${APP}/public ...` 直接失败的问题
 - `packages/db/src/client.ts`
   - Prisma Client 改为惰性初始化：
     - 新增 `getPrismaClient()`
@@ -54,6 +58,7 @@
   - `pnpm spellcheck`
   - `pnpm -C apps/web build`
   - `pnpm -C apps/admin build`
+  - `docker build --build-arg APP=web -t mianshitong-web-smoke .`
 
 ### 下一步
 
