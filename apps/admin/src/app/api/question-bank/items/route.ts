@@ -1,5 +1,6 @@
 import { prisma } from '@mianshitong/db';
 import { getAdminUser } from '@/lib/admin-auth';
+import { syncQuestionRetrievalDoc } from '@/lib/question-retrieval-doc';
 import { getAdminRequestGuardError } from '@/lib/admin-security';
 import { parseCreateQuestionPayload } from '@/lib/question-bank-validation';
 
@@ -37,6 +38,7 @@ export async function POST(request: Request): Promise<Response> {
         ...parsed.data,
       },
     });
+    await syncQuestionRetrievalDoc(created);
 
     return Response.json({ ok: true, id: created.id });
   } catch {

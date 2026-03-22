@@ -9,6 +9,8 @@
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "prisma:push": "prisma db push --schema prisma/schema.prisma",
+    "retrieval:backfill": "node scripts/backfill-question-embeddings.mjs",
+    "retrieval:seed-fixtures": "node scripts/seed-question-bank-rag-fixtures.mjs",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run"
   },

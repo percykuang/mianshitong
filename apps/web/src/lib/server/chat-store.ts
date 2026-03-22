@@ -11,6 +11,8 @@ import type {
   SessionSummary,
 } from '@mianshitong/shared';
 import { compareSessionsByPinnedAndCreated } from '@/lib/chat-session-order';
+import { listActiveQuestionBank } from './question-bank-repository';
+import { resolveQuestionRetriever } from './question-retriever';
 
 type SessionStore = Map<string, ChatSession>;
 
@@ -40,15 +42,24 @@ export function createSession(input?: CreateSessionInput): ChatSession {
   return session;
 }
 
-export function sendMessage(sessionId: string, content: string): PostMessageResult | undefined {
+export async function sendMessage(
+  sessionId: string,
+  content: string,
+): Promise<PostMessageResult | undefined> {
   const session = store.get(sessionId);
   if (!session) {
     return undefined;
   }
 
-  const result = processSessionMessage({
+  const questionBank = session.status === 'idle' ? await listActiveQuestionBank() : [];
+  const retriever = session.status === 'idle' ? await resolveQuestionRetriever(questionBank) : null;
+
+  const result = await processSessionMessage({
     session,
     content,
+    questionBank: session.status === 'idle' ? questionBank : undefined,
+    questionRetriever: retriever?.questionRetriever,
+    retrievalStrategy: retriever?.retrievalStrategy,
   });
 
   store.set(sessionId, result.session);

@@ -3,7 +3,9 @@ import { AdminShell } from '@/components/admin-shell';
 import { BackButton } from '@/components/back-button';
 import { SessionDetailView } from '@/components/session-detail-view';
 import { requireAdminUser } from '@/lib/admin-auth';
+import { decodeAdminSessionRuntime } from '@/lib/chat-session-runtime';
 import { formatDateTime } from '@/lib/format';
+import { isSystemMessage } from '@/lib/session-messages';
 
 interface SessionDetailPageProps {
   params: Promise<{ sessionId?: string }>;
@@ -28,9 +30,6 @@ function normalizeMessages(value: unknown): Array<{
     return [];
   }
 
-  const systemWelcome =
-    '你好，我是面试通 AI 面试官。你可以直接说“开始模拟面试”，或先让我帮你优化简历/拆解面试题。';
-
   return value
     .map((item, index) => {
       if (!item || typeof item !== 'object') {
@@ -44,7 +43,7 @@ function normalizeMessages(value: unknown): Array<{
       let kind = typeof message.kind === 'string' ? message.kind : 'text';
       const content =
         typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-      if (role === 'assistant' && content === systemWelcome) {
+      if (isSystemMessage(message)) {
         kind = 'system';
       }
       const createdAt = message.createdAt ?? '';
@@ -80,6 +79,7 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
   }
 
   const messages = normalizeMessages(session.messages);
+  const runtime = decodeAdminSessionRuntime(session.runtime);
 
   return (
     <AdminShell title="会话详情" headerPrefix={<BackButton />} adminUser={adminUser}>
@@ -97,6 +97,10 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
           ...message,
           createdAt: message.createdAt ? formatDateTime(message.createdAt) : '',
         }))}
+        runtime={{
+          ...runtime,
+          planGeneratedAt: runtime.planGeneratedAt ? formatDateTime(runtime.planGeneratedAt) : null,
+        }}
       />
     </AdminShell>
   );

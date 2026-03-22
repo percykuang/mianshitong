@@ -7,7 +7,783 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.32（2026-03-22）：将 Web smoke 烟测拆为独立 CI Job
+
+### 目标
+
+- 把 Web 侧 Playwright smoke 也纳入默认 CI，并与 Admin E2E 分离，降低单个 job 串行耗时与排障复杂度。
+
+### 主要改动
+
+- `package.json`
+  - 新增 `pnpm test:e2e:web`，固定以 `PLAYWRIGHT_SCOPE=web` 仅运行 `web-chrome` 项目。
+- `.github/workflows/ci.yml`
+  - 在现有 `test`、`admin-e2e` 之外新增 `web-e2e` job。
+  - Web job 当前执行步骤为：
+    - `pnpm install --frozen-lockfile`
+    - `pnpm db:generate`
+    - `pnpm exec playwright install chromium --with-deps`
+    - `pnpm test:e2e:web`
+  - 失败时同样上传 `playwright-report` 与 `test-results`，便于定位 Web 端回归。
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无业务逻辑变更。
+- 仅补充 CI 编排与 Web 端浏览器回归入口。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+  - `pnpm test:e2e:web`
+
+### 下一步
+
+- 如后续 Web / Admin E2E 继续增长，可再评估抽取公共 CI 步骤或按 smoke / regression 继续分层。
+
+## Iteration 4.31（2026-03-22）：将 Admin Trace 烟测接入 CI
+
+### 目标
+
+- 把已经落地的 Admin 会话详情页烟测接入默认 CI，避免只在本地手动回归。
+
+### 主要改动
+
+- `.github/workflows/ci.yml`
+  - 在现有 `test` job 之外新增 `admin-e2e` job。
+  - 使用 `pgvector/pgvector:pg16` 作为 GitHub Actions service database。
+  - CI 中会顺序执行：
+    - `pnpm install --frozen-lockfile`
+    - `pnpm db:generate`
+    - `pnpm db:migrate:deploy`
+    - `pnpm exec playwright install chromium --with-deps`
+    - `pnpm test:e2e:admin`
+  - 失败时会上传 `playwright-report` 与 `test-results`。
+- `playwright.config.ts`
+  - 在 CI 环境下，Playwright 项目自动使用 `chromium` channel；
+  - 本地继续保持 `chrome` channel，保证开发体验不变。
+- `package.json`
+  - 新增 `pnpm db:migrate:deploy`，供 CI 非交互应用已有迁移。
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无业务功能变更。
+- 仅补强 CI 流程与测试基础设施。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+- 本地附加验证：
+  - Admin Trace Playwright 用例已在上一轮真实浏览器环境中通过。
+
+### 下一步
+
+- 如需进一步收口，可再把 Web 侧 smoke 也拆成独立 CI job，避免未来 E2E 规模增长后单 job 串行时间过长。
+
+## Iteration 4.30（2026-03-22）：补齐 Admin 会话详情 Trace 的 Playwright 烟测
+
+### 目标
+
+- 用真实浏览器把 Admin 会话详情页的 `规划 Trace / 执行 Trace / 报告 Trace` 串起来回归，避免后续 UI 或运行态协议调整后页面静默失效。
+
+### 主要改动
+
+- `playwright.config.ts`
+  - E2E 配置从单一 Web 项目扩展为：
+    - `web-chrome`
+    - `admin-chrome`
+  - 支持通过环境变量控制只启动所需服务：
+    - `PLAYWRIGHT_SCOPE=web|admin`
+    - `PLAYWRIGHT_SKIP_WEBSERVER=1`
+- `package.json`
+  - 新增 `pnpm test:e2e:admin`，用于只跑 Admin 侧浏览器烟测。
+- `apps/admin/e2e/support/admin-e2e-fixtures.ts`
+  - 新增 Admin E2E 测试辅助：
+    - 创建临时管理员账号
+    - 构造并写入一条带完整 `planningTrace / followUpTrace / assessmentTrace / reportTrace` 的测试会话
+    - 通过 API 登录 Admin
+    - 测试结束后清理临时数据
+- `apps/admin/e2e/session-detail-trace.spec.ts`
+  - 新增 Admin 会话详情页烟测。
+  - 当前覆盖：
+    - 进入会话详情页
+    - 查看规划 Trace
+    - 展开执行 Trace
+    - 查看报告 Trace
+    - 校验对话记录正常渲染
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 无业务协议变更。
+- 仅补充测试与本地 E2E 配置能力。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec playwright test admin/e2e/session-detail-trace.spec.ts --project admin-chrome`（带 `PLAYWRIGHT_SCOPE=admin PLAYWRIGHT_SKIP_WEBSERVER=1`）
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.29（2026-03-22）：为面试报告 Trace 建立离线评测基线
+
+### 目标
+
+- 把 `reportTrace` 纳入可回归的离线评测，避免后续调整评分规则、总结模板或 trace 结构时静默回归。
+
+### 主要改动
+
+- `packages/interview-engine/src/index.ts`
+  - 对外导出 `buildInterviewReportResult`，供 `packages/evals` 直接复用纯函数聚合逻辑。
+- `packages/evals/src/report-trace-evals.ts`
+  - 新增报告评测执行器。
+  - 当前会校验：
+    - `report` 与 `reportTrace` 的 level / summary / strengths / gaps / nextSteps 一致性
+    - `assessmentCount`、`dimensionTraces`、point source 数量等结构正确性
+    - 各 case 的等级、分数区间、优势项、短板项、改进建议数量是否符合预期
+- `packages/evals/src/report-trace-fixtures.ts`
+  - 新增 3 组稳定 fixture：
+    - `needs-work`
+    - `solid`
+    - `strong`
+- `packages/evals/src/report-trace-evals.test.ts`
+  - 新增逐 case 与整套 suite 两层测试。
+- `packages/evals/src/index.ts`
+  - 导出新的 report trace eval API 与 fixtures。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 无运行时协议变更。
+- 本次仅补强离线评测基线。
+
+### 验证
+
+- 已执行：
+  - `pnpm test -- packages/evals/src/report-trace-evals.test.ts`
+  - `pnpm typecheck`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.28（2026-03-22）：Admin 会话详情补齐面试报告 Trace
+
+### 目标
+
+- 在“规划 Trace + 执行 Trace”基础上，再把最终面试报告的聚合过程结构化落地，避免 Admin 端只能看到结果、看不到报告如何推导。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - 新增 `InterviewReportTrace` 及其子结构：
+    - `InterviewReportDimensionTrace`
+    - `InterviewReportPointTrace`
+    - `InterviewReportNextStepTrace`
+  - `InterviewRuntimeState` 新增 `reportTrace`。
+- `packages/interview-engine/src/scoring.ts`
+  - 新增 `buildInterviewReportResult`，评分聚合时同时产出：
+    - 原有 `InterviewReport`
+    - 新的结构化 `InterviewReportTrace`
+  - trace 现会记录：
+    - 维度均分来源
+    - 总分聚合公式
+    - level 判定原因
+    - strengths / gaps 来源题目
+    - nextSteps 从哪些 gaps 推导
+    - overallSummary 选中了哪条模板分支
+- `packages/interview-engine/src/process-helpers.ts`
+  - 完成面试时把 `reportTrace` 写入 runtime。
+  - 重新开始面试规划时会清空旧 `report` 与 `reportTrace`，避免跨轮污染。
+- `packages/interview-engine/src/process-session-message.ts`
+  - 已完成但尚未持久化报告的 completed 会话，现在会一起补写 `reportTrace`。
+  - 题目评分完成后会先清空旧 `reportTrace`，确保重新聚合时不会误读脏数据。
+- `apps/web`
+  - 会话 runtime 的创建、解码、本地缓存标准化逻辑已兼容 `reportTrace`，旧会话自动补 `null`。
+- `apps/admin/src/components/session-report-trace-card.tsx`
+  - 新增“面试报告 Trace”卡片。
+  - 展示内容包括：
+    - 总分、等级、聚合规则、模板分支
+    - 五个维度均分及每题来源
+    - strengths / gaps 来源
+    - nextSteps 推导来源
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 会话详情页更新为：
+    - `面试规划 Trace`
+    - `面试执行 Trace`
+    - `面试报告 Trace`
+    - `对话记录`
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 运行态 JSON 新增 `reportTrace` 字段。
+- 旧会话与旧本地缓存读取时会自动兼容，不需要手动迁移。
+
+### 验证
+
+- 已执行：
+  - `pnpm test -- packages/interview-engine/src/index.test.ts apps/web/src/lib/server/chat-session-ui-state.test.ts`
+  - `pnpm typecheck`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.27（2026-03-22）：Admin 会话详情补齐追问与评分执行 Trace
+
+### 目标
+
+- 在已有题单规划 Trace 基础上，把会话执行阶段也接入可视化观测，形成“规划 -> 执行 -> 对话记录”的完整 Agent 调试链路。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - 新增 `InterviewFollowUpTrace`、`InterviewAssessmentTrace` 及追问决策枚举。
+  - `InterviewRuntimeState` 新增 `followUpTrace`、`assessmentTrace`。
+- `packages/interview-engine/src/process-helpers.ts`
+  - 追问判定逻辑现在会记录每一轮的决策 trace，包括：
+    - 回答摘要
+    - 命中/缺失要点
+    - 覆盖率
+    - 是否触发追问
+    - 跳过原因
+- `packages/interview-engine/src/scoring.ts`
+  - 评分逻辑抽出 `buildAssessmentResult`，同时产出：
+    - 原有 `QuestionAssessment`
+    - 新的 `InterviewAssessmentTrace`
+- `packages/interview-engine/src/process-session-message.ts`
+  - 在每题完成评分时，把 `assessmentTrace` 写入 runtime。
+- `apps/web`
+  - 会话 runtime 的创建、解码、本地缓存标准化逻辑已兼容 `followUpTrace` / `assessmentTrace`，旧会话会自动补默认空数组。
+- `apps/admin/src/components/session-execution-trace-card.tsx`
+  - 新增“面试执行 Trace”卡片。
+  - 按题目聚合展示：
+    - 题目元信息
+    - 每轮追问决策
+    - 最终评分摘要与维度分数
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 会话详情页接入新的执行 Trace 卡片。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 运行态 JSON 新增 `followUpTrace` / `assessmentTrace` 字段。
+- 旧会话与旧本地缓存已在读取时自动兼容，不需要手动迁移。
+
+### 验证
+
+- 已执行：
+  - `pnpm typecheck`
+  - `pnpm test -- packages/interview-engine/src/index.test.ts apps/web/src/lib/server/chat-session-ui-state.test.ts`
+  - Playwright 实际登录 Admin，并验证会话详情页新的执行 Trace 卡片可正常渲染、展开且控制台无 warning/error
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.26（2026-03-22）：Admin 会话详情接入面试规划 Trace 面板
+
+### 目标
+
+- 让 Admin 会话详情页可以直接查看题单规划过程，作为 Hybrid RAG / LangGraph 调试与展示入口，而不是只能看最终聊天记录。
+
+### 主要改动
+
+- `apps/admin/src/lib/chat-session-runtime.ts`
+  - 新增 Admin 侧 runtime 解码 helper。
+  - 统一把数据库里的会话 runtime 规范化为可安全展示的结构，后续可继续扩展评分 trace、追问 trace。
+- `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - 会话详情页新增 runtime 解析并传给客户端视图。
+  - 详情页消息归一化逻辑改为复用 `isSystemMessage`，避免欢迎语判定重复实现。
+- `apps/admin/src/components/session-planning-trace-card.tsx`
+  - 新增“面试规划 Trace”卡片。
+  - 展示内容包括：
+    - 检索策略、生成时间、难度配额、必考/可选标签
+    - 候选人画像、识别证据、出题说明
+    - 最终题单
+    - 每个题位的候选题列表、命中题目、标签命中情况和分数拆解
+- `apps/admin/src/components/session-detail-view.tsx`
+  - 会话详情页接入新的 Trace 卡片。
+  - 概览区同步收敛到 antd v5 推荐的 `Descriptions items` 写法。
+- `apps/admin/package.json`
+  - 补齐 `@mianshitong/shared` workspace 依赖声明，避免 Admin 端直接引用共享类型但未声明依赖。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 本次仅为 Admin 可视化增强，不影响 Web 端会话写入协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm db:generate`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.25（2026-03-22）：Hybrid RAG 烟测基线与核心标签覆盖修正
+
+### 目标
+
+- 为 Hybrid RAG 建立更接近真实线上行为的端到端烟测基线，并修正“四题场景下核心标签覆盖不足”的规划问题。
+
+### 主要改动
+
+- `packages/db/scripts/seed-question-bank-rag-fixtures.mjs`
+  - 新增题库检索测试种子脚本，可批量生成 60 条前端题库 fixture，并支持 `--reset / --cleanup`。
+- `scripts/smoke-hybrid-rag.mjs`
+  - 新增基于真实 `/api/chat/stream` 的 Hybrid RAG 端到端烟测。
+  - 校验项从“底层向量召回”提升为“Web 实际题单规划结果 + `planningTrace.strategy`”，更符合真实用户链路。
+- `package.json`
+  - `retrieval:smoke` 改为运行新的端到端烟测脚本。
+- `packages/interview-engine/src/interview-planning.ts`
+  - 调整 `mustIncludeTags` 生成规则：
+    - `1` 题场景覆盖前 `1` 个核心标签
+    - `2-3` 题场景覆盖前 `2` 个核心标签
+    - `4` 题及以上场景覆盖前 `3` 个核心标签
+  - 修复 `React + TypeScript + 工程化` 这类复合画像下，题单长期被“多标签重合题”挤占，导致 React 核心方向不出题的问题。
+- `packages/interview-engine/src/interview-planning.test.ts`
+  - 新增回归测试，锁定“四题场景覆盖前三个核心标签”的行为。
+
+### 迁移/破坏性变更
+
+- 无新增数据库迁移。
+- 若要在本地复现 Hybrid RAG 烟测，需要先保证：
+  - `pnpm db:up`
+  - `pnpm db:migrate`
+  - `pnpm retrieval:seed-fixtures -- --reset`
+  - `EMBEDDING_PROVIDER=ollama pnpm retrieval:backfill`
+- 当前不再把“纯向量最近邻排序”视为有效回归基线，因为真实线上链路是“向量候选召回 + hybrid 重排 + 规划层多题编排”。
+
+### 验证
+
+- 已执行：
+  - `pnpm test -- packages/interview-engine/src/interview-planning.test.ts packages/interview-engine/src/index.test.ts packages/evals/src/question-planning-evals.test.ts`
+  - `pnpm retrieval:smoke`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.24（2026-03-22）：pgvector 持久化与 Web 侧自动向量检索接入
+
+### 目标
+
+- 把 Hybrid RAG 从“只有向量契约”推进到“数据库可持久化 + Web 端可自动启用”的可运行状态，为后续真实 embedding 回填与 RAG 调优打基础。
+
+### 主要改动
+
+- `packages/db/prisma/schema.prisma`
+  - 新增 `QuestionRetrievalDoc` 模型，独立维护题目检索文本、标准化标签、embedding 元数据与向量列。
+  - `QuestionBankItem` 与检索文档建立一对一关系，删除题目时级联删除索引文档。
+- `packages/db/prisma/migrations/20260322183000_add_question_retrieval_doc/migration.sql`
+  - 自定义迁移中启用 `vector` extension。
+  - 新建 `QuestionRetrievalDoc` 表与检索元数据索引。
+- `compose.yaml`
+  - 本地数据库镜像切换为 `pgvector/pgvector:pg16`，保证开发环境可执行 `vector` 扩展迁移。
+- `packages/llm`
+  - 新增 `OllamaEmbeddingProvider`，基于 Ollama `/api/embed` 生成批量 embedding。
+- `packages/interview-engine`
+  - `planInterviewFromSource` / `processSessionMessage` 支持注入 `QuestionRetriever` 与 `retrievalStrategy`。
+  - 规划 trace 的 `strategy` 现在可以区分 `hybrid-lexical-v1` 与 `hybrid-vector-v1`。
+- `apps/web/src/lib/server/question-retriever.ts`
+  - 新增 Web 侧 retriever resolver。
+  - 当 `EMBEDDING_PROVIDER=ollama` 且库中存在当前模型版本的有效 embedding 时，自动启用 `pgvector + hybrid rerank`。
+  - 若 embedding 未回填或检索无结果，则自动回退 lexical retriever。
+- `apps/admin`
+  - 题库新增/编辑后自动同步 `QuestionRetrievalDoc` 元数据。
+  - 当题目内容变更时，会主动清空旧 embedding，避免读到脏向量。
+- `packages/db/scripts/backfill-question-embeddings.mjs`
+  - 新增 embedding 回填脚本。
+  - 根脚本入口增加 `pnpm retrieval:backfill`，用于批量生成或重建题库向量。
+- `env.example`
+  - 新增 `EMBEDDING_PROVIDER`、`EMBEDDING_VERSION`、`OLLAMA_EMBED_MODEL`、`OLLAMA_EMBED_DIMENSIONS` 配置占位。
+
+### 迁移/破坏性变更
+
+- 本次引入了新的数据库迁移。拉取后需要执行：
+  - `pnpm db:up`
+  - `pnpm db:migrate`
+  - `pnpm retrieval:backfill`
+- 只有完成回填后，Web 端才会自动切到向量检索；否则仍保持 lexical 模式，不影响现有功能。
+- 当前未加 `ivfflat/hnsw` 向量索引，原因是现阶段列维度按“可变维度 + 版本化”设计，题库规模在 MVP 阶段也足以先接受顺序扫描；后续确定单一 embedding 模型后再补高性能索引更稳。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+  - `pnpm db:generate`
+
+## Iteration 4.23（2026-03-22）：Vector Retriever 契约与 Fallback 机制落地
+
+### 目标
+
+- 在不引入数据库迁移的前提下，把向量召回所需的接口、分数协议与 fallback 机制提前收口，为后续 `pgvector` 接入做最后一层准备。
+
+### 主要改动
+
+- `packages/llm/src/contracts.ts`
+  - 新增 `EmbeddingProvider` 与 `EmbeddingInput` 协议，明确 embedding 能力归属 `packages/llm`。
+- `packages/retrieval/src/question-retrieval.ts`
+  - 检索分数拆解新增 `semantic` 字段。
+  - `searchQuestionDocs` 支持接收可选的 `semanticScoresByQuestionId`，便于做混合重排。
+  - 提供统一的 query text 构造函数，供 lexical 与 vector 检索共用。
+- `packages/retrieval/src/vector-question-retriever.ts`
+  - 新增 `QuestionVectorStore` 与 `createVectorQuestionRetriever`。
+  - 支持：
+    - embedding query
+    - vector 候选召回
+    - semantic 分数注入
+    - 无结果时回退 lexical retriever
+- `packages/retrieval/src/index.ts`
+  - 导出 vector retriever 相关接口。
+- `packages/retrieval/src/question-retrieval.test.ts`
+  - 新增两类回归测试：
+    - vector 候选经标签/难度重排后命中更合适题目
+    - vector 无结果时自动 fallback 到 lexical 检索
+- `packages/interview-engine/src/interview-planning.ts`
+  - planning trace 分数拆解同步增加 `semantic` 字段，保证未来切换向量召回时 trace 协议不需要再变。
+
+### 迁移/破坏性变更
+
+- 当前默认出题仍走 lexical retriever。
+- 新增的 vector retriever 还只是接口与组装层，未接真实 `pgvector` 存储。
+
+### 验证
+
+- 已执行：
+  - `pnpm --filter @mianshitong/llm typecheck`
+  - `pnpm --filter @mianshitong/shared typecheck`
+  - `pnpm --filter @mianshitong/retrieval typecheck`
+  - `pnpm --filter @mianshitong/interview-engine typecheck`
+  - `pnpm test -- packages/retrieval/src/question-retrieval.test.ts packages/interview-engine/src/index.test.ts packages/evals/src/question-planning-evals.test.ts`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.22（2026-03-22）：Retriever Adapter 抽象落地
+
+### 目标
+
+- 把规划层对具体检索实现的依赖进一步隔离，使后续接入 `pgvector / embeddings` 时只需要新增检索 adapter，而不用重写 `interview-planning`。
+
+### 主要改动
+
+- `packages/retrieval/src/question-retrieval.ts`
+  - 新增 `QuestionRetriever` 接口。
+  - 新增 `createLexicalQuestionRetriever`，把当前词法检索包装成异步 adapter。
+- `packages/retrieval/src/index.ts`
+  - 导出 retriever 接口与 lexical adapter。
+- `packages/retrieval/src/question-retrieval.test.ts`
+  - 新增 adapter 回归测试，确认 lexical 检索可以通过统一接口异步调用。
+- `packages/interview-engine/src/interview-planning.ts`
+  - `pickNextQuestion` / `buildQuestionPlanFromBlueprint` 改为依赖 `QuestionRetriever`。
+  - 规划层不再直接调用具体词法检索函数，只在入口处创建默认 lexical retriever。
+
+### 迁移/破坏性变更
+
+- 无外部行为变化，本次是内部架构收敛。
+- 当前默认检索实现仍是 lexical hybrid；后续只需新增 vector retriever adapter 即可替换。
+
+### 验证
+
+- 已执行：
+  - `pnpm --filter @mianshitong/retrieval typecheck`
+  - `pnpm --filter @mianshitong/interview-engine typecheck`
+  - `pnpm test -- packages/retrieval/src/question-retrieval.test.ts packages/interview-engine/src/index.test.ts packages/evals/src/question-planning-evals.test.ts`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.21（2026-03-22）：题单规划离线 Eval 基线落地
+
+### 目标
+
+- 为 `ResumeProfile -> InterviewBlueprint -> Retrieval -> QuestionPlan` 链路建立第一版离线回归评测，确保后续优化检索或接入向量召回时有稳定基线。
+
+### 主要改动
+
+- `packages/evals`
+  - 新增独立 workspace 包，承载题单规划评测逻辑与样例。
+- `packages/evals/src/question-planning-evals.ts`
+  - 新增题单规划评测执行器，支持逐条 case 运行与整套 suite 运行。
+  - 当前校验维度包括：题目数量、关键标签覆盖、难度下限/上限、关键题命中、planning trace 存在性。
+- `packages/evals/src/question-planning-fixtures.ts`
+  - 新增两组题单评测样例：
+    - 初级 React 候选人
+    - 资深工程化/性能候选人
+  - 样例刻意按“当前策略真实行为”建模，强调标签相关性优先，而不是伪造严格配额。
+- `packages/evals/src/question-planning-evals.test.ts`
+  - 新增参数化回归测试，校验单 case 与整套 suite 都能通过。
+- `packages/evals/src/index.ts`
+  - 导出评测执行器与内置样例，便于后续接 CLI 或 CI。
+- `pnpm-lock.yaml`
+  - 同步 workspace 新增包。
+
+### 迁移/破坏性变更
+
+- 无线上链路变更，本次仅新增离线 Eval 能力。
+
+### 验证
+
+- 已执行：
+  - `pnpm --filter @mianshitong/evals typecheck`
+  - `pnpm test -- packages/evals/src/question-planning-evals.test.ts`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.20（2026-03-22）：面试规划 Trace Snapshot 落地
+
+### 目标
+
+- 为题单规划过程补齐可持久化的结构化 trace，记录“每个题位为什么选到这道题”，为后续调试页、Eval 与向量检索演进打基础。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - 新增 `InterviewPlanningTrace`、`InterviewPlanningStepTrace`、`InterviewPlanningCandidateTrace` 等运行态协议。
+  - `InterviewRuntimeState` 新增 `planningTrace` 字段。
+- `packages/interview-engine/src/interview-planning.ts`
+  - 题单规划现在会为每个题位记录目标难度、检索模式、偏好标签、未覆盖必考标签、候选题 top 5 与最终选中结果。
+  - `planInterviewFromSource` 返回 `planningTrace`，和 `questionPlan` 一起进入运行态。
+- `packages/interview-engine/src/process-helpers.ts`
+  - 会话从 `idle` 切到 `interviewing` 时，把本次规划 trace 写入 `runtime.planningTrace`。
+- `packages/interview-engine/src/session-core.ts`
+  - 运行态初始化与克隆逻辑补齐 `planningTrace` 深拷贝。
+- `apps/web/src/lib/server/chat-session-ui-state.ts`
+  - 解码数据库 runtime 时兼容旧会话：缺少 `planningTrace` 的历史数据会自动补为 `null`。
+- `apps/web/src/app/chat/lib/chat-local-session.ts`
+  - 本地缓存会话标准化时补齐 `planningTrace`，避免旧 IndexedDB 数据结构不一致。
+- `apps/web/src/lib/server/chat-session-ui-state.test.ts`
+  - 新增旧 runtime 兼容测试。
+- `packages/interview-engine/src/index.test.ts`
+  - 新增规划 trace 回归断言。
+
+### 迁移/破坏性变更
+
+- 运行态 JSON 新增 `planningTrace` 字段。
+- 旧数据库会话与旧本地缓存已在读取时自动兼容，无需手动迁移。
+
+### 验证
+
+- 已执行：
+  - `pnpm --filter @mianshitong/shared typecheck`
+  - `pnpm --filter @mianshitong/interview-engine typecheck`
+  - `pnpm --filter @mianshitong/web typecheck`
+  - `pnpm test -- packages/interview-engine/src/index.test.ts apps/web/src/lib/server/chat-session-ui-state.test.ts`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.19（2026-03-22）：Hybrid RAG 第一阶段检索层落地
+
+### 目标
+
+- 把题库检索从 `interview-planning` 内嵌规则里抽出来，形成一个可继续演进到向量检索的独立检索层。
+
+### 主要改动
+
+- `packages/retrieval`
+  - 新增独立 workspace 包，承载题库检索文档构建与检索排序逻辑。
+  - 提供 `buildQuestionRetrievalDocs` 与 `searchQuestionDocs` 两个核心接口，先落地“元数据过滤 + 词法召回 + 标签/难度重排”。
+  - 检索结果保留 `score`、`matchedTags`、`lexicalOverlap` 等结构化信息，便于后续接入 Trace、Eval 和向量召回。
+- `packages/interview-engine/src/interview-planning.ts`
+  - 删除内嵌候选题打分逻辑，改为通过 `@mianshitong/retrieval` 完成每个题位的候选检索。
+  - 规划层只保留蓝图生成、难度配额编排、必须标签覆盖与标签均衡控制。
+  - 当前题单生成链路正式收敛为 `ResumeProfile -> InterviewBlueprint -> Retrieval -> QuestionPlan`。
+- `packages/interview-engine/package.json`
+  - 新增对 `@mianshitong/retrieval` 的依赖。
+- `packages/retrieval/src/question-retrieval.test.ts`
+  - 新增检索包测试，覆盖文档构建、必须标签优先、排除题目与相邻难度补位等核心行为。
+- `pnpm-lock.yaml`
+  - 同步 workspace 依赖关系。
+
+### 迁移/破坏性变更
+
+- 当前 Hybrid RAG 第一阶段仍是词法检索实现，尚未接入 `pgvector/embedding`；但 `packages/retrieval` 的接口已按“可替换检索后端”设计，后续可以在不改规划层的情况下切换向量召回。
+
+### 验证
+
+- 已执行：
+  - `pnpm install --no-frozen-lockfile`
+  - `pnpm --filter @mianshitong/retrieval typecheck`
+  - `pnpm --filter @mianshitong/interview-engine typecheck`
+  - `pnpm test -- packages/retrieval/src/question-retrieval.test.ts packages/interview-engine/src/index.test.ts`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
 ## Iteration 4.15（2026-03-22）：Admin 提交面二次收口
+
+## Iteration 4.16（2026-03-22）：Web 端 AI 面试 Agent 架构设计
+
+## Iteration 4.17（2026-03-22）：AI 面试 Agent Phase 1 骨架落地
+
+## Iteration 4.18（2026-03-22）：统一 Guest 本地链路到 Agent 流程
+
+### 目标
+
+- 让未登录 Guest 本地会话也能走与远端持久化会话相同的 AI 面试 Agent 主链路，避免“远端可用、本地仍是旧聊天模式”的体验割裂。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/stream/route.ts`
+  - 新增对本地 `session` 载荷的识别。
+  - 当本地会话开始模拟面试或已处于 interviewing 状态时，直接调用 `processSessionMessage` 和题库规划逻辑，返回完整 session。
+  - 普通聊天仍走原有通用模型流式分支。
+- `apps/web/src/app/chat/hooks/use-local-send-message.ts`
+  - 调用 Guest 流式接口时附带本地完整 session。
+  - 优先消费 SSE `done` 事件中的完整 session，再回落到旧的 `assistantContent` 拼装逻辑。
+- `apps/web/src/app/chat/lib/chat-local-stream-handler.ts`
+  - 支持缓存 `done` 事件返回的完整 session。
+- `apps/web/src/app/chat/lib/chat-local-stream-handler.test.ts`
+  - 新增完整 session 场景测试。
+- `apps/web/src/app/chat/lib/chat-api.ts`
+  - Guest 流式请求类型新增可选 `session` 字段。
+
+### 迁移/破坏性变更
+
+- Guest 本地会话在“开始模拟面试”后不再仅依赖通用流式模型回复，而会切入与远端一致的 interview-engine 主链路。
+- 普通聊天链路保持不变。
+
+### 验证
+
+- 已执行：
+  - `pnpm typecheck`
+  - `pnpm test`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 目标
+
+- 把 Web 端模拟面试从“建会话时就生成固定题单”升级为“开始面试时由 Agent 规划题单”的第一阶段骨架。
+
+### 主要改动
+
+- `packages/interview-engine/package.json`
+  - 新增 `@langchain/langgraph` 与 `@langchain/core` 依赖，用于承载 Phase 1 图编排骨架。
+- `packages/shared/src/types/index.ts`
+  - 新增 `ResumeProfile`、`InterviewBlueprint`、`WeightedTag` 等类型。
+  - 扩展 `InterviewRuntimeState`，补充画像、蓝图、规划摘要与生成时间字段。
+- `packages/interview-engine/src/interview-planning.ts`
+  - 新增 LangGraphJS 规划图。
+  - 第一阶段用规则节点实现 `ResumeProfile -> InterviewBlueprint -> QuestionPlan`，为后续真实 LLM Skill/RAG 节点预留图结构。
+- `packages/interview-engine/src/process-helpers.ts`
+  - `idle -> interviewing` 改为先调用规划图，再写入 `runtime.questionPlan`、画像与蓝图。
+  - 新增规划摘要消息与题库为空时的兜底提示。
+- `packages/interview-engine/src/process-session-message.ts`
+  - 改为异步，支持在开始面试时注入题库参与规划。
+- `packages/interview-engine/src/session-core.ts`
+  - 建会话时不再预生成 `questionPlan`。
+  - 新增面试启动命令清洗逻辑。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/route.ts`
+  - 在非流式消息接口中按需加载题库，并接入异步 `processSessionMessage`。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 远端持久化会话的流式链路新增 interview-engine 分支。
+  - 当用户开始模拟面试或已处于 interviewing 状态时，直接返回 Agent 生成后的完整会话。
+- `apps/web/src/lib/server/chat-session-model.ts`
+  - 草稿会话创建时不再生成题单。
+- `apps/web/src/lib/server/chat-session-repository.ts`
+  - 新增 `saveOrCreateUserSession`，兼容首次发消息时前端只有草稿会话 ID 的场景。
+  - 移除建会话与普通消息追加时不再需要的题库查询。
+- `apps/web/src/app/chat/lib/chat-local-session.ts`
+  - 同步扩展本地会话 runtime 结构。
+
+### 迁移/破坏性变更
+
+- Web 端远端持久化会话链路中，“开始模拟面试”现在会在开始时即时生成题单，而不是依赖建会话时预生成的题单。
+- Guest 本地流式链路当前尚未接入同一套 Agent 骨架，后续需要再统一。
+
+### 验证
+
+- 已执行：
+  - `pnpm typecheck`
+  - `pnpm test`
+- 待执行完整检查：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 目标
+
+- 在正式实现 Web 端“基于简历和标签的出题机制”前，先确定一个既能体现 AI Agent 工程能力、又兼顾产品可用性的整体架构方案。
+
+### 主要改动
+
+- `docs/InterviewAgentArchitecture.md`
+  - 新增 Web 端 AI 面试 Agent 架构设计文档。
+  - 明确采用“核心链路 Agent 化，外围保持标准 Web 工程”的总体方案。
+  - 设计 `ResumeProfile -> InterviewBlueprint -> Hybrid RAG -> QuestionPlan` 的出题链路。
+  - 设计 LangGraphJS 主图、子图、状态模型、Skills、Memory、Trace 与 Eval 方案。
+  - 给出与当前代码的衔接点以及分阶段落地计划。
+- `docs/ProjectContext.md`
+  - 同步记录新的架构结论，并将新文档加入项目文档清单。
+
+### 迁移/破坏性变更
+
+- 暂无代码级破坏性变更，本次仅完成设计收敛。
+- 后续实现时，Web 端抽题主控制轴需要从固定 `topics` 迁移到 `tags`，且 `questionPlan` 生成时机需要从“创建会话时”调整为“开始模拟面试时”。
+
+### 验证
+
+- 待执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
 
 ### 目标
 

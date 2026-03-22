@@ -19,7 +19,13 @@ export function decodeSessionRuntime(input: Prisma.JsonValue): {
 } {
   if (!isRecord(input)) {
     return {
-      runtime: input as unknown as ChatSession['runtime'],
+      runtime: {
+        ...(input as unknown as ChatSession['runtime']),
+        followUpTrace: [],
+        assessmentTrace: [],
+        planningTrace: null,
+        reportTrace: null,
+      },
       pinnedAt: null,
     };
   }
@@ -29,9 +35,16 @@ export function decodeSessionRuntime(input: Prisma.JsonValue): {
   const pinnedAt = typeof uiState?.pinnedAt === 'string' ? uiState.pinnedAt : null;
   const runtime = { ...runtimeValue };
   delete runtime.__chatUi;
+  const normalizedRuntime = runtime as unknown as Partial<ChatSession['runtime']>;
 
   return {
-    runtime: runtime as unknown as ChatSession['runtime'],
+    runtime: {
+      ...(normalizedRuntime as ChatSession['runtime']),
+      followUpTrace: normalizedRuntime.followUpTrace ?? [],
+      assessmentTrace: normalizedRuntime.assessmentTrace ?? [],
+      planningTrace: normalizedRuntime.planningTrace ?? null,
+      reportTrace: normalizedRuntime.reportTrace ?? null,
+    },
     pinnedAt,
   };
 }

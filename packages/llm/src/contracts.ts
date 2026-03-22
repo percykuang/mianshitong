@@ -37,3 +37,13 @@ export interface StreamChatProvider {
   readonly name: string;
   streamChat(input: StreamChatInput): AsyncGenerator<string>;
 }
+
+export interface EmbeddingInput {
+  texts: string[];
+  signal?: AbortSignal;
+}
+
+export interface EmbeddingProvider {
+  readonly name: string;
+  embedTexts(input: EmbeddingInput): Promise<number[][]>;
+}

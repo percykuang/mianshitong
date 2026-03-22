@@ -1,5 +1,6 @@
 import { prisma } from '@mianshitong/db';
 import { getAdminUser } from '@/lib/admin-auth';
+import { syncQuestionRetrievalDoc } from '@/lib/question-retrieval-doc';
 import { getAdminRequestGuardError } from '@/lib/admin-security';
 import { parsePatchQuestionPayload } from '@/lib/question-bank-validation';
 
@@ -35,6 +36,7 @@ export async function PATCH(
       where: { id },
       data: parsed.data,
     });
+    await syncQuestionRetrievalDoc(updated);
     return Response.json({ ok: true, id: updated.id });
   } catch {
     return Response.json(

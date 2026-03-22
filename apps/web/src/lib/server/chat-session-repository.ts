@@ -16,7 +16,6 @@ import {
   truncateSessionForEdit,
   type SessionRecord,
 } from './chat-session-model';
-import { listActiveQuestionBank } from './question-bank-repository';
 
 function toSessionOrNull(record: SessionRecord | null): ChatSession | null {
   return record ? toSession(record) : null;
@@ -122,8 +121,7 @@ export async function createUserSession(
   input?: CreateSessionInput,
   sessionId?: string | null,
 ): Promise<ChatSession> {
-  const questionBank = await listActiveQuestionBank();
-  const session = createDraftSession(input, sessionId, questionBank);
+  const session = createDraftSession(input, sessionId);
   const created = await createUserSessionRecord(userId, session);
   if (!created) {
     throw new Error('会话创建失败');
@@ -148,15 +146,27 @@ export async function saveUserSession(
   return getUserSession(userId, session.id);
 }
 
+export async function saveOrCreateUserSession(
+  userId: string,
+  session: ChatSession,
+): Promise<ChatSession | null> {
+  const existing = await getUserSession(userId, session.id);
+
+  if (existing) {
+    return saveUserSession(userId, session);
+  }
+
+  return createUserSessionRecord(userId, session);
+}
+
 export async function appendUserSessionExchange(
   userId: string,
   sessionId: string,
   input: { userContent: string; assistantContent: string; now?: string; modelId?: ModelId },
 ): Promise<ChatSession | null> {
   const current = await getUserSession(userId, sessionId);
-  const questionBank = current ? [] : await listActiveQuestionBank();
   const nextSession = appendSessionMessages(
-    current ?? createDraftSession({ modelId: input.modelId }, sessionId, questionBank),
+    current ?? createDraftSession({ modelId: input.modelId }, sessionId),
     input,
   );
 

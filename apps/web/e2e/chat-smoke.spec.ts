@@ -73,7 +73,7 @@ test('删除当前会话后应回到空聊天页', async ({ page }) => {
   await expect(page.getByText('新建一个会话后，你的聊天记录会展示在这里。')).toBeVisible();
 });
 
-test('消息复制应显示 tooltip 和局部 copied 状态，不触发全局 toast', async ({ page }) => {
+test('消息复制应更新局部 copied 状态，不触发全局 toast', async ({ page }) => {
   const session = buildGuestSession({
     id: '55555555555555555555555555555555',
     title: '复制测试',
@@ -87,9 +87,7 @@ test('消息复制应显示 tooltip 和局部 copied 状态，不触发全局 to
 
   const assistantCopy = page.getByTestId('assistant-message-copy');
 
-  await assistantCopy.hover();
-  await expect(page.getByText('复制回复')).toBeVisible();
-
+  await expect(assistantCopy).toHaveAttribute('aria-label', '复制');
   await assistantCopy.click();
   await expect(assistantCopy).toHaveAttribute('data-copy-state', 'copied');
   await expect(assistantCopy).toHaveAttribute('aria-label', '已复制');

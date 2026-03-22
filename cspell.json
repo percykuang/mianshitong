@@ -54,6 +54,12 @@
     "questionCount",
     "scrypt",
     "sider",
-    "upserted"
+    "upserted",
+    "evals",
+    "reactjs",
+    "pgvector",
+    "nomic",
+    "rerank",
+    "hnsw"
   ]
 }

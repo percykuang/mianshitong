@@ -1,0 +1,19 @@
+{
+  "name": "@mianshitong/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mianshitong/interview-engine": "workspace:*",
+    "@mianshitong/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@mianshitong/config": "workspace:*"
+  }
+}

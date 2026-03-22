@@ -42,17 +42,35 @@ model ChatSessionRecord {
 }
 
 model QuestionBankItem {
-  id         String   @id @default(cuid())
-  questionId String   @unique
-  level      String
-  title      String
-  prompt     String?
-  answer     String?
-  keyPoints  Json     @default("[]")
-  followUps  Json     @default("[]")
-  tags       Json     @default("[]")
-  order      Int?
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String               @id @default(cuid())
+  questionId   String               @unique
+  level        String
+  title        String
+  prompt       String?
+  answer       String?
+  keyPoints    Json                 @default("[]")
+  followUps    Json                 @default("[]")
+  tags         Json                 @default("[]")
+  order        Int?
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  retrievalDoc QuestionRetrievalDoc?
+}
+
+model QuestionRetrievalDoc {
+  id                  String           @id @default(cuid())
+  questionItemId      String           @unique
+  searchText          String
+  normalizedTags      String[]         @default([])
+  embedding           Unsupported("vector")?
+  embeddingModel      String?
+  embeddingVersion    String?
+  embeddingDimensions Int?
+  contentHash         String
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  questionItem        QuestionBankItem @relation(fields: [questionItemId], references: [id], onDelete: Cascade)
+
+  @@index([embeddingModel, embeddingVersion, embeddingDimensions])
 }

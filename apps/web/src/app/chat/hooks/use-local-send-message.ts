@@ -101,11 +101,22 @@ export function useLocalSendMessage({
           {
             modelId: baseSession.modelId,
             messages: turns,
+            session: baseSession,
           },
           abortController.signal,
         );
 
         await readSseStream(response, streamHandler.handleEvent);
+
+        const syncedSession = streamHandler.getSyncedSession();
+        if (syncedSession) {
+          await saveLocalSession(syncedSession);
+          setActiveSession(syncedSession);
+          setActiveSessionId(syncedSession.id);
+          replaceSession(syncedSession.id);
+          await refreshSessions();
+          return;
+        }
 
         const assistantContent = streamHandler.getAssistantContent().trim();
         if (!assistantContent) {

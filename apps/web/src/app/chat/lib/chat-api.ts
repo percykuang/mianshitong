@@ -106,6 +106,7 @@ export async function openGuestStreamRequest(
   input: {
     modelId: ModelId;
     messages: ChatTurn[];
+    session?: ChatSession;
   },
   signal?: AbortSignal,
 ): Promise<Response> {

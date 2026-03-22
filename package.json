@@ -17,7 +17,11 @@
     "db:studio": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma studio --port \"${PRISMA_STUDIO_PORT:-5555}\"",
     "db:generate": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma generate --schema prisma/schema.prisma",
     "db:migrate": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma migrate dev --schema prisma/schema.prisma",
+    "db:migrate:deploy": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma migrate deploy --schema prisma/schema.prisma",
     "db:reset": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db exec prisma migrate reset --schema prisma/schema.prisma --force --skip-seed",
+    "retrieval:backfill": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db run retrieval:backfill",
+    "retrieval:seed-fixtures": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" pnpm -C packages/db run retrieval:seed-fixtures",
+    "retrieval:smoke": "DATABASE_URL=\"${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}\" node scripts/smoke-hybrid-rag.mjs",
     "db:users": "docker compose exec -T db psql -U mianshitong -d mianshitong -c 'SELECT \"id\", \"email\", \"createdAt\" FROM \"AuthUser\" ORDER BY \"createdAt\" DESC LIMIT 50;'",
     "build": "pnpm -r --if-present build",
     "start:web": "pnpm -C apps/web start",
@@ -37,6 +41,8 @@
     "commitlint": "commitlint",
     "prepare": "husky",
     "test:e2e": "playwright test",
+    "test:e2e:admin": "PLAYWRIGHT_SCOPE=admin playwright test --project admin-chrome",
+    "test:e2e:web": "PLAYWRIGHT_SCOPE=web playwright test --project web-chrome",
     "lint:tailwind": "node scripts/check-tailwind-canonical.mjs"
   },
   "devDependencies": {
@@ -49,6 +55,7 @@
     "cspell": "^9.1.0",
     "eslint": "^9.39.3",
     "eslint-config-prettier": "^10.1.0",
+    "eslint-module-utils": "^2.12.1",
     "globals": "^15.15.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.0",

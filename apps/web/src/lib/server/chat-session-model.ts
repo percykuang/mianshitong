@@ -1,5 +1,4 @@
 import { Prisma } from '@mianshitong/db';
-import { buildQuestionPlan } from '@mianshitong/interview-engine';
 import {
   MODEL_OPTIONS,
   normalizeInterviewConfig,
@@ -72,11 +71,12 @@ function parseSessionStatus(value: string): SessionStatus {
 export function createDraftSession(
   input?: CreateSessionInput,
   sessionId?: string | null,
-  questionBank?: InterviewQuestion[],
+  _questionBank?: InterviewQuestion[],
 ): ChatSession {
+  void _questionBank;
+
   const now = new Date().toISOString();
   const config = normalizeInterviewConfig(input?.config);
-  const questionPlan = buildQuestionPlan(config, questionBank);
 
   return {
     id: resolveSessionId(sessionId),
@@ -87,11 +87,19 @@ export function createDraftSession(
     config,
     report: null,
     runtime: {
-      questionPlan,
+      questionPlan: [],
       currentQuestionIndex: 0,
       followUpRound: 0,
       activeQuestionAnswers: [],
       assessments: [],
+      followUpTrace: [],
+      assessmentTrace: [],
+      resumeProfile: null,
+      interviewBlueprint: null,
+      planningSummary: null,
+      planGeneratedAt: null,
+      planningTrace: null,
+      reportTrace: null,
     },
     createdAt: now,
     updatedAt: now,
@@ -225,6 +233,7 @@ export function truncateSessionForEdit(
     runtime: {
       ...session.runtime,
       activeQuestionAnswers: [],
+      reportTrace: null,
     },
     updatedAt: now,
     status: 'idle',

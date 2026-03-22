@@ -14,8 +14,10 @@ interface LocalStreamHandlerInput {
 export function createLocalStreamHandler(input: LocalStreamHandlerInput): {
   handleEvent: SseEventHandler;
   getAssistantContent: () => string;
+  getSyncedSession: () => ChatSession | null;
 } {
   let assistantContent = '';
+  let syncedSession: ChatSession | null = null;
 
   return {
     handleEvent: (eventName, payload) => {
@@ -35,6 +37,10 @@ export function createLocalStreamHandler(input: LocalStreamHandlerInput): {
       }
 
       if (eventName === 'done') {
+        const maybeSession = parsed.session as ChatSession | undefined;
+        if (maybeSession) {
+          syncedSession = maybeSession;
+        }
         const value =
           typeof parsed.assistantContent === 'string' ? parsed.assistantContent : assistantContent;
         assistantContent = value;
@@ -48,5 +54,6 @@ export function createLocalStreamHandler(input: LocalStreamHandlerInput): {
       }
     },
     getAssistantContent: () => assistantContent,
+    getSyncedSession: () => syncedSession,
   };
 }

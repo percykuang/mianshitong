@@ -1,5 +1,12 @@
 import { createMockLlmProvider, type LlmProvider } from '@mianshitong/llm';
-import type { ChatMessage, ChatSession, PostMessageResult } from '@mianshitong/shared';
+import type { QuestionRetriever } from '@mianshitong/retrieval';
+import type {
+  ChatMessage,
+  ChatSession,
+  InterviewPlanningStrategy,
+  InterviewQuestion,
+  PostMessageResult,
+} from '@mianshitong/shared';
 import {
   completeInterview,
   handleCompletedSession,
@@ -7,7 +14,7 @@ import {
   handleIdleSession,
   maybeAskFollowUp,
 } from './process-helpers';
-import { buildAssessment, buildInterviewReport } from './scoring';
+import { buildAssessmentResult, buildInterviewReportResult } from './scoring';
 import { cloneSession, createMessage, pushAssistantMessage, toTitle } from './session-core';
 
 function appendUserMessage(session: ChatSession, content: string, now: string): void {
@@ -29,7 +36,9 @@ function ensureCompletedReport(
 ): PostMessageResult {
   session.status = 'completed';
   if (!session.report) {
-    session.report = buildInterviewReport(session.runtime.assessments);
+    const { report, trace } = buildInterviewReportResult(session.runtime.assessments, now);
+    session.report = report;
+    session.runtime.reportTrace = trace;
   }
   pushAssistantMessage(session, assistantMessages, {
     kind: 'report',
@@ -67,8 +76,10 @@ function processInterviewingSession(input: {
   }
 
   const mergedAnswer = input.session.runtime.activeQuestionAnswers.join('\n');
-  const assessment = buildAssessment(currentQuestion, mergedAnswer);
+  const { assessment, trace } = buildAssessmentResult(currentQuestion, mergedAnswer, input.now);
   input.session.runtime.assessments.push(assessment);
+  input.session.runtime.assessmentTrace.push(trace);
+  input.session.runtime.reportTrace = null;
   input.session.runtime.currentQuestionIndex += 1;
   input.session.runtime.followUpRound = 0;
   input.session.runtime.activeQuestionAnswers = [];
@@ -105,12 +116,15 @@ function processInterviewingSession(input: {
   });
 }
 
-export function processSessionMessage(input: {
+export async function processSessionMessage(input: {
   session: ChatSession;
   content: string;
   now?: string;
   provider?: LlmProvider;
-}): PostMessageResult {
+  questionBank?: InterviewQuestion[];
+  questionRetriever?: QuestionRetriever;
+  retrievalStrategy?: InterviewPlanningStrategy;
+}): Promise<PostMessageResult> {
   const now = input.now ?? new Date().toISOString();
   const provider = input.provider ?? createMockLlmProvider();
   const session = cloneSession(input.session);
@@ -135,7 +149,16 @@ export function processSessionMessage(input: {
   }
 
   if (session.status === 'idle') {
-    return handleIdleSession({ session, provider, content, now, assistantMessages });
+    return handleIdleSession({
+      session,
+      provider,
+      content,
+      now,
+      assistantMessages,
+      questionBank: input.questionBank ?? [],
+      questionRetriever: input.questionRetriever,
+      retrievalStrategy: input.retrievalStrategy,
+    });
   }
 
   return processInterviewingSession({

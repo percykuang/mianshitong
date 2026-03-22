@@ -22,6 +22,7 @@
 - `docs/PromptSpec.md`：面试官提示词与结构化输出协议
 - `docs/IterationLog.md`：迭代改动记录（每次变更追加）
 - `docs/GitConventions.md`：Git/Commit 规范（Conventional Commits）
+- `docs/InterviewAgentArchitecture.md`：Web 端 AI 面试 Agent 架构设计（LangGraphJS / Hybrid RAG / Skills / Trace / Eval）
 - `AGENTS.md`：协作约定与“每次改动后的必做清单”（避免忘记更新文档/跑规范）
 - `env.example`：环境变量占位（DeepSeek 配置待确认）
 
@@ -50,6 +51,34 @@
 - 用户详情页修复为 Next 16 兼容的异步 `params` 读取方式，并统一会话消息数统计口径，排除系统欢迎语。
 - Admin 端又做了一轮提交前清理：删除未再使用的题目弹窗编辑组件、移除没有入口的 `/users/[userId]` 用户详情页链路，并收窄题库列表页不再使用的数据字段。
 - Admin 端再做一次提交面收口：移除旧 `favicon.ico`，避免与当前 `icon.svg` 并存；同时清理 `AdminShell` 未使用的 `description` props、`apps/admin` 未使用的依赖声明，以及多余的 `transpilePackages` 配置。
+- Web 端 AI 面试能力的目标进一步收敛为“核心链路 Agent 化，外围保持标准 Web 工程”：采用 LangGraphJS 编排简历画像、面试规划、题目检索、提问追问、评估与报告。
+- 出题机制确定为 `ResumeProfile -> InterviewBlueprint -> Hybrid RAG -> QuestionPlan`，不采用纯数据库随机抽题，也不采用纯 RAG 直接决定所有题目。
+- 技术展示重点确定为：`LangGraphJS`、`Hybrid RAG`、`Skills`、`Memory`、`Trace`、`Eval`，并新增 `docs/InterviewAgentArchitecture.md` 作为后续实现依据。
+- Web 端 AI 面试 Agent 已开始落第一阶段骨架：`packages/interview-engine` 已接入 LangGraphJS 规划图，支持在“开始模拟面试”时基于历史输入生成 `ResumeProfile`、`InterviewBlueprint` 与题单，而不是在建会话时提前固化 `questionPlan`。
+- Guest 本地流式链路现已和远端持久化会话一样支持切入 interview-engine：当用户开始模拟面试或已经处于 interviewing 状态时，本地 `/api/chat/stream` 也会直接返回 Agent 处理后的完整 session，普通聊天仍保留原有通用流式模型调用。
+- `packages/retrieval` 已落地为 Hybrid RAG 第一阶段检索层：当前先使用“元数据过滤 + 词法召回 + 标签/难度重排”，并把题库检索从 `packages/interview-engine/src/interview-planning.ts` 中抽离出来，后续可平滑替换为 `pgvector + embeddings`。
+- 当前题单生成已进入“规划层与检索层分离”状态：`interview-engine` 负责画像、蓝图、配额和编排，`retrieval` 负责候选文档构建、搜索、重排与补位。
+- 规划链路已补齐 `planningTrace` 运行态快照：每个题位会记录目标难度、偏好标签、候选题 top 结果和最终选中题，为后续做可视化 Trace、管理端调试和离线 Eval 提供基础数据。
+- Web 端已兼容旧会话/旧本地缓存中没有 `planningTrace` 的历史 runtime，读取时会自动补齐为 `null`，不需要额外数据迁移。
+- `packages/evals` 已落地第一版离线评测基线，当前通过 fixture 校验两类典型候选人画像下的题单结果，评测重点是“标签覆盖 + 关键题命中 + planning trace 完整性”，而不是假设当前算法已经实现严格难度硬配额。
+- `packages/retrieval` 已进一步抽象出 `QuestionRetriever` adapter 接口，当前默认实现为 `createLexicalQuestionRetriever`；`packages/interview-engine` 规划层现在只依赖接口，不再绑定具体检索函数，为后续接 `pgvector / embedding` 做好了替换边界。
+- `packages/llm` 已补齐 `EmbeddingProvider` 协议，`packages/retrieval` 已新增 `createVectorQuestionRetriever` 与 `QuestionVectorStore` 契约；当前支持“向量候选召回 + lexical hybrid 重排 + lexical fallback”，但尚未接真实向量库。
+- `pgvector` 真实持久化现已开始落地：数据库新增独立 `QuestionRetrievalDoc` 表，不把向量列直接塞进 `QuestionBankItem`，以便后续做 embedding 版本化与重建。
+- 本地开发数据库容器已切换到 `pgvector/pgvector:pg16`；后续凡是初始化新环境，都需要执行题库 embedding 回填，入口脚本为 `pnpm retrieval:backfill`。
+- Web 端当前会在 `EMBEDDING_PROVIDER=ollama` 且存在有效 embedding 时，自动切到 `hybrid-vector-v1`；否则继续使用 `hybrid-lexical-v1`，不影响现有出题链路。
+- Admin 端题库新增/编辑已自动同步检索元数据，并在题目内容变化时清空旧 embedding，避免向量索引与题目正文不一致。
+- 为了给 Hybrid RAG 做更贴近真实用户链路的验证，新增了 60 条前端题库 fixture 种子脚本与 `pnpm retrieval:seed-fixtures` 入口；当前推荐用“批量造数 + embedding 回填 + Web 端到端烟测”作为本地调优基线。
+- 原先尝试的“纯向量最近邻 smoke”已被放弃，因为它无法代表真实线上链路；当前唯一保留的回归基线是 `/api/chat/stream` 驱动的 Hybrid RAG 端到端烟测。
+- 面试规划层已补一条更符合产品直觉的规则：当题量达到 4 题及以上时，`mustIncludeTags` 会覆盖前三个核心标签，而不是固定只保留前两个，避免 `React + TypeScript + 工程化` 这类复合画像下被“双标签重叠题”长期挤占。
+- Admin 会话详情页已接入“面试规划 Trace”可视化面板，当前可以直接查看检索策略、候选人画像、题单蓝图、最终题单，以及每个题位的候选题与分数拆解，作为后续 RAG 调优和 LangGraph 链路展示的第一版观测面。
+- Admin 端为此新增了独立的 runtime 解码 helper，不再在详情页里直接信任原始 JSON 结构；后续若继续展示评分 trace、追问 trace，可沿用这条取数边界继续扩展。
+- 面试执行阶段现已补齐结构化 trace：每次用户作答后的“追问/不追问”决策都会写入 `followUpTrace`，每题最终评分会写入 `assessmentTrace`，这样运行态不再只有最终 `assessments/report` 结果，而是能回放决策过程。
+- Admin 会话详情页现已形成“规划 Trace + 执行 Trace + 对话记录”的完整调试视图，可直接看到每题为什么追问、追问了什么、最后如何评分，为后续演示 Agent 能力和调试 Prompt/规则提供统一观测入口。
+- 面试报告阶段现也已补齐结构化 `reportTrace`：运行态会记录维度均分来源、总分公式、等级判定、优势/短板来源、改进建议推导和总结模板分支，Admin 会话详情页现已具备“规划 -> 执行 -> 报告 -> 对话”的完整可观测链路。
+- `packages/evals` 现已补齐 `reportTrace` 的离线评测基线，当前通过 3 组固定 `QuestionAssessment` fixture 覆盖 `needs-work / solid / strong` 三类报告输出，评测重点是“报告结果与 trace 一致性 + 维度来源结构完整性”，为后续调 prompt/规则提供稳定回归网。
+- Admin 端现在已有一条真实浏览器烟测覆盖会话详情页三段 Trace；测试会通过临时种入管理员账号和完整 trace 会话来验证页面渲染，不依赖手工准备数据。Playwright 配置也已支持按 `PLAYWRIGHT_SCOPE` 只启动所需服务，避免单跑 Admin 用例时被 Web 服务拖慢或阻塞。
+- 这条 Admin Trace 烟测现已接入 GitHub Actions 默认 CI：CI 会启 `pgvector` 数据库服务、非交互执行 `db:migrate:deploy`、安装 Playwright Chromium，并只运行 Admin 项目；同时 Playwright 配置已支持“本地用 Chrome、CI 用 Chromium”的环境分流，减少 CI 浏览器依赖风险。
+- Web 侧 smoke 现也已拆成独立 CI job：通过 `pnpm test:e2e:web` 只运行 `web-chrome` 项目，和 `admin-e2e` 并行挂在 `test` 之后，避免后续 E2E 数量增长时单个 job 串行时间过长。
 
 ### 2026-02-26
 

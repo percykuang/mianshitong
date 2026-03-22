@@ -53,4 +53,20 @@ describe('createLocalStreamHandler', () => {
     expect(handler.getAssistantContent()).toBe('final answer');
     expect(setNotice).toHaveBeenCalledWith('模型繁忙');
   });
+
+  it('done 支持返回完整 session', () => {
+    const nextSession = createDraftLocalSession('deepseek-chat', 'local_stream_session_2');
+    const setActiveSession = vi.fn();
+    const setNotice = vi.fn();
+    const handler = createLocalStreamHandler({
+      optimisticAssistantId: 'assistant_tmp_2',
+      setActiveSession,
+      setNotice,
+    });
+
+    handler.handleEvent('done', JSON.stringify({ session: nextSession }));
+
+    expect(handler.getSyncedSession()).toEqual(nextSession);
+    expect(handler.getAssistantContent()).toBe('');
+  });
 });

@@ -44,6 +44,13 @@ export function normalizeStoredSession(session: ChatSession): ChatSession {
   return {
     ...session,
     pinnedAt: session.pinnedAt ?? null,
+    runtime: {
+      ...session.runtime,
+      followUpTrace: session.runtime.followUpTrace ?? [],
+      assessmentTrace: session.runtime.assessmentTrace ?? [],
+      planningTrace: session.runtime.planningTrace ?? null,
+      reportTrace: session.runtime.reportTrace ?? null,
+    },
   };
 }
 
@@ -64,6 +71,14 @@ export function createDraftLocalSession(modelId: ModelId, sessionId?: string | n
       followUpRound: 0,
       activeQuestionAnswers: [],
       assessments: [],
+      followUpTrace: [],
+      assessmentTrace: [],
+      resumeProfile: null,
+      interviewBlueprint: null,
+      planningSummary: null,
+      planGeneratedAt: null,
+      planningTrace: null,
+      reportTrace: null,
     },
     createdAt: now,
     updatedAt: now,

@@ -1,16 +1,19 @@
-import { buildQuestionPlan } from './question-plan';
 import {
-  normalizeInterviewConfig,
   type ChatMessage,
   type ChatSession,
   type CreateSessionInput,
-  type InterviewQuestion,
   type InterviewRuntimeState,
   type MessageKind,
   type MessageRole,
 } from '@mianshitong/shared';
 
 const INTERVIEW_START_PATTERNS = [/模拟面试/, /开始面试/, /开始模拟/, /\binterview\b/i];
+const INTERVIEW_COMMAND_PATTERNS = [
+  /开始模拟面试/gi,
+  /开始面试/gi,
+  /开始模拟/gi,
+  /\binterview\b/gi,
+];
 
 function createId(prefix: string): string {
   const random = Math.random().toString(36).slice(2, 9);
@@ -63,21 +66,105 @@ function cloneRuntime(runtime: InterviewRuntimeState): InterviewRuntimeState {
       missingPoints: [...item.missingPoints],
       scores: { ...item.scores },
     })),
+    followUpTrace: runtime.followUpTrace.map((item) => ({
+      ...item,
+      matchedPoints: [...item.matchedPoints],
+      missingPoints: [...item.missingPoints],
+    })),
+    assessmentTrace: runtime.assessmentTrace.map((item) => ({
+      ...item,
+      matchedPoints: [...item.matchedPoints],
+      missingPoints: [...item.missingPoints],
+      scores: { ...item.scores },
+    })),
+    resumeProfile: runtime.resumeProfile
+      ? {
+          ...runtime.resumeProfile,
+          primaryTags: runtime.resumeProfile.primaryTags.map((item) => ({ ...item })),
+          secondaryTags: runtime.resumeProfile.secondaryTags.map((item) => ({ ...item })),
+          projectTags: [...runtime.resumeProfile.projectTags],
+          strengths: [...runtime.resumeProfile.strengths],
+          riskFlags: [...runtime.resumeProfile.riskFlags],
+          evidence: [...runtime.resumeProfile.evidence],
+        }
+      : null,
+    interviewBlueprint: runtime.interviewBlueprint
+      ? {
+          ...runtime.interviewBlueprint,
+          difficultyDistribution: { ...runtime.interviewBlueprint.difficultyDistribution },
+          tagDistribution: runtime.interviewBlueprint.tagDistribution.map((item) => ({ ...item })),
+          mustIncludeTags: [...runtime.interviewBlueprint.mustIncludeTags],
+          optionalTags: [...runtime.interviewBlueprint.optionalTags],
+          avoidTags: [...runtime.interviewBlueprint.avoidTags],
+          strategyNotes: [...runtime.interviewBlueprint.strategyNotes],
+        }
+      : null,
+    planningTrace: runtime.planningTrace
+      ? {
+          ...runtime.planningTrace,
+          levelQuota: { ...runtime.planningTrace.levelQuota },
+          steps: runtime.planningTrace.steps.map((step) => ({
+            ...step,
+            uncoveredMustTags: [...step.uncoveredMustTags],
+            preferredTags: step.preferredTags.map((item) => ({ ...item })),
+            candidates: step.candidates.map((candidate) => ({
+              ...candidate,
+              tags: [...candidate.tags],
+              matchedTags: [...candidate.matchedTags],
+              matchedMustIncludeTags: [...candidate.matchedMustIncludeTags],
+              matchedOptionalTags: [...candidate.matchedOptionalTags],
+              lexicalOverlap: [...candidate.lexicalOverlap],
+              breakdown: { ...candidate.breakdown },
+            })),
+          })),
+        }
+      : null,
+    reportTrace: runtime.reportTrace
+      ? {
+          ...runtime.reportTrace,
+          dimensionSummary: { ...runtime.reportTrace.dimensionSummary },
+          dimensionTraces: runtime.reportTrace.dimensionTraces.map((item) => ({
+            ...item,
+            sources: item.sources.map((source) => ({ ...source })),
+          })),
+          strengths: runtime.reportTrace.strengths.map((item) => ({
+            ...item,
+            sources: item.sources.map((source) => ({ ...source })),
+          })),
+          gaps: runtime.reportTrace.gaps.map((item) => ({
+            ...item,
+            sources: item.sources.map((source) => ({ ...source })),
+          })),
+          nextSteps: runtime.reportTrace.nextSteps.map((item) => ({
+            ...item,
+            sources: item.sources.map((source) => ({ ...source })),
+          })),
+        }
+      : null,
   };
 }
 
 export function createRuntimeState(
-  config: CreateSessionInput['config'],
-  questionBank?: InterviewQuestion[],
+  _config: CreateSessionInput['config'],
+  _questionBank?: unknown,
 ): InterviewRuntimeState {
-  const normalizedConfig = normalizeInterviewConfig(config);
+  void _config;
+  void _questionBank;
 
   return {
-    questionPlan: buildQuestionPlan(normalizedConfig, questionBank),
+    questionPlan: [],
     currentQuestionIndex: 0,
     followUpRound: 0,
     activeQuestionAnswers: [],
     assessments: [],
+    followUpTrace: [],
+    assessmentTrace: [],
+    resumeProfile: null,
+    interviewBlueprint: null,
+    planningSummary: null,
+    planGeneratedAt: null,
+    planningTrace: null,
+    reportTrace: null,
   };
 }
 
@@ -96,6 +183,15 @@ export function cloneSession(session: ChatSession): ChatSession {
 
 export function shouldStartInterview(content: string): boolean {
   return INTERVIEW_START_PATTERNS.some((pattern) => pattern.test(content));
+}
+
+export function extractInterviewPlanningText(content: string): string {
+  return INTERVIEW_COMMAND_PATTERNS.reduce(
+    (result, pattern) => result.replace(pattern, ' '),
+    content,
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function includesKeyword(answer: string, keyword: string): boolean {

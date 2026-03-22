@@ -1,7 +1,11 @@
 'use client';
 
+import type { ChatSession } from '@mianshitong/shared';
 import { Card, Descriptions, List, Tag, Typography } from 'antd';
 import { useLayoutEffect, useRef, useState } from 'react';
+import { SessionExecutionTraceCard } from '@/components/session-execution-trace-card';
+import { SessionPlanningTraceCard } from '@/components/session-planning-trace-card';
+import { SessionReportTraceCard } from '@/components/session-report-trace-card';
 
 interface SessionMeta {
   id: string;
@@ -24,9 +28,10 @@ interface SessionMessage {
 interface SessionDetailViewProps {
   session: SessionMeta;
   messages: SessionMessage[];
+  runtime: ChatSession['runtime'];
 }
 
-export function SessionDetailView({ session, messages }: SessionDetailViewProps) {
+export function SessionDetailView({ session, messages, runtime }: SessionDetailViewProps) {
   const visibleMessages = messages.filter(
     (item) => item.role !== 'system' && item.kind !== 'system',
   );
@@ -69,17 +74,27 @@ export function SessionDetailView({ session, messages }: SessionDetailViewProps)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card title="会话概览">
-        <Descriptions column={2} size="small" colon={false} styles={{ label: { width: 100 } }}>
-          <Descriptions.Item label="会话 ID">{session.id}</Descriptions.Item>
-          <Descriptions.Item label="用户">{session.userEmail}</Descriptions.Item>
-          <Descriptions.Item label="标题">{session.title || '未命名'}</Descriptions.Item>
-          <Descriptions.Item label="模型">{session.modelId}</Descriptions.Item>
-          <Descriptions.Item label="状态">{session.status}</Descriptions.Item>
-          <Descriptions.Item label="创建时间">{session.createdAt}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{session.updatedAt}</Descriptions.Item>
-          <Descriptions.Item label="消息数">{visibleMessages.length}</Descriptions.Item>
-        </Descriptions>
+        <Descriptions
+          column={2}
+          size="small"
+          colon={false}
+          styles={{ label: { width: 100 } }}
+          items={[
+            { key: 'id', label: '会话 ID', children: session.id },
+            { key: 'userEmail', label: '用户', children: session.userEmail },
+            { key: 'title', label: '标题', children: session.title || '未命名' },
+            { key: 'modelId', label: '模型', children: session.modelId },
+            { key: 'status', label: '状态', children: session.status },
+            { key: 'createdAt', label: '创建时间', children: session.createdAt },
+            { key: 'updatedAt', label: '更新时间', children: session.updatedAt },
+            { key: 'messageCount', label: '消息数', children: visibleMessages.length },
+          ]}
+        />
       </Card>
+
+      <SessionPlanningTraceCard runtime={runtime} />
+      <SessionExecutionTraceCard runtime={runtime} />
+      <SessionReportTraceCard runtime={runtime} />
 
       <Card title="对话记录" styles={{ body: { padding: 0 } }}>
         {visibleMessages.length === 0 ? (

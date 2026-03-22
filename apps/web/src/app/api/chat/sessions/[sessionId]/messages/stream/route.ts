@@ -1,9 +1,16 @@
+import { processSessionMessage, shouldStartInterview } from '@mianshitong/interview-engine';
 import { MODEL_OPTIONS, type ModelId } from '@mianshitong/shared';
 import type { StreamChatProvider } from '@mianshitong/llm';
 import { getCurrentUserId } from '@/lib/server/auth-session';
 import { normalizeAssistantMarkdown } from '@/lib/server/chat-response-format';
-import { appendUserSessionExchange, getUserSession } from '@/lib/server/chat-session-repository';
+import {
+  appendUserSessionExchange,
+  getUserSession,
+  saveOrCreateUserSession,
+} from '@/lib/server/chat-session-repository';
 import { createDraftSession } from '@/lib/server/chat-session-model';
+import { listActiveQuestionBank } from '@/lib/server/question-bank-repository';
+import { resolveQuestionRetriever } from '@/lib/server/question-retriever';
 import {
   createStreamProvider,
   formatSseEvent,
@@ -40,6 +47,56 @@ export async function POST(
   const session =
     (await getUserSession(userId, sessionId)) ??
     createDraftSession({ modelId: requestedModelId }, sessionId);
+  const shouldUseInterviewEngine = session.status !== 'idle' || shouldStartInterview(content);
+
+  if (shouldUseInterviewEngine) {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const run = async () => {
+          let hasError = false;
+
+          try {
+            controller.enqueue(formatSseEvent('start', { sessionId }));
+
+            const questionBank = session.status === 'idle' ? await listActiveQuestionBank() : [];
+            const retriever =
+              session.status === 'idle' ? await resolveQuestionRetriever(questionBank) : null;
+
+            const result = await processSessionMessage({
+              session,
+              content,
+              questionBank: session.status === 'idle' ? questionBank : undefined,
+              questionRetriever: retriever?.questionRetriever,
+              retrievalStrategy: retriever?.retrievalStrategy,
+            });
+            const updatedSession = await saveOrCreateUserSession(userId, result.session);
+            if (!updatedSession) {
+              throw new Error('会话不存在或已失效');
+            }
+
+            controller.enqueue(formatSseEvent('done', { session: updatedSession }));
+          } catch (error) {
+            hasError = true;
+            controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));
+          } finally {
+            controller.enqueue(formatSseEvent('end', { ok: !hasError }));
+            controller.close();
+          }
+        };
+
+        void run();
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  }
 
   let provider: StreamChatProvider;
   let model: string;

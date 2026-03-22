@@ -2,6 +2,8 @@ import { processSessionMessage } from '@mianshitong/interview-engine';
 import type { PostMessageResponse } from '@mianshitong/shared';
 import { getCurrentUserId } from '@/lib/server/auth-session';
 import { getUserSession, saveUserSession } from '@/lib/server/chat-session-repository';
+import { listActiveQuestionBank } from '@/lib/server/question-bank-repository';
+import { resolveQuestionRetriever } from '@/lib/server/question-retriever';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -30,9 +32,15 @@ export async function POST(
     return Response.json({ message: 'Session not found' }, { status: 404 });
   }
 
-  const result = processSessionMessage({
+  const questionBank = session.status === 'idle' ? await listActiveQuestionBank() : [];
+  const retriever = session.status === 'idle' ? await resolveQuestionRetriever(questionBank) : null;
+
+  const result = await processSessionMessage({
     session,
     content,
+    questionBank: session.status === 'idle' ? questionBank : undefined,
+    questionRetriever: retriever?.questionRetriever,
+    retrievalStrategy: retriever?.retrievalStrategy,
   });
 
   const savedSession = await saveUserSession(userId, result.session);

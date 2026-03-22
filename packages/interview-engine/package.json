@@ -10,7 +10,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@langchain/core": "^1.1.34",
+    "@langchain/langgraph": "^1.2.5",
     "@mianshitong/llm": "workspace:*",
+    "@mianshitong/retrieval": "workspace:*",
     "@mianshitong/shared": "workspace:*"
   },
   "devDependencies": {
