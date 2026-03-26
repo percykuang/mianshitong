@@ -36,6 +36,10 @@
 
 ### 2026-03-26
 
+- GitHub Actions 的 `web-e2e` 失败根因已定位清楚：不是 Playwright 断言本身不稳定，而是 Web 端当前已经接入游客 `UserActor`、会话持久化和额度逻辑，CI 中每次访问 `/api/chat/usage`、`/api/chat/sessions`、`/api/chat/sessions/[sessionId]/messages/stream` 都会触发 Prisma 访问数据库。
+- 原 `web-e2e` job 仍沿用“只启动 Web + mock LLM、不带数据库”的旧配置，因此在 GitHub Actions 中稳定报 `Prisma P1001 Can't reach database server at 127.0.0.1:5432`，随后页面只停留在输入问题和 loading 状态，导致所有断言都看不到预期 assistant 文本。
+- 当前结论已经收口为：`web-e2e` 必须与 `admin-e2e` 一样补齐 `pgvector` service、`DATABASE_URL` 和 `pnpm db:migrate:deploy`，否则这条链路不具备真实可运行前提。
+
 - 聊天页骨架已按最新产品要求收口回严格的“三段式”结构：header 在顶部、footer 在底部承载输入区，中间消息区独立滚动；此前那套“浏览器整页滚动 + fixed footer 浮层”的实现已经撤回。
 - 当前布局协议与既定产品交互基线重新对齐为：外层 `h-dvh flex flex-col`，消息区 `relative flex-1 min-h-0`，内部消息列表容器 `absolute inset-0 overflow-y-auto`，footer 则是布局流中的 `sticky bottom-0`。
 - 聊天页“回到底部”按钮的位置又做了一次细节收口：当前按钮继续挂在消息区内部的绝对定位层，但底部偏移已经从过大的经验值收敛到贴近 footer 上沿的 `16px` 实测间距，避免按钮悬在消息区中段，视觉上重新与既定产品基线对齐。

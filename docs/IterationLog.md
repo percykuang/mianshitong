@@ -7,6 +7,36 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.89（2026-03-26）：修复 Web E2E 在 CI 中缺少数据库依赖的问题
+
+### 目标
+
+- 修复 GitHub Actions 中 `web-e2e` job 的环境配置缺口，避免 Web 端 E2E 在接入游客持久化和额度逻辑后因缺少数据库而稳定失败。
+
+### 主要改动
+
+- 更新 `/.github/workflows/ci.yml`
+  - 为 `web-e2e` job 补齐 `pgvector/pgvector:pg16` 数据库服务。
+  - 为 `web-e2e` 注入 `DATABASE_URL`。
+  - 在运行 Playwright 前新增 `pnpm db:migrate:deploy`。
+- 根因说明：
+  - Web 端当前在游客访问时会创建 `UserActor`、读取额度与会话记录，因此不再是“纯前端 mock UI”链路。
+  - 原 `web-e2e` 仍沿用旧配置，没有数据库服务，导致 CI 中 Prisma 报 `P1001 Can't reach database server at 127.0.0.1:5432`。
+
+### 迁移/破坏性变更
+
+- 无业务代码变更。
+- 无数据库 schema 新增，仅修正 CI 运行环境。
+
+### 验证
+
+- 本地已根据 GitHub Actions 失败日志完成根因定位。
+- 后续以 GitHub Actions `web-e2e` job 重新运行通过作为最终验收。
+
+### 下一步
+
+- 后续凡是 Web E2E 覆盖到服务端持久化能力，都默认按“需要数据库”的前提维护 CI，而不是再假设 Web 端 smoke 只依赖 mock LLM。
+
 ## Iteration 4.88（2026-03-26）：抽离 Admin Trace 视图共享展示 helper
 
 ### 目标
