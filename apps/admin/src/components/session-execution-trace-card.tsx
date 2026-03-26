@@ -5,11 +5,11 @@ import type {
   InterviewAssessmentTrace,
   InterviewFollowUpDecision,
   InterviewFollowUpTrace,
-  InterviewLevel,
   InterviewQuestion,
 } from '@mianshitong/shared';
 import { Card, Collapse, Descriptions, List, Tag, Typography } from 'antd';
 import type { CollapseProps, DescriptionsProps } from 'antd';
+import { formatInterviewLevel, renderTraceTagList, TraceEmptyCard } from './session-trace-shared';
 
 interface SessionExecutionTraceCardProps {
   runtime: ChatSession['runtime'];
@@ -22,12 +22,6 @@ interface ExecutionTraceGroup {
   assessment: InterviewAssessmentTrace | null;
 }
 
-const LEVEL_LABELS: Record<InterviewLevel, string> = {
-  junior: '初级',
-  mid: '中级',
-  senior: '高级',
-};
-
 const FOLLOW_UP_DECISION_MAP: Record<InterviewFollowUpDecision, { label: string; color: string }> =
   {
     ask_follow_up: { label: '触发追问', color: 'blue' },
@@ -36,26 +30,6 @@ const FOLLOW_UP_DECISION_MAP: Record<InterviewFollowUpDecision, { label: string;
     skip_coverage_sufficient: { label: '覆盖已足够', color: 'green' },
     skip_all_points_covered: { label: '要点已覆盖', color: 'green' },
   };
-
-function formatLevel(level: InterviewLevel): string {
-  return LEVEL_LABELS[level] ?? level;
-}
-
-function renderTagList(values: string[], color = 'default') {
-  if (values.length === 0) {
-    return <Typography.Text type="secondary">-</Typography.Text>;
-  }
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-      {values.map((value, index) => (
-        <Tag key={`${value}-${index}`} color={color}>
-          {value}
-        </Tag>
-      ))}
-    </div>
-  );
-}
 
 function groupExecutionTrace(runtime: ChatSession['runtime']): ExecutionTraceGroup[] {
   return runtime.questionPlan.map((question, index) => ({
@@ -116,13 +90,13 @@ function buildAssessmentItems(
       key: 'matchedPoints',
       label: '命中要点',
       span: 2,
-      children: renderTagList(assessment.matchedPoints, 'green'),
+      children: renderTraceTagList(assessment.matchedPoints, 'green'),
     },
     {
       key: 'missingPoints',
       label: '缺失要点',
       span: 2,
-      children: renderTagList(assessment.missingPoints, 'red'),
+      children: renderTraceTagList(assessment.missingPoints, 'red'),
     },
   ];
 }
@@ -165,11 +139,7 @@ export function SessionExecutionTraceCard({ runtime }: SessionExecutionTraceCard
   const groups = groupExecutionTrace(runtime);
 
   if (groups.length === 0) {
-    return (
-      <Card title="面试执行 Trace">
-        <Typography.Text type="secondary">该会话还没有进入执行阶段。</Typography.Text>
-      </Card>
-    );
+    return <TraceEmptyCard title="面试执行 Trace" description="该会话还没有进入执行阶段。" />;
   }
 
   const items: CollapseProps['items'] = groups.map((group) => {
@@ -201,7 +171,7 @@ export function SessionExecutionTraceCard({ runtime }: SessionExecutionTraceCard
             <Typography.Text type="secondary">{group.question.id}</Typography.Text>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Tag>{formatLevel(group.question.level)}</Tag>
+            <Tag>{formatInterviewLevel(group.question.level)}</Tag>
             <Tag color={followUpCount > 0 ? 'blue' : 'default'}>追问 {followUpCount} 次</Tag>
             {group.assessment ? (
               <Tag color="green">已评分 {group.assessment.averageScore}</Tag>
@@ -227,13 +197,13 @@ export function SessionExecutionTraceCard({ runtime }: SessionExecutionTraceCard
               {
                 key: 'level',
                 label: '难度',
-                children: formatLevel(group.question.level),
+                children: formatInterviewLevel(group.question.level),
               },
               {
                 key: 'tags',
                 label: '标签',
                 span: 2,
-                children: renderTagList(group.question.tags),
+                children: renderTraceTagList(group.question.tags),
               },
               {
                 key: 'prompt',
@@ -310,13 +280,13 @@ export function SessionExecutionTraceCard({ runtime }: SessionExecutionTraceCard
                               key: 'matchedPoints',
                               label: '命中要点',
                               span: 2,
-                              children: renderTagList(item.matchedPoints, 'green'),
+                              children: renderTraceTagList(item.matchedPoints, 'green'),
                             },
                             {
                               key: 'missingPoints',
                               label: '缺失要点',
                               span: 2,
-                              children: renderTagList(item.missingPoints, 'red'),
+                              children: renderTraceTagList(item.missingPoints, 'red'),
                             },
                           ]}
                         />

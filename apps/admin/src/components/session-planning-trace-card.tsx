@@ -2,12 +2,12 @@
 
 import type {
   ChatSession,
-  InterviewLevel,
   InterviewPlanningCandidateTrace,
   InterviewPlanningStepTrace,
 } from '@mianshitong/shared';
 import { Card, Collapse, Descriptions, List, Table, Tag, Typography } from 'antd';
 import type { DescriptionsProps, TableColumnsType } from 'antd';
+import { formatInterviewLevel, renderTraceTagList, TraceEmptyCard } from './session-trace-shared';
 
 interface SessionPlanningTraceCardProps {
   runtime: ChatSession['runtime'];
@@ -17,20 +17,6 @@ interface CandidateRow extends InterviewPlanningCandidateTrace {
   key: string;
   rank: number;
   isSelected: boolean;
-}
-
-const LEVEL_LABELS: Record<InterviewLevel, string> = {
-  junior: '初级',
-  mid: '中级',
-  senior: '高级',
-};
-
-function formatLevel(level: InterviewLevel | null | undefined): string {
-  if (!level) {
-    return '不限';
-  }
-
-  return LEVEL_LABELS[level] ?? level;
 }
 
 function formatStrategy(strategy: string | null | undefined): string {
@@ -47,22 +33,6 @@ function formatStrategy(strategy: string | null | undefined): string {
 
 function formatRetrievalMode(mode: InterviewPlanningStepTrace['retrievalMode']): string {
   return mode === 'target_level' ? '目标难度召回' : '全量补位召回';
-}
-
-function renderTagList(tags: string[], color = 'default') {
-  if (tags.length === 0) {
-    return <Typography.Text type="secondary">-</Typography.Text>;
-  }
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-      {tags.map((tag, index) => (
-        <Tag key={`${tag}-${index}`} color={color}>
-          {tag}
-        </Tag>
-      ))}
-    </div>
-  );
 }
 
 function buildBreakdownText(candidate: InterviewPlanningCandidateTrace) {
@@ -104,13 +74,13 @@ function buildCandidateColumns(): TableColumnsType<CandidateRow> {
       dataIndex: 'level',
       key: 'level',
       width: 92,
-      render: (value: InterviewLevel) => <Tag>{formatLevel(value)}</Tag>,
+      render: (value) => <Tag>{formatInterviewLevel(value)}</Tag>,
     },
     {
       title: '标签',
       dataIndex: 'tags',
       key: 'tags',
-      render: (tags: string[]) => renderTagList(tags),
+      render: (tags: string[]) => renderTraceTagList(tags),
     },
     {
       title: '命中',
@@ -121,13 +91,13 @@ function buildCandidateColumns(): TableColumnsType<CandidateRow> {
             <Typography.Text type="secondary" style={{ marginRight: 8 }}>
               命中标签
             </Typography.Text>
-            {renderTagList(record.matchedTags)}
+            {renderTraceTagList(record.matchedTags)}
           </div>
           <div>
             <Typography.Text type="secondary" style={{ marginRight: 8 }}>
               必考标签
             </Typography.Text>
-            {renderTagList(record.matchedMustIncludeTags, 'blue')}
+            {renderTraceTagList(record.matchedMustIncludeTags, 'blue')}
           </div>
         </div>
       ),
@@ -187,13 +157,13 @@ export function SessionPlanningTraceCard({ runtime }: SessionPlanningTraceCardPr
       key: 'mustIncludeTags',
       label: '必考标签',
       span: 2,
-      children: renderTagList(runtime.interviewBlueprint?.mustIncludeTags ?? [], 'blue'),
+      children: renderTraceTagList(runtime.interviewBlueprint?.mustIncludeTags ?? [], 'blue'),
     },
     {
       key: 'optionalTags',
       label: '可选标签',
       span: 2,
-      children: renderTagList(runtime.interviewBlueprint?.optionalTags ?? []),
+      children: renderTraceTagList(runtime.interviewBlueprint?.optionalTags ?? []),
     },
     {
       key: 'levelQuota',
@@ -222,7 +192,7 @@ export function SessionPlanningTraceCard({ runtime }: SessionPlanningTraceCardPr
         {
           key: 'seniority',
           label: '画像级别',
-          children: formatLevel(runtime.resumeProfile.seniority),
+          children: formatInterviewLevel(runtime.resumeProfile.seniority),
         },
         {
           key: 'experience',
@@ -242,13 +212,13 @@ export function SessionPlanningTraceCard({ runtime }: SessionPlanningTraceCardPr
           key: 'projectTags',
           label: '项目标签',
           span: 2,
-          children: renderTagList(runtime.resumeProfile.projectTags),
+          children: renderTraceTagList(runtime.resumeProfile.projectTags),
         },
         {
           key: 'riskFlags',
           label: '风险提示',
           span: 2,
-          children: renderTagList(runtime.resumeProfile.riskFlags, 'gold'),
+          children: renderTraceTagList(runtime.resumeProfile.riskFlags, 'gold'),
         },
         {
           key: 'evidence',
@@ -271,11 +241,7 @@ export function SessionPlanningTraceCard({ runtime }: SessionPlanningTraceCardPr
   const candidateColumns = buildCandidateColumns();
 
   if (!trace && !runtime.resumeProfile && !runtime.interviewBlueprint) {
-    return (
-      <Card title="面试规划 Trace">
-        <Typography.Text type="secondary">该会话还没有题单规划信息。</Typography.Text>
-      </Card>
-    );
+    return <TraceEmptyCard title="面试规划 Trace" description="该会话还没有题单规划信息。" />;
   }
 
   return (
@@ -337,7 +303,7 @@ export function SessionPlanningTraceCard({ runtime }: SessionPlanningTraceCardPr
                       justifyContent: 'flex-end',
                     }}
                   >
-                    <Tag>{formatLevel(item.level)}</Tag>
+                    <Tag>{formatInterviewLevel(item.level)}</Tag>
                     {item.tags.map((tag) => (
                       <Tag key={`${item.id}-${tag}`}>{tag}</Tag>
                     ))}
@@ -360,7 +326,7 @@ export function SessionPlanningTraceCard({ runtime }: SessionPlanningTraceCardPr
 
               return {
                 key: String(step.slot),
-                label: `第 ${step.slot} 题 · ${formatLevel(step.targetLevel)} · ${step.selectedQuestionTitle ?? '未命中题目'}`,
+                label: `第 ${step.slot} 题 · ${formatInterviewLevel(step.targetLevel)} · ${step.selectedQuestionTitle ?? '未命中题目'}`,
                 children: (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <Descriptions
@@ -392,7 +358,7 @@ export function SessionPlanningTraceCard({ runtime }: SessionPlanningTraceCardPr
                           key: 'uncoveredMustTags',
                           label: '未覆盖必考标签',
                           span: 2,
-                          children: renderTagList(step.uncoveredMustTags, 'gold'),
+                          children: renderTraceTagList(step.uncoveredMustTags, 'gold'),
                         },
                         {
                           key: 'preferredTags',

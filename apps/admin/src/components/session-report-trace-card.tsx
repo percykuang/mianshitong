@@ -7,6 +7,7 @@ import type {
 } from '@mianshitong/shared';
 import { Card, Collapse, Descriptions, List, Tag, Typography } from 'antd';
 import type { CollapseProps, DescriptionsProps } from 'antd';
+import { renderTraceNamedTagList, TraceEmptyCard } from './session-trace-shared';
 
 interface SessionReportTraceCardProps {
   runtime: ChatSession['runtime'];
@@ -27,16 +28,11 @@ const REPORT_LEVEL_META = {
 } as const;
 
 function renderQuestionSources(points: InterviewReportPointTrace['sources']) {
-  if (points.length === 0) {
-    return <Typography.Text type="secondary">-</Typography.Text>;
-  }
-
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-      {points.map((item) => (
-        <Tag key={`${item.questionId}-${item.questionTitle}`}>{item.questionTitle}</Tag>
-      ))}
-    </div>
+  return renderTraceNamedTagList(
+    points.map((item) => ({
+      key: `${item.questionId}-${item.questionTitle}`,
+      label: item.questionTitle,
+    })),
   );
 }
 
@@ -81,13 +77,14 @@ export function SessionReportTraceCard({ runtime }: SessionReportTraceCardProps)
 
   if (!trace) {
     return (
-      <Card title="面试报告 Trace">
-        <Typography.Text type="secondary">
-          {runtime.assessments.length > 0
+      <TraceEmptyCard
+        title="面试报告 Trace"
+        description={
+          runtime.assessments.length > 0
             ? '该会话已有评分结果，但还没有结构化报告 Trace，通常说明这是旧会话数据。'
-            : '该会话还没有生成面试报告。'}
-        </Typography.Text>
-      </Card>
+            : '该会话还没有生成面试报告。'
+        }
+      />
     );
   }
 
