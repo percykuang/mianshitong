@@ -21,6 +21,11 @@ async function cleanupFixtureRecords(): Promise<void> {
       OR: [{ id: TRACE_SESSION_ID }, { user: { email: TRACE_USER_EMAIL } }],
     },
   });
+  await prisma.userActor.deleteMany({
+    where: {
+      OR: [{ authUser: { email: TRACE_USER_EMAIL } }, { displayName: TRACE_USER_EMAIL }],
+    },
+  });
   await prisma.authUser.deleteMany({ where: { email: TRACE_USER_EMAIL } });
   await prisma.adminUser.deleteMany({ where: { email: ADMIN_EMAIL } });
 }
@@ -99,12 +104,22 @@ export async function seedAdminTraceSession() {
       passwordHash: 'not-used-in-e2e',
     },
   });
+  await prisma.userActor.create({
+    data: {
+      id: authUser.id,
+      type: 'registered',
+      displayName: authUser.email,
+      authUserId: authUser.id,
+      lastSeenAt: new Date(),
+    },
+  });
 
   const session = await buildTraceSession();
 
   await prisma.chatSessionRecord.create({
     data: {
       id: session.id,
+      actorId: authUser.id,
       userId: authUser.id,
       title: session.title,
       modelId: session.modelId,

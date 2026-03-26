@@ -10,14 +10,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.6.0",
+    "@ant-design/nextjs-registry": "^1.0.2",
+    "@ant-design/v5-patch-for-react-19": "^1.0.0",
     "@mianshitong/db": "workspace:*",
     "@mianshitong/interview-engine": "workspace:*",
     "@mianshitong/retrieval": "workspace:*",
     "@mianshitong/shared": "workspace:*",
-    "@ant-design/icons": "^5.6.0",
-    "@ant-design/nextjs-registry": "^1.0.2",
-    "@ant-design/v5-patch-for-react-19": "^1.0.0",
     "antd": "^5.26.2",
+    "dayjs": "^1.11.19",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"

@@ -15,6 +15,7 @@ interface QuestionsPageProps {
     topic?: string;
     level?: string;
     status?: string;
+    title?: string;
     keyword?: string;
   }>;
 }
@@ -30,7 +31,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
   ]);
   const level = resolvedSearchParams.level?.trim() ?? '';
   const status = resolvedSearchParams.status?.trim() ?? '';
-  const keyword = resolvedSearchParams.keyword?.trim() ?? '';
+  const title = resolvedSearchParams.title?.trim() ?? resolvedSearchParams.keyword?.trim() ?? '';
 
   const whereClauses: Prisma.QuestionBankItemWhereInput[] = [];
   if (tags.length > 0) {
@@ -47,13 +48,9 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
   if (status === 'inactive') {
     whereClauses.push({ isActive: false });
   }
-  if (keyword) {
+  if (title) {
     whereClauses.push({
-      OR: [
-        { title: { contains: keyword, mode: 'insensitive' } },
-        { prompt: { contains: keyword, mode: 'insensitive' } },
-        { answer: { contains: keyword, mode: 'insensitive' } },
-      ],
+      title: { contains: title, mode: 'insensitive' },
     });
   }
 
@@ -82,10 +79,10 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
   return (
     <AdminShell title="题库管理" adminUser={adminUser}>
       <QuestionsFilter
+        title={title}
         tags={tags}
         level={level}
         status={status}
-        keyword={keyword}
         pageSize={pagination.pageSize}
       />
       <QuestionsTableCard rows={data} />
@@ -94,7 +91,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         page={pagination.page}
         pageSize={pagination.pageSize}
         total={total}
-        params={{ tags: tags.length ? tags.join(',') : undefined, level, status, keyword }}
+        params={{ title, tags: tags.length ? tags.join(',') : undefined, level, status }}
         totalLabel="道题目"
       />
     </AdminShell>

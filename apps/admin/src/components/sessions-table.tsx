@@ -11,7 +11,9 @@ export interface SessionRow {
   status: string;
   messageCount: number;
   updatedAt: string;
-  userEmail: string;
+  actorId: string;
+  actorLabel: string;
+  actorType: 'guest' | 'registered';
 }
 
 interface SessionsTableProps {
@@ -30,7 +32,18 @@ export function SessionsTable({ rows }: SessionsTableProps) {
         </Typography.Text>
       ),
     },
-    { title: '用户', dataIndex: 'userEmail', key: 'userEmail' },
+    {
+      title: '用户',
+      key: 'actorLabel',
+      render: (_, record) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>{record.actorLabel}</span>
+          <Tag color={record.actorType === 'guest' ? 'default' : 'blue'}>
+            {record.actorType === 'guest' ? '访客' : '注册用户'}
+          </Tag>
+        </div>
+      ),
+    },
     {
       title: '标题',
       dataIndex: 'title',

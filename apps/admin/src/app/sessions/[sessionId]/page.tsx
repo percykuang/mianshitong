@@ -66,7 +66,10 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
   const session = sessionId
     ? await prisma.chatSessionRecord.findUnique({
         where: { id: sessionId },
-        include: { user: { select: { email: true } } },
+        include: {
+          user: { select: { email: true } },
+          actor: { select: { id: true, type: true, displayName: true } },
+        },
       })
     : null;
 
@@ -87,7 +90,9 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
         session={{
           id: session.id,
           title: session.title,
-          userEmail: session.user.email,
+          actorId: session.actor.id,
+          actorLabel: session.user?.email ?? session.actor.displayName,
+          actorType: session.actor.type,
           modelId: session.modelId,
           status: session.status,
           createdAt: formatDateTime(session.createdAt),

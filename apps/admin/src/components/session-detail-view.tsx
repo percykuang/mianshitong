@@ -10,7 +10,9 @@ import { SessionReportTraceCard } from '@/components/session-report-trace-card';
 interface SessionMeta {
   id: string;
   title: string;
-  userEmail: string;
+  actorId: string;
+  actorLabel: string;
+  actorType: 'guest' | 'registered';
   modelId: string;
   status: string;
   createdAt: string;
@@ -81,7 +83,17 @@ export function SessionDetailView({ session, messages, runtime }: SessionDetailV
           styles={{ label: { width: 100 } }}
           items={[
             { key: 'id', label: '会话 ID', children: session.id },
-            { key: 'userEmail', label: '用户', children: session.userEmail },
+            { key: 'actorId', label: '身份 ID', children: session.actorId },
+            { key: 'actorLabel', label: '用户', children: session.actorLabel },
+            {
+              key: 'actorType',
+              label: '身份类型',
+              children: (
+                <Tag color={session.actorType === 'guest' ? 'default' : 'blue'}>
+                  {session.actorType === 'guest' ? '访客' : '注册用户'}
+                </Tag>
+              ),
+            },
             { key: 'title', label: '标题', children: session.title || '未命名' },
             { key: 'modelId', label: '模型', children: session.modelId },
             { key: 'status', label: '状态', children: session.status },
