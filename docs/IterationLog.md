@@ -7,6 +7,1328 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 4.88（2026-03-26）：抽离 Admin Trace 视图共享展示 helper
+
+### 目标
+
+- 收口 Admin 会话详情页三张 Trace 卡片中的重复展示逻辑，减少重复维护成本。
+- 在不改动数据流和页面结构的前提下，抽出共享的“难度格式化 / 标签列表 / 空态卡片”能力。
+
+### 主要改动
+
+- 新增共享组件：
+  - `apps/admin/src/components/session-trace-shared.tsx`
+- 抽出的共享能力：
+  - `formatInterviewLevel`
+  - `renderTraceTagList`
+  - `renderTraceNamedTagList`
+  - `TraceEmptyCard`
+- 应用到以下组件：
+  - `apps/admin/src/components/session-planning-trace-card.tsx`
+  - `apps/admin/src/components/session-execution-trace-card.tsx`
+  - `apps/admin/src/components/session-report-trace-card.tsx`
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 无 UI 行为变更，仅重复展示逻辑抽离。
+
+### 验证
+
+- 定向校验通过：
+  - 共享组件与三张 Trace 卡片的 ESLint
+  - `apps/admin` TypeScript 检查
+
+### 下一步
+
+- 三张 Trace 卡片当前仍然偏大，但这轮已经先把最稳定的共享展示层抽出；后续如果继续拆，建议优先抽“折叠面板项构建函数”，而不是把 JSX 结构切得太碎。
+
+## Iteration 4.86（2026-03-26）：清理临时文件，并拆分 chat-composer 组件
+
+### 目标
+
+- 在不影响现有功能和 UI 的前提下，做一轮低风险代码整理，降低聊天输入区组件的维护成本。
+- 清理由本地 UI 对齐调试留下的无用截图文件，避免工作区继续堆积临时产物。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 将原本混在主组件中的“快捷问题网格”和“额度按钮/弹层”拆出。
+  - 主文件从 `288` 行收敛到 `173` 行，仅保留输入区主流程和表单交互。
+- 新增：
+  - `apps/web/src/app/chat/components/chat-composer-quick-prompts.tsx`
+  - `apps/web/src/app/chat/components/chat-composer-usage.tsx`
+- 删除本地临时截图产物：
+  - 多个 `chat-* / current-* / reference-* / 基线对照-* / mianshitong-*` 调试 PNG
+  - 这些文件不参与运行时、测试和文档引用
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 无 UI 行为变更，属于纯结构整理与临时文件清理。
+
+### 验证
+
+- `chat-composer` 拆分后的三个文件均通过独立 ESLint 校验。
+- 后续将继续以完整项目检查作为提交前基线。
+
+### 下一步
+
+- 当前不继续硬拆 `use-chat-controller.ts`，因为它已经通过 `actions / effects / store / navigation / storage` 分层；再拆的收益暂时低于回归风险。
+
+## Iteration 4.87（2026-03-26）：拆分 chat-general-policy 服务端策略模块
+
+### 目标
+
+- 将 Web 端普通聊天策略文件 `chat-general-policy.ts` 从超大单文件拆成按职责分层的多个纯模块。
+- 在不改变现有行为的前提下，让“意图识别、prompt 指令、few-shot 示例、fallback 回复、Markdown 清理、类型定义”边界更清晰。
+
+### 主要改动
+
+- 新增策略模块：
+  - `apps/web/src/lib/server/chat-general-policy.types.ts`
+  - `apps/web/src/lib/server/chat-general-policy.constants.ts`
+  - `apps/web/src/lib/server/chat-general-policy-intent.ts`
+  - `apps/web/src/lib/server/chat-general-policy-instruction.ts`
+  - `apps/web/src/lib/server/chat-general-policy-examples.ts`
+  - `apps/web/src/lib/server/chat-general-policy-fallback.ts`
+  - `apps/web/src/lib/server/chat-general-policy-format.ts`
+  - `apps/web/src/lib/server/chat-general-policy-prompt.ts`
+- 原入口文件：
+  - `apps/web/src/lib/server/chat-general-policy.ts`
+  - 现仅作为统一出口保留，负责 re-export，主文件体量已从超大单文件收口到 `15` 行。
+- 这次拆分后的职责边界：
+  - `intent`：意图识别与算术格式化
+  - `instruction`：system 指令生成
+  - `examples`：few-shot 示例
+  - `prompt`：将指令/示例拼装进消息列表
+  - `fallback`：兜底回复
+  - `format`：Markdown 分割线清理
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 对外导出保持兼容，现有调用方无需改动 import 路径。
+
+### 验证
+
+- 定向测试通过：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - `apps/web/src/lib/server/chat-response-format.test.ts`
+- 新模块通过独立 ESLint 校验。
+
+### 下一步
+
+- `chat-general-policy-examples.ts` 目前仍略大，但其主体是 few-shot 数据，不属于高耦合逻辑；当前不再为了“低于 200 行”机械拆分，避免把示例数据切得过碎。
+
+## Iteration 4.83（2026-03-26）：将聊天页“回到底部”按钮位置对齐到既定产品基线
+
+### 目标
+
+- 修正聊天页长会话场景里“回到底部”按钮的垂直位置，使其贴近 footer 上沿，而不是悬在消息区中部。
+
+### 主要改动
+
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 将“回到底部”按钮容器的底部偏移从大额 `pb-46/md:pb-42` 收敛为 `pb-4`。
+  - 保留按钮的居中挂载方式、显隐逻辑和三段式骨架，不改动消息滚动模型。
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 仅聊天页“回到底部”按钮的视觉定位调整。
+
+### 验证
+
+- Playwright 对比参考页后确认：
+  - 当前按钮底边到 footer 顶边间距为 `16px`；
+  - 与既定产品基线实测间距一致。
+
+### 下一步
+
+- 如果后续继续收口聊天页细节，应继续通过实际坐标和滚动行为对比，不要再用经验值去猜按钮偏移。
+
+## Iteration 4.84（2026-03-26）：为聊天消息列补齐底部显式 spacer
+
+### 目标
+
+- 让聊天区底部留白协议与既定产品基线保持一致，不再只依赖外层布局，而是在消息列末尾显式插入一个固定高度占位块。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 在消息列末尾新增一个 `24px` 高宽的 shrink spacer（代码采用 canonical Tailwind 写法 `min-h-6 min-w-6 shrink-0`）。
+  - 该 spacer 位于所有消息节点之后，作为消息区与输入区之间的稳定底部留白。
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 仅聊天消息列底部留白结构调整。
+
+### 验证
+
+- Playwright 复核确认：
+  - 本地消息列最后一个子节点已为 `24px` 的 shrink spacer；
+  - 结构和参考页一致。
+
+### 下一步
+
+- 如果后续继续调整输入区高度或 footer 间距，优先保留这类显式 spacer 协议，而不是把底部留白重新散落到多处 `padding-bottom`。
+
+## Iteration 4.85（2026-03-26）：修正用户长消息气泡被横向撑满的问题
+
+### 目标
+
+- 修复用户发送长文本时，气泡被横向拉宽、文本像整行右对齐铺开的布局问题。
+- 让用户气泡恢复为“整体右对齐，但气泡本身按最大宽度自然收缩，文本在气泡内正常换行”。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 用户消息外层容器改为 `ml-auto + items-end + sm:max-w-[80%]`，由容器承担右对齐与最大宽度约束。
+  - 用户消息气泡去掉 `w-fit + text-right` 组合，改为 `max-w-full + self-end + text-left`。
+  - 用户消息正文继续沿用项目内统一的 `wrap-break-word` 换行策略，避免超长词片段把气泡再次撑开。
+- `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - 新增长用户消息 DOM 回归测试，锁定：
+    - 气泡本身 `self-end`
+    - 文本左对齐
+    - 外层使用 `items-end`
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 仅用户消息气泡的宽度与文本排版策略调整。
+
+### 验证
+
+- 组件测试通过：
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+
+### 下一步
+
+- 如果后续继续对齐聊天页视觉细节，用户气泡这层应继续遵守“容器负责右对齐，气泡负责自然收缩”的分工，不要再把 `fit-content` 和右对齐文本混在同一层。
+
+## Iteration 4.82（2026-03-26）：将聊天页重构回严格的上中下三段式骨架
+
+### 目标
+
+- 按最新产品要求，把聊天页从“页面整体滚动 + 固定底栏浮层”改回“header / 可滚动消息区 / footer”三段式骨架。
+- 让布局协议重新与既定产品交互基线对齐：页面本身不滚，中间消息区独立滚动，footer 在布局流中承载输入框。
+
+### 主要改动
+
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 移除整页滚动和 `fixed` footer 方案。
+  - 主内容区改为 `h-dvh + flex-col + overflow-hidden`。
+  - 中间消息区维持 `relative flex-1 min-h-0`，footer 改为布局流里的 `sticky bottom-0` 区块。
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 消息列表改回独立滚动容器：`absolute inset-0 overflow-y-auto`。
+  - 移除旧的底部安全区 spacer 协议。
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 去掉内部的宽度外壳，由父级 footer 统一承担宽度与定位。
+- `apps/web/src/app/chat/components/chat-header.tsx`
+  - header 改为固定高度的普通布局行，不再使用页面级 sticky。
+- `apps/web/src/app/chat/components/chat-conversation-transition.tsx`
+  - 过渡态同步切换为消息区内部滚动协议，避免切换会话时布局断层。
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 聊天页滚动模型从“浏览器页面滚动”切换回“中间消息区滚动”。
+
+### 验证
+
+- Playwright 复核确认：
+  - 空态下页面为标准上中下布局。
+  - footer 不再是脱离布局流的全局 `fixed` 浮层。
+  - 中间消息区存在独立的 `overflow-y-auto` 滚动容器，页面整体高度保持在视口内。
+
+### 下一步
+
+- 后续聊天页若继续调视觉细节，应优先在这套三段式骨架上做样式收口，不要再把滚动责任切回浏览器页面。
+
+## Iteration 4.80（2026-03-26）：收敛聊天表格冗余操作，并延后 AI 消息反馈入口显示时机
+
+### 目标
+
+- 移除聊天表格顶部的复制/下载按钮，减少无必要的操作噪音。
+- 修复 AI 流式生成过程中，复制/点赞/点踩按钮过早出现的交互问题。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-table-block.tsx`
+  - 删除表格顶部的复制与下载操作区，仅保留表格容器和横向滚动能力。
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 为最后一条正在流式生成的 assistant 消息补充 `isStreaming` 判定并下发给消息项。
+- `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 将 assistant 消息动作区显示条件从“非 loading”收紧为“非 loading、非编辑、非流式生成中”。
+- `apps/web/src/app/chat/components/chat-table-block.dom.test.tsx`
+  - 调整为校验表格正常渲染且不再出现复制/下载按钮。
+- `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - 新增 DOM 回归测试，覆盖：
+    - assistant 消息生成中不显示复制/反馈按钮
+    - assistant 消息生成完成后才显示复制/反馈按钮
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 聊天表格交互从“可复制/下载”收敛为纯展示。
+
+### 验证
+
+- 组件测试通过：
+  - `chat-table-block.dom.test.tsx`
+  - `chat-message-item.dom.test.tsx`
+
+### 下一步
+
+- 若后续确实需要导出能力，建议优先做“整条回答复制”或“代码块局部复制”，不要把表格单独导出入口重新塞回主阅读流中。
+
+## Iteration 4.81（2026-03-26）：修复历史会话切换后未自动定位到底部的问题
+
+### 目标
+
+- 修复从 `/chat` 空页直接点击历史会话时，长会话不会自动滚动到最新消息位置的问题。
+- 同时覆盖“远端会话异步加载完成后再渲染”和“已缓存会话立即切换”两类链路。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-auto-scroll.ts`
+  - 为“会话切换后的首次滚底”新增显式待执行状态，不再只依赖一次性的 session change effect。
+  - 当会话真正可见后，会通过“立即执行 + 双 `requestAnimationFrame` + 短延时补滚”的方式连续尝试滚到底部，避免被异步渲染、固定底栏测量或后续 DOM 高度变化覆盖。
+  - 原有发送消息、普通流式追踪、用户手动脱离底部等逻辑保持不变。
+- `apps/web/src/app/chat/hooks/use-auto-scroll.dom.test.ts`
+  - 新增 DOM 回归测试，覆盖：
+    - 远端会话加载完成后自动滚到底部
+    - 直接切到已缓存会话时自动滚到底部
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 仅聊天页会话切换后的滚动时机增强。
+
+### 验证
+
+- Hook DOM 测试通过：
+  - `use-auto-scroll.dom.test.ts`
+
+### 下一步
+
+- 后续如果聊天页继续引入图片、富媒体卡片或更复杂的异步块级内容，优先沿用这条“会话切换待执行滚底 + 多阶段补滚”策略，不要把滚动职责分散到页面层。
+
+## Iteration 4.79（2026-03-26）：聊天消息区改为按底栏真实高度预留安全区
+
+### 目标
+
+- 修复聊天页长会话场景下“最后一段消息被底部输入区遮住”的回归问题。
+- 保留浏览器右侧滚动条，不回退到内部滚动容器，也不再依赖固定 `pb-*` 常量猜测底部留白。
+
+### 主要改动
+
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 为底部固定输入区增加真实高度测量，使用 `useLayoutEffect + ResizeObserver` 监听高度变化。
+  - 将测量到的底栏高度加上额外安全间距后，下发给消息列表作为底部安全区。
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 移除消息列固定底部 padding。
+  - 改为在消息列表底部追加动态 spacer，保证最后一条消息、反馈按钮等内容不会被输入区覆盖。
+- `apps/web/src/app/chat/components/chat-layout.ts`
+  - 将消息列基础布局与底部安全区常量拆开，保留 SSR 首屏 fallback 高度，避免首屏闪动过大。
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 仅聊天页消息区与底栏的布局协作方式调整。
+
+### 验证
+
+- Playwright 实测确认：
+  - 长会话滚到底部后，最后一条消息不再被输入区遮挡。
+  - 输入区仍固定在视口底部，浏览器右侧滚动条继续生效。
+  - 与既定交互基线相比，最后一条消息与输入区之间保留了稳定安全间距。
+
+### 下一步
+
+- 后续如果继续调输入区样式或加入新提示条，应继续沿用“测量底栏真实高度 -> 同步消息区安全区”的方式，不要再回到固定 `padding-bottom`。
+
+## Iteration 4.78（2026-03-26）：将聊天输入区固定到底部，兼容浏览器级滚动
+
+### 目标
+
+- 继续修复聊天页输入区在长内容场景下被正文流挤出视口的问题。
+- 保留浏览器右侧滚动条，不退回到内部消息容器滚动。
+
+### 主要改动
+
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 将输入区外层从 `sticky` 收敛为 `fixed bottom-0`
+  - 根据侧边栏状态增加桌面端左侧偏移，避免固定输入区压到侧边栏
+- `apps/web/src/app/chat/components/chat-layout.ts`
+  - 为消息列增加额外底部留白，避免最后一条消息被底部固定输入区遮挡
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 仅聊天页底部输入区定位策略调整。
+
+### 验证
+
+- Playwright 实测确认：
+  - 空会话下输入框在首屏可见
+  - 人工拉高消息区内容并滚动页面后，输入框仍保持在视口底部可见
+  - `document.body.scrollHeight` 仍正常增长，浏览器右侧滚动条继续生效
+
+### 下一步
+
+- 后续如需再调聊天页 UI，应继续避免改动滚动骨架；输入区、额度入口、快捷提示等能力优先在固定底栏内部做增量调整。
+
+## Iteration 4.77（2026-03-26）：恢复聊天页稳定布局，撤销内部滚动回归
+
+### 目标
+
+- 修复聊天页最近一轮样式调整后出现的两个回归：
+  - 输入框区域观感被破坏
+  - 聊天内容重新退化成内部滚动，而不是浏览器右侧滚动条
+
+### 主要改动
+
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 移除会锁死页面高度的 `overflow-hidden`
+  - 将主内容容器从 `h-dvh` 改回 `min-h-svh`，允许页面高度随消息内容自然增长
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 移除消息区 `overflow-y-auto`，不再把聊天列表作为内部滚动容器
+- `apps/web/src/app/chat/components/chat-conversation-transition.tsx`
+  - 同步移除过渡态内部滚动，避免切会话时布局协议不一致
+- `apps/web/src/app/chat/hooks/use-auto-scroll.ts`
+  - 自动滚底逻辑从“仅支持内部容器滚动”改为“优先容器、否则退回浏览器页面滚动”
+  - 保留原有回到底部与发送时自动滚底行为
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 恢复输入框表单的稳定尺寸和内边距
+  - 保留额度按钮，但不再用更激进的表单布局改动去挤压输入区
+
+### 迁移/破坏性变更
+
+- 无数据库变更。
+- 无 API 协议变更。
+- 仅聊天页布局与滚动策略修复。
+
+### 验证
+
+- Playwright 实测确认：
+  - 输入框重新稳定可见
+  - 聊天消息区不再存在独立的 `overflow-y-auto` 滚动容器
+  - 临时拉高内容后，`document.body.scrollHeight` 可正常超过视口高度，由浏览器右侧滚动条接管滚动
+
+### 下一步
+
+- 后续聊天页的 UI 增强，应尽量避免继续改动页面骨架；优先通过独立子组件增强能力，减少再次把滚动和输入区布局带坏。
+
+## Iteration 4.76（2026-03-26）：聊天表格补齐复制/下载操作，并收敛首列宽度
+
+### 目标
+
+- 让聊天区 Markdown 表格具备“复制表格/下载表格”操作，补齐与既定交互基线一致的可操作性。
+- 解决表格首列视觉过宽问题，避免第一列挤占可读空间。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-table-block.tsx`
+  - 新增独立表格渲染组件，统一承接：
+    - 表格容器结构（操作区 + 横向滚动区）
+    - 复制表格（复制 Markdown）
+    - 下载表格（导出 `table.md`）
+  - 按钮状态支持短暂反馈（`已复制表格` / `已下载表格`）。
+- `apps/web/src/app/chat/components/chat-markdown.tsx`
+  - 将 `react-markdown` 的 `table/thead/tbody/tr/th/td` 渲染切换为自定义组件映射。
+  - 表格布局调整为固定列布局，并给首列增加 `22%` 宽度约束，缓解首列过宽。
+  - 移除旧的全局 `[&_table]` 选择器样式，改为标签级渲染样式，减少样式冲突。
+- `apps/web/src/app/chat/components/chat-table-block.dom.test.tsx`
+  - 新增 DOM 回归测试，覆盖：
+    - 复制/下载按钮存在性
+    - 复制动作写入剪贴板
+    - 下载动作触发文件导出
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无 API 协议变更。
+- 仅聊天区表格渲染与交互增强。
+
+### 验证
+
+- 组件测试：`chat-table-block.dom.test.tsx` 通过。
+- Playwright 实测：
+  - 表格操作按钮可见并可点击，下载实际触发 `table.md` 导出。
+  - 复制按钮可进入“已复制表格”状态。
+  - 首列表头宽度占比约 `0.22`，不再出现首列明显偏宽。
+
+### 下一步
+
+- 若后续要进一步贴近基线，可继续补“表格 hover/焦点态细节”和“复杂长表格滚动阴影提示”。
+
+## Iteration 4.75（2026-03-26）：修复 Markdown 标题与表格在聊天区“可渲染但不可读”的样式问题
+
+### 目标
+
+- 解决技术问答内容里 `h2/h3` 与对比表格“结构已渲染但视觉层级不明显”的问题。
+- 让聊天区 Markdown 呈现和既定产品交互基线在标题层级、表格边框与单元格间距上保持一致。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-markdown.tsx`
+  - 为 Markdown 容器补齐标题样式：
+    - `h2`: `24px / 600 / mt-6 / mb-2`
+    - `h3`: `20px / 600 / mt-6 / mb-2`
+    - 同时补齐 `h1/h4` 的层级样式，避免模型偶发输出时退回默认样式。
+  - 补齐表格样式：
+    - `table` 增加边框、折叠布局和间距
+    - `th/td` 增加 `8px 16px` 内边距
+    - `thead/tr` 增加背景与分隔线
+  - 同步补充 `blockquote/li` 的基础可读性样式，保证技术回答中的引用和列表层次稳定可见。
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无 API 协议变更。
+- 仅聊天消息 Markdown 呈现样式变化，不影响消息内容与存储结构。
+
+### 验证
+
+- 使用 Playwright 对比本地与既定产品交互基线同题回答的计算样式：
+  - `h2` 从 `14px/400` 修复为 `24px/600`
+  - `table` 边框恢复可见
+  - `th/td` 内边距恢复为 `8px 16px`
+- 验证后本地消息中 `h2`、表格已经达到目标视觉层级，可直接识别结构。
+
+### 下一步
+
+- 若后续还需继续贴近交互基线，可再补“表格暗色主题细节（行 hover / 分隔线对比度）”和“代码块与正文行距统一性”。
+
+## Iteration 4.74（2026-03-26）：为普通技术问答补齐结构化意图与分层输出
+
+### 目标
+
+- 解决 Web 端普通技术问答“格式偏平、标题层级弱、面试导向不足”的问题。
+- 让技术解释类问题更稳定地输出 `H2/H3 + 示例 + 常见追问/误区 + 收口引导`，而不是继续被通用聊天策略压平成短段落。
+
+### 主要改动
+
+- `apps/web/src/lib/server/chat-general-policy.ts`
+  - 为普通聊天新增 `technical_question` 意图，并细分三种技术问答风格：
+    - `concept`
+    - `mechanism`
+    - `comparison`
+  - 新增低成本规则识别，当前可识别：
+    - 概念题，如 `JS闭包是什么`
+    - 机制题，如 `事件循环是什么`
+    - 对比题，如 `React useMemo 和 useCallback 的区别`
+  - 调整全局系统策略：
+    - 普通闲聊仍保持轻量排版
+    - 技术问答允许使用必要的二、三级标题
+    - 明确禁止 H1、emoji 标题、Markdown 分割线和 mermaid 图
+  - 为技术问答新增专属 system instruction 与最小 few-shot，明确要求按以下结构回答：
+    - 概念题：`定义 / 核心特点 / 示例 / 常见误区或面试追问 / 一句话总结`
+    - 机制题：`核心结论 / 执行流程或工作原理 / 示例 / 常见追问 / 面试回答建议`
+    - 对比题：`一句话区别 / 核心差异 / 什么时候用 / 示例 / 面试里怎么回答`
+  - 新增技术问答失败兜底文案，保证模型主链路不可用时仍能给出结构化引导，而不是直接退回报错或泛泛回复。
+- `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - 新增技术问答意图识别测试
+  - 新增技术问答专属 instruction / few-shot 注入测试
+  - 新增技术问答兜底回复结构测试
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无 API 协议字段变更。
+- 普通聊天中的“技术解释类问题”回复风格已变化，后续如果要继续调优，应优先改技术意图 prompt 和 few-shot，而不是重新加重全局聊天策略。
+
+### 验证
+
+- 已通过 `vitest` 验证技术问答意图识别、结构化指令注入与兜底回复。
+- 已使用 Playwright 本地抽查真实页面，确认：
+  - `React useMemo 和 useCallback 的区别` 现会输出 `H2` 级标题、示例和常见误区/面试追问
+  - `事件循环是什么` 现会输出 `核心结论 / 执行流程 / 示例 / 常见追问 / 面试回答建议`
+  - 输出中未再出现本轮重点规避的分割线与 emoji 标题
+
+### 下一步
+
+- 如果后续还要继续对齐更成熟的技术助手体验，优先补“技术追问链路”和“技术题回答版本切换（简版 / 面试版 / 实战版）”，不要继续用全局 prompt 去硬压所有普通聊天。
+
+## Iteration 4.73（2026-03-26）：补齐 Web 端高频入口的真实 AI 主路径 E2E 防回归
+
+### 目标
+
+- 补一条浏览器级回归测试，明确卡住“高频入口必须走真实 AI 主路径，不能退化回固定模板兜底”。
+- 顺手把 Web 端旧的 IndexedDB 游客伪链路 E2E 辅助函数迁到当前真实服务端会话接口。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - 新增仅供测试环境使用的 `mock` 流式 provider
+  - 当 `LLM_PROVIDER=mock` 时，普通聊天主路径会返回基于用户最后一条消息生成的流式内容，避免 E2E 再依赖浏览器层伪造聊天接口
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - 新增 `mock` provider 回归测试，确保它能稳定输出基于用户消息的流式回复
+- `playwright.config.ts`
+  - Web E2E 启动 `pnpm dev:web` 时，显式注入 `LLM_PROVIDER=mock`
+  - 让浏览器测试命中真实页面、真实服务端路由，但不会依赖外部模型服务
+- `apps/web/e2e/support/chat-e2e-fixtures.ts`
+  - 删除旧的 IndexedDB 造会话 helper
+  - 改为通过 `Page.request` 直接调用 `/api/chat/sessions` 与 `/api/chat/sessions/:id/messages/stream` 创建真实远端会话
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 首条 smoke 现会同时断言：
+    - 预设问题点击后确实请求了真实流式接口
+    - 请求体包含正确的 `content / modelId`
+    - 页面最终展示的是 `mock` provider 输出，而不是简历优化兜底模板
+  - 其余会话切换、删除、复制、点赞/点踩用例也统一迁到真实服务端会话数据
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无线上运行逻辑变更。
+- `LLM_PROVIDER=mock` 仅在 Playwright Web E2E 的本地测试服务器命令里启用，不会影响正常开发和生产环境。
+
+### 验证
+
+- 新增单元测试覆盖 `mock` stream provider。
+- Web E2E smoke 已改为走当前真实会话接口，而不是旧游客本地存储链路。
+
+### 下一步
+
+- 如果后续还要继续加这类产品行为回归，优先沿用“服务端 mock provider + 浏览器真实链路”模式，不要再回退到前端直接 mock 整个聊天接口。
+
+## Iteration 4.71（2026-03-26）：普通聊天改为意图提示词驱动的真实 AI 流式回复
+
+### 目标
+
+- 解决“高频入口像固定模板直吐、打字效果不像真实 AI”的产品割裂问题。
+- 将普通聊天高频入口从“模板主路径”切换为“意图识别 + AI 实时生成”为主，固定模板只保留为兜底。
+
+### 主要改动
+
+- `apps/web/src/lib/server/chat-general-policy.ts`
+  - 新增 `GeneralChatIntent` 结构，统一描述：
+    - 问候语
+    - 简历优化入口
+    - 简单算术轻度跑题
+    - 自我介绍
+    - 项目亮点提炼
+  - 原先直接返回完整模板文案的逻辑，改为：
+    - `resolveGeneralChatIntent()` 负责识别意图
+    - `prependGeneralChatIntentInstruction()` 负责向模型注入意图专属 system 指令
+    - `buildGeneralChatFallbackReply()` 仅在主链路失败时兜底
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - `toChatTurns()` 支持接收普通聊天意图，并把意图专属 system 指令叠加到通用产品策略之前
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 普通聊天不再命中固定模板直出，而是默认走真实模型流式
+  - 若模型主链路在高频入口场景下失败，才退回到模板兜底回复
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - 编辑重答链路同步切到“AI 主路径 + 模板兜底”
+- `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - 回归测试从“模板直出文案”改为验证：
+    - 意图识别
+    - 意图专属 system 指令注入
+    - 兜底回复生成
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无 API 协议字段变更。
+- 普通聊天高频入口的回复来源已变化：
+  - 主路径现在来自真实模型生成
+  - 固定模板仅在主路径不可用时兜底
+
+### 验证
+
+- 已通过外部行为调研确认：
+  - 预置项点击会触发后台聊天接口
+  - 相同问题重复发送时，回复文案存在明显差异
+  - 这更接近“模型生成 + 强意图约束”，而不是单一固定模板
+- 已补充本地单元测试，确保意图识别与兜底逻辑可回归
+
+### 下一步
+
+- 后续如果还要继续贴近成熟产品体验，优先补强“意图专属 few-shot 示例”，而不是继续打磨固定模板的假流式节奏。
+
+## Iteration 4.72（2026-03-26）：为高频意图补充最小 few-shot 示例
+
+### 目标
+
+- 在普通聊天已切回真实 AI 流式的基础上，继续收紧高频入口回复的稳定性。
+- 用最小 token 成本为高频意图补充 few-shot，减少模型回复风格漂移。
+
+### 主要改动
+
+- `apps/web/src/lib/server/chat-general-policy.ts`
+  - 为以下意图各补充 1 组最小 few-shot：
+    - 问候语
+    - 简历优化入口
+    - 简单算术轻度跑题
+    - 自我介绍
+    - 项目亮点提炼
+  - few-shot 与意图专属 system 指令共同注入到普通聊天上下文中
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - 调整普通聊天上下文拼接顺序，明确为：
+    - 通用系统策略
+    - 意图专属 system 指令
+    - few-shot 示例
+    - 历史消息
+- `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - 新增 few-shot 注入断言，防止后续被改回只剩 system 指令
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无 API 协议字段变更。
+- 普通聊天高频入口的上下文 token 数会小幅增加，但换来更稳定的产品风格。
+
+### 验证
+
+- 已补充单元测试，验证意图 system 指令和对应 few-shot 会一起注入上下文。
+
+### 下一步
+
+- 若后续还要继续增强普通聊天稳定性，建议优先微调 few-shot 内容本身，而不是继续无上限堆 system prompt。
+
+## Iteration 4.69（2026-03-26）：清理仓库中的具体竞品名称痕迹
+
+### 目标
+
+- 清理仓库内直接出现的具体竞品名称，避免在文档、词典或临时素材中暴露对照来源。
+- 保留必要的设计演进信息，但将表述统一收口为中性的“既定产品基线 / 既定产品交互基线”。
+
+### 主要改动
+
+- `docs/ProjectContext.md`
+  - 将历史记录中的具体竞品名称替换为中性基线表述
+- `docs/IterationLog.md`
+  - 同步替换迭代记录中的具体竞品名称与直接链接
+- `cspell.json`
+  - 移除不再需要的竞品专有词
+- 删除 3 张本地临时参考截图。
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无运行时代码逻辑变更。
+- 仅清理仓库文字痕迹与临时素材。
+
+### 验证
+
+- 已全仓搜索确认仓库内无已清理的具体竞品名称残留。
+
+### 下一步
+
+- 后续新增文档、截图、测试记录时，继续统一使用中性表述，不再写入具体竞品名称。
+
+## Iteration 4.70（2026-03-26）：让普通聊天模板回复也走流式与额度扣减
+
+### 目标
+
+- 修正普通聊天高频模板回复的产品行为，使其不再表现为“一次性吐出整段固定文案”。
+- 统一用户心智：无论是预置问题、简单算术问题，还是其他普通聊天消息，只要进入回复链路，都应表现为流式输出并计入当日额度。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - 新增模板回复分片工具，将整段文本切成多个 `delta`
+  - 新增模板回复流式发送 helper，带轻量节奏控制，确保前端能看到连续增量输出，而不是单次完整落地
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 普通聊天短路回复改为先扣额度，再走分片 SSE 输出
+  - 若短路回复在真正输出前失败，会回滚当次额度
+  - 若输出过程中中断，则沿用普通流式链路的思路，尽量保留已生成的部分内容
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - 编辑重答链路同步收敛到同一套短路流式与额度逻辑
+- 新增回归测试：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - 覆盖模板回复分片后的无损还原与换行结构保留
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无 API 协议字段变更。
+- 但普通聊天模板回复的运行行为已变化：
+  - 现在会消耗每日额度
+  - 现在会通过多个 `delta` 流式返回
+
+### 验证
+
+- 已通过代码检查确认：
+  - 模板短路分支不再一次性发送完整 `delta`
+  - 模板短路分支已纳入 `consumeChatUsage()` / `rollbackChatUsage()` 口径
+- 已补充纯函数回归测试，防止后续把流式分片退化回单次整包输出
+
+### 下一步
+
+- 如果后续还要继续增强普通聊天的“打字机体感”，优先调节分片节奏和粒度，而不是重新把模板回复塞回前端本地模拟。
+
+## Iteration 4.68（2026-03-26）：继续收紧普通聊天入口模板的产品感
+
+### 目标
+
+- 基于 Playwright 对 `既定产品交互基线` 的真实对照，再把普通聊天里的“问候语”和“自我介绍入口”往产品助手风格收一层。
+- 让首轮回复在“权威感、领域边界、下一步引导”上更接近成熟的 AI 面试产品。
+
+### 主要改动
+
+- `apps/web/src/lib/server/chat-general-policy.ts`
+  - 问候语模板改为更明确的“资深程序员 + 前端 AI 面试官”身份表述
+  - 问候语补充“简历文本直接粘贴即可”的行动引导，减少用户在上传方式上的犹豫
+  - “前端面试时，如何正确的自我介绍”模板改为混合式回复：
+    - 先索取用户的求职状态 / 目标岗位级别 / 年限与技术栈
+    - 再给一版可直接使用的 3 段式通用结构
+- `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - 同步补齐上述模板行为断言，避免回归
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 仅收紧普通聊天高频入口模板文案与引导策略。
+
+### 验证
+
+- 已通过 Playwright 对照验证：
+  - `既定产品交互基线`
+  - `http://127.0.0.1:3000/chat`
+- 重点核对场景：
+  - `你好`
+  - `可以帮我优化简历吗？`
+  - `前端面试时，如何正确的自我介绍`
+  - `1+2等于几？`
+
+### 下一步
+
+- 如果后续还要继续对齐 `既定产品基线`，优先继续补“项目亮点提炼 / 简历改写 / 面试复盘”这几类入口模板，而不是一开始就无限扩 prompt。
+
+## Iteration 4.67（2026-03-26）：引入 Web 端通用回复策略，对齐 既定产品基线 的产品化回答
+
+### 目标
+
+- 收紧 Web 端普通聊天回复的产品风格，让它更像“前端 AI 面试官”，而不是通用聊天机器人。
+- 对齐 `既定产品基线` 在几个高频场景下的观感：
+  - 简历优化入口先索取简历正文
+  - 简单算术题先回答，再轻量回拉到主域
+  - 问候语回复直接介绍能力边界
+  - 尽量不输出横线分割
+
+### 主要改动
+
+- 新增 `apps/web/src/lib/server/chat-general-policy.ts`
+  - 增加普通聊天的系统策略提示词，明确：
+    - 前端面试官 / 简历优化助手角色
+    - 非领域问题的“简答 + 回拉”策略
+    - 缺少简历正文时先索取内容
+    - 禁止使用 Markdown 分割线
+  - 新增高频短路回复能力：
+    - 新会话问候语
+    - 简历优化入口
+    - 简单算术问题
+    - 自我介绍问题
+    - 项目亮点提炼问题
+  - 新增横线分割清洗逻辑，保留代码块内容不受影响
+- `apps/web/src/lib/server/chat-response-format.ts`
+  - 普通聊天的 system prompt 改为接入新的通用回复策略
+  - `normalizeAssistantMarkdown()` 增加对分割线的兜底清理
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 普通聊天链路新增高频模板短路
+  - 命中短路时直接走同一条 SSE 返回流程并落库，不再调用模型
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - 编辑重答链路同步接入高频模板短路
+- 新增回归测试：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - 覆盖问候语、简历优化、算术回拉、自我介绍、项目亮点和分割线清洗
+- 使用 Playwright 对比验证：
+  - `既定产品交互基线`
+  - `http://127.0.0.1:3000/chat`
+  - 已手动确认本地两条关键链路：
+    - `可以帮我优化简历吗？`
+    - `1+2等于几？`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 仅收紧 Web 端普通聊天回复策略与输出风格。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 后续如果还要继续贴近 `既定产品基线`，建议继续补：
+  - 更细的意图分类
+  - 更多高频入口模板
+  - “产品感”专项 eval，而不是只看技术正确性
+
+## Iteration 4.66（2026-03-26）：统一后台筛选按钮为尾部图标交互
+
+### 目标
+
+- 收紧后台列表页筛选按钮样式，让“筛选”按钮本身更统一、更克制。
+- 满足新的交互要求：
+  - 图标放在按钮最后面
+  - 有筛选条件时，hover 尾部筛选图标替换为清空图标
+  - 点击尾部清空图标快速清空条件，同时不丢失按钮主体打开 Drawer 的入口
+
+### 主要改动
+
+- 新增 `apps/admin/src/components/admin-filter-action-button.tsx`
+  - 抽出后台通用筛选按钮组件
+  - 按钮主体始终负责打开 Drawer
+  - 尾部图标默认显示筛选图标
+  - 当存在筛选条件且 hover 时，尾部图标替换为清空图标
+  - 点击尾部清空图标时会阻止冒泡，只执行清空，不会误打开 Drawer
+- `apps/admin/src/components/sessions-filter.tsx`
+  - 替换原先“按钮 + 额外浮层清空按钮”实现
+  - 统一接入新的尾部图标筛选按钮
+- `apps/admin/src/components/questions-filter.tsx`
+  - 同步接入新的尾部图标筛选按钮
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 仅调整 Admin 会话管理页、题库管理页的筛选按钮交互样式。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续用户管理、日志管理等列表页也改成 Drawer 高级筛选，可以直接复用这一按钮组件，避免继续出现样式漂移。
+
+## Iteration 4.65（2026-03-26）：题库管理筛选重构为标题搜索 + Drawer
+
+### 目标
+
+- 让题库管理页与会话管理页保持一致的筛选交互范式，避免列表页顶部继续堆积 inline 表单控件。
+- 明确题库页的主搜索意图为“按标题搜索”，而不是继续混用全文关键词筛选。
+
+### 主要改动
+
+- `apps/admin/src/components/questions-filter.tsx`
+  - 重构为“标题搜索框 + 筛选按钮”布局
+  - 标题搜索改为 `300ms` 防抖实时筛选
+  - 高级筛选统一收进右侧 Drawer
+  - Drawer 中当前支持：
+    - 标签
+    - 难度
+    - 状态
+  - Drawer 右上角关闭图标移除，仅保留“取消 / 确定”和点击蒙层关闭
+  - 在存在筛选条件时，顶部“筛选”按钮 hover 会显示尾部清空图标，可一键清空标题与全部高级筛选
+  - 采用与会话筛选一致的表单同步边界：
+    - `Form initialValues`
+    - Drawer 打开后再 `setFieldsValue`
+- `apps/admin/src/app/questions/page.tsx`
+  - 服务端主查询参数从旧 `keyword` 语义收敛为 `title`
+  - 标题筛选现在只匹配 `QuestionBankItem.title`
+  - 旧 `keyword` / `topic` 仍保留兼容读取，避免历史链接立刻失效
+  - 分页透传新的 `title / tags / level / status` 参数
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 题库管理页的筛选交互从 inline 表单改为“标题搜索 + Drawer 高级筛选”。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续题库维度继续增加，可继续往 Drawer 里扩展，不需要再挤压列表页顶部空间。
+
+## Iteration 4.64（2026-03-26）：修复会话筛选 Drawer 的 Form 告警与 hydration 回归
+
+### 目标
+
+- 修复 Admin 会话管理页在筛选 Drawer 上同时出现的两个前端问题：
+  - `Form.useForm()` 未连接 `Form` 的控制台告警
+  - 为消除告警临时加入 `forceRender` 后导致的 hydration mismatch
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-filter.tsx`
+  - 移除 `Drawer forceRender`
+  - `Form` 改为通过 `initialValues` 提供首次打开时的默认值
+  - 表单值同步逻辑改为“仅在 Drawer 打开后执行 `form.setFieldsValue`”
+  - “清空所有筛选条件”不再在 Drawer 关闭态下直接操作 `form` 实例，避免再次触发未挂载告警
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 仅修正 Admin 会话管理页前端渲染行为。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 当前 Drawer + Form 的同步边界已经稳定；后续如果后台其他页也采用同类“抽屉表单”结构，应沿用“打开后同步值”的模式，而不是优先使用 `forceRender`。
+
+## Iteration 4.63（2026-03-26）：收紧会话筛选 Drawer 关闭入口并补齐一键清空
+
+### 目标
+
+- 去掉会话筛选 Drawer 右上角冗余的关闭图标，统一收口到“取消”按钮和点击蒙层关闭。
+- 在筛选已生效时，为顶部“筛选”按钮补一个更轻量的一键清空入口，减少反复打开 Drawer 还原条件的操作成本。
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-filter.tsx`
+  - `Drawer` 显式设置 `closeIcon={false}`，移除右上角关闭图标
+  - `Drawer` 补充 `forceRender`，避免 `Form.useForm()` 创建的实例在抽屉首次打开前未挂载而触发 Ant Design 控制台告警
+  - “筛选”按钮在存在任意生效条件时，hover 后会在按钮尾部显示清空图标
+  - 点击尾部清空图标后会一次性清空：
+    - 标题搜索
+    - 用户 ID
+    - 用户名 / 邮箱
+    - 用户类型
+    - 会话状态
+    - 更新时间范围
+  - 清空后通过 `router.replace` 回到第一页，避免旧分页参数残留
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 仅调整 Admin 会话管理页筛选交互细节。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如果后续还要继续细化筛选体验，可以再补“快捷时间范围”和“筛选条件摘要”，但当前这一版已经把高频清空动作收口了。
+
+## Iteration 4.62（2026-03-26）：重构会话管理筛选交互为搜索框 + Drawer
+
+### 目标
+
+- 避免会话管理页顶部堆积过多 inline 筛选控件，为后续扩展更多筛选维度预留空间。
+- 按新的交互方案支持：
+  - 标题实时搜索
+  - Drawer 高级筛选
+  - 会话状态筛选
+  - 时间范围筛选
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-filter.tsx`
+  - 重构为“标题搜索框 + 筛选按钮”主布局
+  - 标题搜索改为输入即筛选，使用 `300ms` 防抖，并通过 `router.replace` 避免产生过多历史记录
+  - 点击“筛选”后从右侧打开 Drawer
+  - Drawer header 为左对齐“筛选”
+  - Drawer footer 只保留：
+    - `取消`
+    - `确定`
+  - Drawer 内筛选项改为纵向排列，当前支持：
+    - 用户 ID
+    - 用户名 / 邮箱
+    - 用户类型
+    - 会话状态
+    - 更新时间范围
+  - 新增高级筛选计数，筛选按钮在存在条件时展示 `筛选（N）`
+- `apps/admin/src/app/sessions/page.tsx`
+  - 新增服务端参数解析：
+    - `status`
+    - `updatedFrom`
+    - `updatedTo`
+  - 增加白名单归一化：
+    - `actorType`
+    - `status`
+    - 日期字符串
+  - Prisma 查询新增：
+    - `status` 精确过滤
+    - `updatedAt` 时间范围过滤
+  - 分页透传新增的筛选参数，保证翻页后条件不丢失
+- `apps/admin/package.json`
+  - 显式补充 `dayjs`
+  - 用于稳定处理 antd `RangePicker` 的初始值与提交值
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- Admin 会话管理页的筛选交互从“全部 inline 表单”改为“标题搜索 + Drawer 高级筛选”。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 若后续筛选条件继续增加，可在 Drawer 中继续扩展，而无需再挤压列表页顶部空间；当前结构已经适合作为后台列表页通用筛选范式。
+
+## Iteration 4.61（2026-03-26）：会话管理支持按用户类型筛选
+
+### 目标
+
+- 为 Admin 会话管理页补齐“按用户类型筛选”的能力，支持快速区分访客会话和注册用户会话。
+
+### 主要改动
+
+- `apps/admin/src/components/sessions-filter.tsx`
+  - 新增“用户类型”下拉筛选
+  - 支持：
+    - 全部用户
+    - 访客
+    - 注册用户
+  - 筛选参数会和已有的 `userId / 用户名 / 会话标题` 一起联动提交
+- `apps/admin/src/app/sessions/page.tsx`
+  - 新增 `actorType` 查询参数解析
+  - 增加 `normalizeActorType()`，只接受：
+    - `guest`
+    - `registered`
+  - 服务端 Prisma 查询新增 `actor.type` 过滤条件
+  - 分页组件透传 `actorType`，保证翻页后筛选条件不丢失
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 仅扩展 Admin 会话管理页的筛选参数与查询条件。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如后续需要更强的后台检索能力，可继续补“按会话状态”或“按时间范围”筛选，但当前 MVP 已覆盖最关键的身份维度。
+
+## Iteration 4.60（2026-03-26）：对齐聊天页额度按钮位置与弹层样式
+
+### 目标
+
+- 修正 Web 聊天页“次数查询”入口位置不对的问题。
+- 参考 `既定产品交互基线`，将额度触发器从输入框底部工具栏迁移到输入框右上角，并同步收紧弹层样式。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 新增 `UsageTriggerIcon`
+  - 额度入口从底部工具栏移到输入框右上角
+  - 入口 UI 由百分比 pill 改为 `28x28` 的环形进度按钮
+  - 输入框增加右侧留白，避免文字与额度按钮重叠
+  - 底部工具栏仅保留模型选择器与发送按钮
+  - 额度弹层收紧为更接近参考页的小尺寸卡片：
+    - `align="end"`
+    - `side="top"`
+    - 更轻的圆角、阴影和间距
+  - 环形按钮改为与参考页同结构的双圆 SVG：
+    - 外圈为低透明度底环
+    - 内圈按 `used / max` 比例递进填充
+    - 额度耗尽时整圈填满
+- 使用 Playwright 对比了：
+  - `既定产品交互基线`
+  - `http://127.0.0.1:3000/chat`
+  - 重点校验输入区结构、触发器锚点和弹层相对位置
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口协议变更。
+- 仅调整聊天输入区前端 UI 结构与样式。
+
+### 验证
+
+- 已执行：
+  - Playwright 视觉对比验证
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 若后续还要继续贴近参考产品，可再单独微调输入框圆角、阴影和发送按钮底部留白，但当前结构已经对齐到同一布局语义。
+
+## Iteration 4.59（2026-03-26）：清理游客旧本地会话残留命名与无用模块
+
+### 目标
+
+- 把 Web 聊天链路里最后残留的 `local` 命名从生产代码中移除，避免与当前“服务端匿名身份 + 服务端会话”架构继续冲突。
+- 删除已经没有真实运行价值的 IndexedDB 本地会话模块，降低后续维护噪音。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-session-draft.ts`
+  - 将原 `chat-local-session.ts` 重命名为中性 helper
+  - `createDraftLocalSession` 改为 `createDraftChatSession`
+  - 保留草稿会话构造、消息构造、标题派生、流式上下文转换等测试基线能力
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 乐观创建会话改为依赖 `createDraftChatSession`
+  - 生产链路不再引用任何 `chat-local-*` 文件
+- `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - `buildStoredLocalSession` 改为 `buildStoredChatSession`
+  - 统一当前命名语义，避免继续暗示“本地持久化”
+- 删除已无生产引用、仅服务旧游客本地存储方案的文件：
+  - `apps/web/src/app/chat/lib/chat-local-storage.ts`
+  - `apps/web/src/app/chat/lib/chat-local-storage.test.ts`
+- 同步更新相关单测与测试基线：
+  - `chat-session-draft.test.ts`
+  - `use-chat-controller-actions.dom.test.ts`
+  - `use-chat-delete-actions.dom.test.ts`
+  - `stream-event-handler.test.ts`
+  - `chat-message-mutations.test.ts`
+  - `chat-remote-session-sync.test.ts`
+  - `chat-active-session-store.test.ts`
+  - `chat-session-cache-store.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无线上接口协议变更。
+- 仅删除已废弃的本地 IndexedDB 会话工具与对应测试，当前 Web 聊天功能不再保留任何“游客本地会话持久化”实现。
+
+### 验证
+
+- 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 若后续要补离线模式，应以独立能力重新设计，而不是恢复旧的 `chat-local-*` 会话分支。
+
+## Iteration 4.58（2026-03-26）：统一游客服务端身份与每日额度，并补齐聊天页额度 UI
+
+### 目标
+
+- 解决 Web 端游客会话不入库、Admin 无法查询游客数据、消息调用次数无限制的问题。
+- 将游客链路从“本地 localStorage”收敛为“服务端匿名身份 + 数据库会话 + 每日额度控制”。
+
+### 主要改动
+
+- `packages/db/prisma/schema.prisma`
+  - 新增：
+    - `UserActor`
+    - `DailyUsageCounter`
+    - `UserActorType`
+  - `ChatSessionRecord` 新增 `actorId`
+  - `ChatSessionRecord.userId` 改为可空，支持游客会话
+- `packages/db/prisma/migrations/20260326100000_add_user_actor_and_usage/migration.sql`
+  - 补齐匿名/注册统一 actor 层的数据迁移与历史数据回填
+- `packages/shared`
+  - 新增：
+    - `ActorType`
+    - `ChatUsageSummary`
+- `apps/web`
+  - 新增服务端匿名身份解析：
+    - `apps/web/src/lib/server/chat-actor.ts`
+  - 新增每日额度服务：
+    - `apps/web/src/lib/server/chat-usage.ts`
+  - 注册用户创建时同步创建 `registered` actor
+  - 全量重构 chat session repository 为 `actorId` 语义：
+    - 会话列表
+    - 会话详情
+    - 新建/保存
+    - 编辑截断
+    - 置顶/重命名
+    - 消息反馈
+  - 新增：
+    - `/api/chat/usage`
+  - 现有 chat API 全部改为通过 `getCurrentChatActor({ createGuest: true })` 解析身份
+  - 发送/编辑消息接入每日额度：
+    - 游客 `10 次/天`
+    - 注册用户 `30 次/天`
+  - 旧 `/api/chat/stream` 本地游客接口改为返回 `410 Gone`
+  - 前端 `useChatStorage` 改为统一走服务端会话，不再区分游客本地存储
+  - 聊天输入区新增额度百分比按钮与弹层，样式对齐 `既定产品基线` / `image.png`
+  - 删除已废弃的游客本地运行链路代码：
+    - `use-local-send-message`
+    - `use-local-edit-message`
+    - `chat-local-stream-handler`
+    - `chat-local-message-feedback`
+    - 旧内存态 `chat-store`
+  - 新增额度用尽提示条：
+    - 游客显示登录 / 注册入口
+    - 注册用户显示明日重置提示
+- `apps/admin`
+  - 会话管理与会话详情页改为读取 `actor`
+  - 会话列表可区分：
+    - `访客`
+    - `注册用户`
+  - 游客会话现在可在 Admin 中查看
+
+### 迁移/破坏性变更
+
+- 数据库新增 actor / usage 两张表，并要求 `ChatSessionRecord` 必须关联 `actorId`。
+- Web 端旧游客本地会话不再作为主链路；已有浏览器 localStorage 中的游客会话不会自动迁移到服务端。
+- 本次变更依赖执行数据库迁移：
+  - `pnpm db:up`
+  - `pnpm db:migrate:deploy`
+
+### 验证
+
+- 已执行：
+  - `pnpm db:generate`
+  - `pnpm typecheck`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+### 下一步
+
+- 如需进一步减小维护成本，可继续删除已废弃的本地游客会话 helper / hook / storage 代码。
+
 ## Iteration 4.57（2026-03-23）：将 deploy 切换为可配置镜像仓库，当前优先支持 ACR
 
 ### 目标
@@ -3598,7 +4920,7 @@
 
 - 若后续需要区分“可恢复错误/致命错误”，可在 `notice` 上增加错误等级并扩展 toast 样式。
 
-## Iteration 2.48（2026-03-06）：聊天页对齐 zhitalk（删除交互 + 游客本地存储 + 登录态 DB 存储）
+## Iteration 2.48（2026-03-06）：聊天页对齐 既定产品基线（删除交互 + 游客本地存储 + 登录态 DB 存储）
 
 ### 目标
 
@@ -3634,7 +4956,7 @@
 
 ### 下一步
 
-- 如需更完整对齐 zhitalk，可继续补“删除确认弹窗”和“游客登录后本地会话一键导入账号”。
+- 如需更完整对齐 既定产品基线，可继续补“删除确认弹窗”和“游客登录后本地会话一键导入账号”。
 
 ## Iteration 2.47（2026-03-06）：修复聊天页误显示 system 欢迎语
 
@@ -3829,11 +5151,11 @@
 
 - 若你本机浏览器仍提示 hydration mismatch，建议提供完整报错堆栈（含组件路径），我会继续定点清理其余触发源。
 
-## Iteration 2.40（2026-03-06）：对齐 zhitalk 的注册/登录闭环并修复本地会话漂移
+## Iteration 2.40（2026-03-06）：对齐 既定产品基线 的注册/登录闭环并修复本地会话漂移
 
 ### 目标
 
-- 参考 `zhitalk.chat` 落地 Email + Password 的注册/登录/退出流程，并保证本地开发（`127.0.0.1`）会话稳定。
+- 参考 `既定产品基线` 落地 Email + Password 的注册/登录/退出流程，并保证本地开发（`127.0.0.1`）会话稳定。
 
 ### 主要改动
 
@@ -4981,7 +6303,7 @@
 
 ### 目标
 
-- 把聊天页自动滚动行为向 `zhitalk.chat` 对齐，避免流式生成时抢走用户滚动控制权。
+- 把聊天页自动滚动行为向 `既定产品基线` 对齐，避免流式生成时抢走用户滚动控制权。
 
 ### 主要改动
 
@@ -5001,7 +6323,7 @@
 
 ### 目标
 
-- 继续向 `zhitalk.chat` 收口，补充离底状态下的“回到底部”按钮。
+- 继续向 `既定产品基线` 收口，补充离底状态下的“回到底部”按钮。
 
 ### 主要改动
 
@@ -5046,7 +6368,7 @@
 ### 主要改动
 
 - 聊天页提交消息时不再只依赖 `use-auto-scroll` 的被动 effect，而是在用户点击发送或点击预设问题时主动执行一次 `scrollToBottom`，确保长会话离底发送时会立刻跳到最新消息区域。
-- 将“回到底部”按钮改为相对输入区定位，使其位置更接近 `zhitalk.chat` 的“底部居中、悬浮于输入框上方”样式。
+- 将“回到底部”按钮改为相对输入区定位，使其位置更接近 `既定产品基线` 的“底部居中、悬浮于输入框上方”样式。
 - 本地用 Playwright 复测：发送前将会话区滚到顶部后再发送，发送瞬间已能直接滚到底部。
 
 ### 迁移/破坏性变更
@@ -5310,16 +6632,16 @@
 
 - 如果后续需要进一步贴近生产效果，建议直接补一套 `LLM_PROVIDER=deepseek` 的本地联调配置，并在 UI 上增加当前实际 provider / model 的调试展示。
 
-## Iteration 2.96（2026-03-09）：聊天代码块主题向 ZhiTalk 收口
+## Iteration 2.96（2026-03-09）：聊天代码块主题向 既定产品基线 收口
 
 ### 目标
 
-- 让 AI 回复中的代码块背景色、边框与亮暗主题更贴近 `zhitalk.chat` 当前实现。
+- 让 AI 回复中的代码块背景色、边框与亮暗主题更贴近 `既定产品基线` 当前实现。
 
 ### 主要改动
 
 - 新增 `chat-code-theme.ts`，将代码高亮主题从分散的全局 CSS 变量收口为两套固定主题对象。
-- 聊天代码块改为使用更接近 `zhitalk.chat` 的容器结构：`rounded-xl border` 外框、独立头部工具条、代码区顶部单独分隔线。
+- 聊天代码块改为使用更接近 `既定产品基线` 的容器结构：`rounded-xl border` 外框、独立头部工具条、代码区顶部单独分隔线。
 - 亮色主题代码区改为 `#ffffff / #24292e`；暗色主题代码区改为 `#24292e / #e1e4e8`，并同步收紧关键词、字符串、函数名、参数等 token 颜色。
 - 代码块工具按钮改为更轻量的图标按钮视觉，弱化 hover 背景，保留下载与复制能力。
 
@@ -5329,13 +6651,13 @@
 
 ### 下一步
 
-- 如仍需继续逼近 `zhitalk.chat`，下一步可再针对滚动条样式、横向滚动行为与代码字体做像素级微调。
+- 如仍需继续逼近 `既定产品基线`，下一步可再针对滚动条样式、横向滚动行为与代码字体做像素级微调。
 
 ## Iteration 2.97（2026-03-09）：聊天代码块切换到 Shiki GitHub 双主题
 
 ### 目标
 
-- 用现成的 GitHub 系主题替换手写 token 配色，让聊天代码块更稳定地贴近 `zhitalk.chat`，并降低后续维护成本。
+- 用现成的 GitHub 系主题替换手写 token 配色，让聊天代码块更稳定地贴近 `既定产品基线`，并降低后续维护成本。
 
 ### 主要改动
 
@@ -5350,14 +6672,14 @@
 
 ### 下一步
 
-- 如果后续仍需进一步逼近 `zhitalk.chat`，可以继续微调 `github-dark` 与 `github-dark-default / dimmed` 的取舍，或再细调工具条尺寸与间距。
+- 如果后续仍需进一步逼近 `既定产品基线`，可以继续微调 `github-dark` 与 `github-dark-default / dimmed` 的取舍，或再细调工具条尺寸与间距。
 
 ## Iteration 2.98（2026-03-09）：修复 markdown 包裹代码块与继续收口代码块细节
 
 ### 目标
 
 - 修复 AI 回复把真正的 fenced code 包在外层 `markdown` fence 中时，前端显示成“代码里的代码”问题。
-- 继续把聊天代码块的头部按钮和代码区排版向 `zhitalk.chat` 做像素级收口。
+- 继续把聊天代码块的头部按钮和代码区排版向 `既定产品基线` 做像素级收口。
 
 ### 主要改动
 
@@ -5398,7 +6720,7 @@
 - 删除仓库根目录下未被项目引用的临时截图参考文件：
   - `image.png`
   - `image2.png`
-  - `zhitalk-code-block-ref.png`
+  - `既定产品基线-code-block-ref.png`
 
 ### 迁移/破坏性变更
 
@@ -5909,7 +7231,7 @@
 
 ### 目标
 
-- 先按 `zhitalk.chat` 的极简思路补齐 AI 回复的 like/dislike 反馈闭环，仅记录正负反馈，不提前引入点踩原因或后台分析。
+- 先按 `既定产品基线` 的极简思路补齐 AI 回复的 like/dislike 反馈闭环，仅记录正负反馈，不提前引入点踩原因或后台分析。
 
 ### 主要改动
 
@@ -5955,15 +7277,15 @@
   - 后台反馈查询；
   - 模型/场景维度的反馈统计。
 
-## Iteration 3.17（2026-03-09）：对齐 zhitalk 的 like/dislike 可感知反馈
+## Iteration 3.17（2026-03-09）：对齐 既定产品基线 的 like/dislike 可感知反馈
 
 ### 目标
 
-- 修复 AI 回复 like/dislike 点击后“像没反应”的体感问题，并把交互细节向 `zhitalk.chat` 靠拢。
+- 修复 AI 回复 like/dislike 点击后“像没反应”的体感问题，并把交互细节向 `既定产品基线` 靠拢。
 
 ### 主要改动
 
-- 使用 Playwright 对比确认 `zhitalk.chat` 的真实行为：
+- 使用 Playwright 对比确认 `既定产品基线` 的真实行为：
   - 点击后立即出现 toast；
   - 当前选中的按钮进入禁用态；
   - 另一侧按钮仍可点击切换；
@@ -5974,7 +7296,7 @@
   - 点赞提示文案为 `Upvoted Response!`，点踩提示文案为 `Downvoted Response!`。
 - 新增一条页面烟测：
   - 校验 like/dislike 点击后 toast 可见；
-  - 校验按钮禁用/可切换状态与 `zhitalk.chat` 对齐。
+  - 校验按钮禁用/可切换状态与 `既定产品基线` 对齐。
 
 ### 迁移/破坏性变更
 
@@ -6613,7 +7935,7 @@
 
 ### 目标
 
-- 将新建会话时聊天区顶部空态文案“面试通 / AI 智能面试官，优化简历，模拟面试”的样式与呈现方式向 `zhitalk.chat` 对齐。
+- 将新建会话时聊天区顶部空态文案“面试通 / AI 智能面试官，优化简历，模拟面试”的样式与呈现方式向 `既定产品基线` 对齐。
 
 ### 方案对比
 
@@ -6627,7 +7949,7 @@
 - 新增独立空态组件：
   - `apps/web/src/app/chat/components/chat-empty-state.tsx`
 - `chat-message-list.tsx` 改为引用新组件，避免空态样式继续堆在消息列表文件内。
-- 样式对齐 `zhitalk.chat`：
+- 样式对齐 `既定产品基线`：
   - 标题改为 `text-3xl md:text-4xl`、`font-semibold`、`text-blue-600`；
   - 副标题改为 `text-xl md:text-2xl`、`text-zinc-500`、`mt-4`；
   - 容器改为 `max-w-3xl` 的居中布局。
@@ -6647,8 +7969,8 @@
   - `pnpm typecheck`
   - `pnpm test`
 - Playwright 对比结果：
-  - 本地空态标题与 `zhitalk.chat` 均为 `36px / 600 / blue-600`；
-  - 本地空态副标题与 `zhitalk.chat` 均为 `24px / 400 / zinc-500 / mt-4`；
+  - 本地空态标题与 `既定产品基线` 均为 `36px / 600 / blue-600`；
+  - 本地空态副标题与 `既定产品基线` 均为 `24px / 400 / zinc-500 / mt-4`；
   - 本地额外补充了轻量 enter 动画，用于提升新建会话时的进入感。
 
 ### 下一步
@@ -6690,11 +8012,11 @@
 
 - 若你后续还觉得左边界不够贴近，可再单独评估是否要把空态容器的 `max-w-3xl` 或 `px` 再向输入区左边缘收紧。
 
-## Iteration 3.39（2026-03-09）：收敛 AI 回复头像与 loading UI 到 zhitalk.chat 风格
+## Iteration 3.39（2026-03-09）：收敛 AI 回复头像与 loading UI 到 既定产品基线 风格
 
 ### 目标
 
-- 缩小聊天页 AI 回复 UI 与 `zhitalk.chat` 的差异，重点对齐头像尺寸、消息列间距、loading 形态与轻量进场动效。
+- 缩小聊天页 AI 回复 UI 与 `既定产品基线` 的差异，重点对齐头像尺寸、消息列间距、loading 形态与轻量进场动效。
 
 ### 方案对比
 
@@ -6704,17 +8026,17 @@
   - 将 loading 从“思考中 + 点”改为更极简的点阵占位；
   - 只改展示层组件，不动聊天状态流。
 - 方案 2：深度重做 AI 回复整行与流式阶段时序。
-  - 更像 `zhitalk.chat`，但会扩大到消息流时序和显隐逻辑，回归风险更高。
+  - 更像 `既定产品基线`，但会扩大到消息流时序和显隐逻辑，回归风险更高。
 
 ### 主要改动
 
 - 新增 AI 头像组件：
   - `apps/web/src/app/chat/components/chat-assistant-avatar.tsx`
   - 头像外壳改为 `size-8`、`-mt-1`、`ring-1 ring-border`；
-  - 图标尺寸保持约 `14px`，与 `zhitalk.chat` 基线一致。
+  - 图标尺寸保持约 `14px`，与 `既定产品基线` 基线一致。
 - 收敛 AI 消息项展示：
   - `apps/web/src/app/chat/components/chat-message-item.tsx`
-  - AI 消息列间距从原先更松散的本地风格调整为更接近 `zhitalk.chat` 的节奏；
+  - AI 消息列间距从原先更松散的本地风格调整为更接近 `既定产品基线` 的节奏；
   - 为 AI 消息行补充轻量 `fade-in + slide-in` 进入动画。
 - loading UI 收敛：
   - `apps/web/src/app/chat/components/chat-loading-indicator.tsx`
@@ -6724,7 +8046,7 @@
 
 ### 对标结果
 
-- Playwright 读取 `zhitalk.chat` 得到的关键基线：
+- Playwright 读取 `既定产品基线` 得到的关键基线：
   - AI 头像外壳：`32x32`；
   - 头像样式：`-mt-1`、`rounded-full`、`bg-background`、`ring-1 ring-border`；
   - 图标尺寸约 `14px`；
@@ -6748,20 +8070,20 @@
 
 ### 下一步
 
-- 若你后续还要继续向 `zhitalk.chat` 抠细节，可以再单独收敛“AI 回复 action 区的出现时机”和“流式首 token 前的占位表现”，但建议继续保持小步改动。
+- 若你后续还要继续向 `既定产品基线` 抠细节，可以再单独收敛“AI 回复 action 区的出现时机”和“流式首 token 前的占位表现”，但建议继续保持小步改动。
 
 ## Iteration 3.40（2026-03-09）：对齐输入框文案、模型菜单与发送按钮
 
 ### 目标
 
-- 将聊天页输入区的占位文案、模型菜单和发送按钮进一步向 `zhitalk.chat` 对齐。
+- 将聊天页输入区的占位文案、模型菜单和发送按钮进一步向 `既定产品基线` 对齐。
 
 ### 方案对比
 
 - 方案 1（采用）：轻量对齐方案。
   - 修改占位文案；
   - 模型菜单改为顶部弹出，并补齐两行菜单项内容；
-  - 发送按钮收敛到与 `zhitalk.chat` 相同的圆形尺寸和状态表现。
+  - 发送按钮收敛到与 `既定产品基线` 相同的圆形尺寸和状态表现。
 - 方案 2：继续深挖输入区内所有附属元素（上下文百分比、文件按钮等）的全部细节。
   - 缺点：范围扩大，不是这次需求重点。
 
@@ -6776,7 +8098,7 @@
   - `apps/web/src/app/chat/components/chat-composer.tsx`
     - 模型下拉改为 `side="top" + align="start" + position="popper"`，使菜单从顶部弹出；
     - 触发器增加前置图标；
-    - 菜单项改为“两行文案”结构，标题与说明对齐 `zhitalk.chat`。
+    - 菜单项改为“两行文案”结构，标题与说明对齐 `既定产品基线`。
 - 发送按钮：
   - `apps/web/src/components/icons.ts`
     - 新增 `ArrowUp` 图标导出；
@@ -6787,7 +8109,7 @@
 
 ### 对标结果
 
-- Playwright 验证 `zhitalk.chat`：
+- Playwright 验证 `既定产品基线`：
   - 模型菜单位于触发器上方；
   - 菜单宽度不小于 `260px`；
   - 菜单项为两行文本，标题约 `12px medium`，描述约 `10px muted`；
@@ -6811,13 +8133,13 @@
 
 ### 下一步
 
-- 若你后续还要继续和 `zhitalk.chat` 抠细节，可以再单独处理输入区上方的上下文百分比按钮与文件上传按钮，但建议继续小步推进。
+- 若你后续还要继续和 `既定产品基线` 抠细节，可以再单独处理输入区上方的上下文百分比按钮与文件上传按钮，但建议继续小步推进。
 
 ## Iteration 3.41（2026-03-09）：修正模型触发器字号与重复下拉箭头
 
 ### 目标
 
-- 修复输入区模型选择器与 `zhitalk.chat` 仍存在的细节偏差：
+- 修复输入区模型选择器与 `既定产品基线` 仍存在的细节偏差：
   - 文字偏大；
   - 重复出现两个向下箭头；
   - 触发器内部图标与文字节奏不够贴近参考实现。
@@ -6826,11 +8148,11 @@
 
 - `apps/web/src/app/chat/components/chat-composer.tsx`
   - 移除手动添加的 `ChevronDown`，只保留共享 `SelectTrigger` 内置的默认下拉图标；
-  - 将模型名称文案收敛为 `text-xs font-medium`，与 `zhitalk.chat` 基线一致；
+  - 将模型名称文案收敛为 `text-xs font-medium`，与 `既定产品基线` 基线一致；
   - 维持前置图标为 `16px`，并简化触发器内部结构，避免视觉上显得过重。
 - 对标结果：
   - 本地触发器当前为 2 个图标（前置图标 + 默认箭头），不再重复渲染箭头；
-  - 文本字号已与 `zhitalk.chat` 对齐到 `text-xs` 级别。
+  - 文本字号已与 `既定产品基线` 对齐到 `text-xs` 级别。
 
 ### 迁移/破坏性变更
 
@@ -6875,7 +8197,7 @@
 
 ### 目标
 
-- 修复聊天输入区模型选择器在选中/回焦后仍可能出现的粗边框视觉问题，使其与 `zhitalk.chat` 的轻量触发器样式保持一致。
+- 修复聊天输入区模型选择器在选中/回焦后仍可能出现的粗边框视觉问题，使其与 `既定产品基线` 的轻量触发器样式保持一致。
 
 ### 主要改动
 
@@ -6953,7 +8275,7 @@
   - `local-ai-loading.png`
   - `local-ai-loading-2.png`
   - `model-trigger-after-fix.png`
-  - `zhitalk-ai-ui.png`
+  - `既定产品基线-ai-ui.png`
 - `apps/web/src/app/chat/components/chat-composer.tsx`
   - 将 `!border-none`、`!border-0`、`!shadow-none` 等旧式 important 写法，统一改为 Tailwind 官方推荐的后缀 `!` 语法。
 - `scripts/check-tailwind-canonical.mjs`
