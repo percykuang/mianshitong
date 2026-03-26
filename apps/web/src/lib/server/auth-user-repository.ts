@@ -13,7 +13,21 @@ export async function findUserById(id: string) {
 }
 
 export async function createUser(input: { email: string; passwordHash: string }) {
-  return prisma.authUser.create({
-    data: input,
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.authUser.create({
+      data: input,
+    });
+
+    await tx.userActor.create({
+      data: {
+        id: user.id,
+        type: 'registered',
+        displayName: user.email,
+        authUserId: user.id,
+        lastSeenAt: new Date(),
+      },
+    });
+
+    return user;
   });
 }

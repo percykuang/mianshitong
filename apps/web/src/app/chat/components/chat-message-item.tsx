@@ -12,6 +12,7 @@ interface ChatMessageItemProps {
   sessionId: string | null;
   message: ChatMessage;
   isLoading: boolean;
+  isStreaming: boolean;
   isEditing: boolean;
   editingValue: string;
   sending: boolean;
@@ -26,6 +27,7 @@ export function ChatMessageItem({
   sessionId,
   message,
   isLoading,
+  isStreaming,
   isEditing,
   editingValue,
   sending,
@@ -36,6 +38,7 @@ export function ChatMessageItem({
   onNotice,
 }: ChatMessageItemProps) {
   const isEditableUserMessage = message.role === 'user' && !isLoading;
+  const shouldShowActions = !isLoading && !isEditing && !isStreaming;
   const { pendingMessageId, setMessageFeedback } = useChatMessageFeedback({
     sessionId,
     onError: onNotice,
@@ -57,7 +60,7 @@ export function ChatMessageItem({
             message.role === 'user'
               ? isEditing
                 ? 'ml-auto w-full max-w-xl md:gap-3'
-                : 'max-w-[calc(100%-2.5rem)] sm:max-w-[min(fit-content,80%)] md:gap-3'
+                : 'ml-auto max-w-[calc(100%-2.5rem)] items-end sm:max-w-[80%] md:gap-3'
               : 'min-w-0 flex-1 md:gap-4',
           )}
         >
@@ -65,7 +68,7 @@ export function ChatMessageItem({
             className={cn(
               'flex flex-col gap-2 overflow-hidden text-sm',
               message.role === 'user' && !isEditing
-                ? 'w-fit rounded-2xl bg-blue-600 px-3 py-2 text-right text-white dark:text-white'
+                ? 'max-w-full self-end rounded-2xl bg-blue-600 px-3 py-2 text-left text-white dark:text-white'
                 : message.role === 'user'
                   ? 'w-full max-w-xl rounded-2xl border border-border bg-background p-2 text-left text-foreground'
                   : 'bg-transparent px-0 py-0 text-left text-foreground',
@@ -109,7 +112,7 @@ export function ChatMessageItem({
             )}
           </div>
 
-          {!isLoading && !isEditing ? (
+          {shouldShowActions ? (
             <div
               className={cn(
                 'flex items-center gap-1 text-muted-foreground',

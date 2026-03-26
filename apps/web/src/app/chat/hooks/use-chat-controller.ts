@@ -1,7 +1,7 @@
 import { type ChatSession, QUICK_PROMPTS, type SessionSummary } from '@mianshitong/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createChatSessionId } from '@/lib/chat-session-id';
-import { createDraftLocalSession } from '../lib/chat-local-session';
+import { createDraftChatSession } from '../lib/chat-session-draft';
 import { markRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 import {
   abortCurrentStream,
@@ -21,8 +21,6 @@ import { useChatControllerStore } from './use-chat-controller-store';
 import { useChatNavigation } from './use-chat-navigation';
 import { useChatStorage } from './use-chat-storage';
 import { useEditMessage } from './use-edit-message';
-import { useLocalEditMessage } from './use-local-edit-message';
-import { useLocalSendMessage } from './use-local-send-message';
 import { useSendMessage } from './use-send-message';
 
 export function useChatController(): ChatController {
@@ -51,7 +49,10 @@ export function useChatController(): ChatController {
   } = useChatNavigation();
   const {
     ready,
-    isAuthenticated,
+    chatUsage,
+    usageLoading,
+    usageError,
+    refreshChatUsage,
     fetchSessionList,
     fetchSessionDetail,
     deleteSessionById,
@@ -99,7 +100,7 @@ export function useChatController(): ChatController {
   }, [fetchSessionList, setSessions]);
 
   const createOptimisticSession = useCallback((): ChatSession => {
-    const session = createDraftLocalSession(selectedModelId, createChatSessionId());
+    const session = createDraftChatSession(selectedModelId, createChatSessionId());
     forceCreateNextSessionRef.current = false;
     updateActiveSession(session);
     setActiveSessionId(session.id);
@@ -113,21 +114,7 @@ export function useChatController(): ChatController {
     readActiveSession: () => (forceCreateNextSessionRef.current ? null : readActiveSession()),
     createOptimisticSession,
     refreshSessions,
-    setSending,
-    setNotice,
-    setInputValue,
-    readInputValue: () => inputValueRef.current,
-    registerAbortController: registerStreamAbortController,
-    clearAbortController: clearStreamAbortController,
-    setActiveSession: updateActiveSession,
-    setActiveSessionId,
-    replaceSession,
-  });
-  const localSendMessage = useLocalSendMessage({
-    sending,
-    readActiveSession: () => (forceCreateNextSessionRef.current ? null : readActiveSession()),
-    createOptimisticSession,
-    refreshSessions,
+    refreshChatUsage,
     setSending,
     setNotice,
     setInputValue,
@@ -148,14 +135,9 @@ export function useChatController(): ChatController {
         return;
       }
 
-      if (isAuthenticated) {
-        await remoteSendMessage(content);
-        return;
-      }
-
-      await localSendMessage(content);
+      await remoteSendMessage(content);
     },
-    [sending, isAuthenticated, remoteSendMessage, localSendMessage, setToast],
+    [sending, remoteSendMessage, setToast],
   );
 
   const stopMessageGeneration = useCallback(() => {
@@ -171,15 +153,7 @@ export function useChatController(): ChatController {
     activeSession,
     sending,
     refreshSessions,
-    setSending,
-    setNotice,
-    setActiveSession: updateActiveSession,
-    setActiveSessionId,
-  });
-  const localEditMessage = useLocalEditMessage({
-    activeSession,
-    sending,
-    refreshSessions,
+    refreshChatUsage,
     setSending,
     setNotice,
     setActiveSession: updateActiveSession,
@@ -188,12 +162,22 @@ export function useChatController(): ChatController {
 
   const editUserMessage = useCallback(
     async (messageId: string, content: string): Promise<boolean> => {
-      return isAuthenticated
-        ? remoteEditMessage(messageId, content)
-        : localEditMessage(messageId, content);
+      return remoteEditMessage(messageId, content);
     },
-    [isAuthenticated, remoteEditMessage, localEditMessage],
+    [remoteEditMessage],
   );
+
+  useEffect(() => {
+    if (usageError) {
+      const timer = window.setTimeout(() => {
+        setNotice(usageError);
+      }, 0);
+
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }
+  }, [usageError, setNotice]);
 
   useChatControllerEffects({
     ready,
@@ -268,6 +252,8 @@ export function useChatController(): ChatController {
     selectedModelId,
     sending,
     activeSessionLoading,
+    chatUsage,
+    usageLoading,
     notice,
     toast,
     sidebarOpen,

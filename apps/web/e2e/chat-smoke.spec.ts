@@ -1,63 +1,50 @@
 import { expect, test } from '@playwright/test';
-import { buildGuestSession, mockGuestStream, seedGuestSessions } from './support/chat-e2e-fixtures';
+import { createRemoteSession, openChat } from './support/chat-e2e-fixtures';
 
-test('新建会话后发送预设消息会创建独立路由并完成回复', async ({ page }) => {
-  await mockGuestStream(
-    page,
-    '当然可以，请把简历内容发给我，我会从项目亮点和量化结果开始帮你优化。',
-  );
-  await page.goto('/chat');
+test('新建会话后发送预设消息会走真实流式接口并渲染 provider 输出', async ({ page }) => {
+  await openChat(page);
+  const prompt = '可以帮我优化简历吗？';
+  const streamRequestPromise = page.waitForRequest((request) => {
+    return (
+      request.method() === 'POST' &&
+      /\/api\/chat\/sessions\/[0-9a-f]{32}\/messages\/stream$/.test(new URL(request.url()).pathname)
+    );
+  });
 
-  await page.getByRole('button', { name: '可以帮我优化简历吗？' }).click();
+  await page.getByRole('button', { name: prompt }).click();
+
+  const streamRequest = await streamRequestPromise;
+  expect(streamRequest.postDataJSON()).toMatchObject({
+    content: prompt,
+    modelId: 'deepseek-chat',
+  });
 
   await expect(page).toHaveURL(/\/chat\/[0-9a-f]{32}$/);
   await expect(page.getByTestId('multimodal-input')).toHaveValue('');
-  await expect(page.getByRole('main')).toContainText('可以帮我优化简历吗？');
+  await expect(page.getByRole('main')).toContainText(prompt);
   await expect(page.getByRole('main')).toContainText(
-    '当然可以，请把简历内容发给我，我会从项目亮点和量化结果开始帮你优化。',
+    '[web-e2e] 已按真实模型链路处理：可以帮我优化简历吗？',
   );
+  await expect(page.getByRole('main')).not.toContainText('不过，我还没有看到你的简历内容');
   await expect(page.getByTestId('suggested-actions')).toHaveCount(0);
 });
 
 test('切换会话时应展示对应会话内容', async ({ page }) => {
-  const firstAssistantContent = '先用 React Profiler 定位重渲染来源，再检查 key 和 memo 策略。';
-  const secondAssistantContent = '可以，优先补齐业务结果、性能指标和技术决策三类信息。';
-  const firstSession = buildGuestSession({
-    id: '11111111111111111111111111111111',
-    title: 'React 性能排查',
-    createdAt: '2026-03-09T10:00:00.000Z',
-    userContent: '帮我分析 React 列表卡顿问题',
-    assistantContent: firstAssistantContent,
-  });
-  const secondSession = buildGuestSession({
-    id: '22222222222222222222222222222222',
-    title: '简历改写建议',
-    createdAt: '2026-03-09T09:00:00.000Z',
-    userContent: '请帮我优化前端简历',
-    assistantContent: secondAssistantContent,
-  });
+  const firstSession = await createRemoteSession(page, '帮我分析 React 列表卡顿问题');
+  const secondSession = await createRemoteSession(page, '请帮我优化前端简历');
 
-  await seedGuestSessions(page, [firstSession, secondSession]);
   await page.goto(`/chat/${firstSession.id}`);
 
-  await expect(page.getByRole('main')).toContainText(firstAssistantContent);
+  await expect(page.getByRole('main')).toContainText(firstSession.assistantContent);
   await page.getByRole('button', { name: secondSession.title }).click();
 
   await expect(page).toHaveURL(new RegExp(`/chat/${secondSession.id}$`));
-  await expect(page.getByRole('main')).toContainText(secondAssistantContent);
-  await expect(page.getByRole('main')).not.toContainText(firstAssistantContent);
+  await expect(page.getByRole('main')).toContainText(secondSession.assistantContent);
+  await expect(page.getByRole('main')).not.toContainText(firstSession.assistantContent);
 });
 
 test('删除当前会话后应回到空聊天页', async ({ page }) => {
-  const session = buildGuestSession({
-    id: '33333333333333333333333333333333',
-    title: '待删除会话',
-    createdAt: '2026-03-09T08:00:00.000Z',
-    userContent: '这条会话用于删除测试',
-    assistantContent: '删除后页面应该回到新的聊天页。',
-  });
-
-  await seedGuestSessions(page, [session]);
+  const session = await createRemoteSession(page, '这条会话用于删除测试');
   await page.goto(`/chat/${session.id}`);
 
   await page.getByRole('button', { name: session.title }).hover();
@@ -74,15 +61,7 @@ test('删除当前会话后应回到空聊天页', async ({ page }) => {
 });
 
 test('消息复制应更新局部 copied 状态，不触发全局 toast', async ({ page }) => {
-  const session = buildGuestSession({
-    id: '55555555555555555555555555555555',
-    title: '复制测试',
-    createdAt: '2026-03-09T06:00:00.000Z',
-    userContent: '请帮我优化这段项目经历',
-    assistantContent: '可以，我会先帮你提炼技术亮点和量化结果。',
-  });
-
-  await seedGuestSessions(page, [session]);
+  const session = await createRemoteSession(page, '请帮我优化这段项目经历');
   await page.goto(`/chat/${session.id}`);
 
   const assistantCopy = page.getByTestId('assistant-message-copy');
@@ -95,15 +74,7 @@ test('消息复制应更新局部 copied 状态，不触发全局 toast', async 
 });
 
 test('消息 like/dislike 应支持三态切换和填充图标', async ({ page }) => {
-  const session = buildGuestSession({
-    id: '44444444444444444444444444444444',
-    title: '反馈测试',
-    createdAt: '2026-03-09T07:00:00.000Z',
-    userContent: '请帮我优化简历',
-    assistantContent: '可以，先把简历贴给我，我会帮你逐段优化。',
-  });
-
-  await seedGuestSessions(page, [session]);
+  const session = await createRemoteSession(page, '请帮我优化简历');
   await page.goto(`/chat/${session.id}`);
 
   const upvote = page.getByTestId('message-upvote');

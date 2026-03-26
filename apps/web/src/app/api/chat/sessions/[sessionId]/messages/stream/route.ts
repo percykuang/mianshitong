@@ -1,18 +1,28 @@
 import { processSessionMessage, shouldStartInterview } from '@mianshitong/interview-engine';
 import { MODEL_OPTIONS, type ModelId } from '@mianshitong/shared';
 import type { StreamChatProvider } from '@mianshitong/llm';
-import { getCurrentUserId } from '@/lib/server/auth-session';
-import { normalizeAssistantMarkdown } from '@/lib/server/chat-response-format';
+import { getCurrentChatActor } from '@/lib/server/chat-actor';
 import {
-  appendUserSessionExchange,
-  getUserSession,
-  saveOrCreateUserSession,
-} from '@/lib/server/chat-session-repository';
+  buildGeneralChatFallbackReply,
+  resolveGeneralChatIntent,
+} from '@/lib/server/chat-general-policy';
+import { normalizeAssistantMarkdown } from '@/lib/server/chat-response-format';
 import { createDraftSession } from '@/lib/server/chat-session-model';
+import {
+  appendActorSessionExchange,
+  getActorSession,
+  saveOrCreateActorSession,
+} from '@/lib/server/chat-session-repository';
+import {
+  consumeChatUsage,
+  getChatUsageLimitMessage,
+  rollbackChatUsage,
+} from '@/lib/server/chat-usage';
 import { listActiveQuestionBank } from '@/lib/server/question-bank-repository';
 import { resolveQuestionRetriever } from '@/lib/server/question-retriever';
 import {
   createStreamProvider,
+  emitShortcutReplyAsStream,
   formatSseEvent,
   isRecord,
   resolveErrorMessage,
@@ -25,13 +35,23 @@ function isModelId(value: unknown): value is ModelId {
   return MODEL_OPTIONS.some((item) => item.id === value);
 }
 
+function createUsageExceededResponse(actorType: 'guest' | 'registered'): Response {
+  return new Response(getChatUsageLimitMessage(actorType), {
+    status: 429,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return new Response('无法初始化会话身份', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
   }
 
   const { sessionId } = await context.params;
@@ -45,15 +65,51 @@ export async function POST(
   }
 
   const session =
-    (await getUserSession(userId, sessionId)) ??
+    (await getActorSession(actor.id, sessionId)) ??
     createDraftSession({ modelId: requestedModelId }, sessionId);
   const shouldUseInterviewEngine = session.status !== 'idle' || shouldStartInterview(content);
+  const generalChatIntent = !shouldUseInterviewEngine
+    ? resolveGeneralChatIntent({
+        content,
+        userMessageCount: session.messages.filter((message) => message.role === 'user').length,
+      })
+    : null;
+  const fallbackAssistantText = generalChatIntent
+    ? normalizeAssistantMarkdown(buildGeneralChatFallbackReply(generalChatIntent))
+    : '';
+
+  let provider: StreamChatProvider | null = null;
+  let model: string | null = null;
+
+  if (!shouldUseInterviewEngine) {
+    try {
+      const result = createStreamProvider(session.modelId);
+      provider = result.provider;
+      model = result.model;
+    } catch (error) {
+      if (!fallbackAssistantText) {
+        return new Response(resolveErrorMessage(error), {
+          status: 400,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }
+    }
+  }
+
+  const usage = await consumeChatUsage({
+    actorId: actor.id,
+    actorType: actor.type,
+  });
+  if (!usage.allowed) {
+    return createUsageExceededResponse(actor.type);
+  }
 
   if (shouldUseInterviewEngine) {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         const run = async () => {
           let hasError = false;
+          let shouldRollback = true;
 
           try {
             controller.enqueue(formatSseEvent('start', { sessionId }));
@@ -69,14 +125,25 @@ export async function POST(
               questionRetriever: retriever?.questionRetriever,
               retrievalStrategy: retriever?.retrievalStrategy,
             });
-            const updatedSession = await saveOrCreateUserSession(userId, result.session);
+            const updatedSession = await saveOrCreateActorSession(
+              actor.id,
+              result.session,
+              actor.authUserId,
+            );
             if (!updatedSession) {
               throw new Error('会话不存在或已失效');
             }
 
+            shouldRollback = false;
             controller.enqueue(formatSseEvent('done', { session: updatedSession }));
           } catch (error) {
             hasError = true;
+            if (shouldRollback) {
+              await rollbackChatUsage({
+                actorId: actor.id,
+                actorType: actor.type,
+              });
+            }
             controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));
           } finally {
             controller.enqueue(formatSseEvent('end', { ok: !hasError }));
@@ -98,17 +165,7 @@ export async function POST(
     });
   }
 
-  let provider: StreamChatProvider;
-  let model: string;
-  try {
-    const result = createStreamProvider(session.modelId);
-    provider = result.provider;
-    model = result.model;
-  } catch (error) {
-    return Response.json({ message: resolveErrorMessage(error) }, { status: 400 });
-  }
-
-  const turns = toChatTurns(session, content);
+  const turns = toChatTurns(session, content, generalChatIntent);
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -119,9 +176,9 @@ export async function POST(
         try {
           controller.enqueue(formatSseEvent('start', { sessionId }));
 
-          for await (const delta of provider.streamChat({
+          for await (const delta of provider!.streamChat({
             messages: turns,
-            model,
+            model: model!,
             signal: request.signal,
           })) {
             assistantText += delta;
@@ -133,27 +190,64 @@ export async function POST(
             throw new Error('模型没有返回可用内容');
           }
 
-          const updatedSession = await appendUserSessionExchange(userId, sessionId, {
-            userContent: content,
-            assistantContent: normalizedAssistantText,
-            modelId: session.modelId,
-          });
+          const updatedSession = await appendActorSessionExchange(
+            actor.id,
+            sessionId,
+            {
+              userContent: content,
+              assistantContent: normalizedAssistantText,
+              modelId: session.modelId,
+            },
+            actor.authUserId,
+          );
           if (!updatedSession) {
             throw new Error('会话不存在或已失效');
           }
 
           controller.enqueue(formatSseEvent('done', { session: updatedSession }));
         } catch (error) {
-          hasError = true;
           const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
           if (normalizedAssistantText) {
-            await appendUserSessionExchange(userId, sessionId, {
-              userContent: content,
-              assistantContent: normalizedAssistantText,
-              modelId: session.modelId,
+            hasError = true;
+            await appendActorSessionExchange(
+              actor.id,
+              sessionId,
+              {
+                userContent: content,
+                assistantContent: normalizedAssistantText,
+                modelId: session.modelId,
+              },
+              actor.authUserId,
+            );
+            controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));
+          } else if (fallbackAssistantText) {
+            const streamedFallbackText = await emitShortcutReplyAsStream({
+              controller,
+              content: fallbackAssistantText,
+              signal: request.signal,
             });
+            const updatedSession = await appendActorSessionExchange(
+              actor.id,
+              sessionId,
+              {
+                userContent: content,
+                assistantContent: streamedFallbackText,
+                modelId: session.modelId,
+              },
+              actor.authUserId,
+            );
+            if (!updatedSession) {
+              throw new Error('会话不存在或已失效');
+            }
+            controller.enqueue(formatSseEvent('done', { session: updatedSession }));
+          } else {
+            hasError = true;
+            await rollbackChatUsage({
+              actorId: actor.id,
+              actorType: actor.type,
+            });
+            controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));
           }
-          controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));
         } finally {
           controller.enqueue(formatSseEvent('end', { ok: !hasError }));
           controller.close();

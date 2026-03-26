@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { ChatComposer } from './components/chat-composer';
 import { ChatConversationTransition } from './components/chat-conversation-transition';
 import { ChatHeader } from './components/chat-header';
+import { CHAT_CONTENT_SHELL_CLASS } from './components/chat-layout';
 import { ChatMessageList } from './components/chat-message-list';
 import { ChatSessionDialog } from './components/chat-session-dialog';
 import { ChatSidebar } from './components/chat-sidebar';
@@ -81,7 +82,7 @@ export function ChatClient() {
   };
 
   return (
-    <div className="group/sidebar-wrapper flex min-h-svh w-full overflow-hidden has-data-[variant=inset]:bg-sidebar">
+    <div className="group/sidebar-wrapper flex h-dvh w-full overflow-hidden has-data-[variant=inset]:bg-sidebar">
       <ChatSidebar
         sessionsLoading={controller.sessionsLoading}
         sessions={controller.sessions}
@@ -98,7 +99,7 @@ export function ChatClient() {
 
       <main
         className={cn(
-          'relative flex min-h-svh w-full flex-1 flex-col bg-background transition-[margin] duration-200 ease-linear',
+          'relative flex h-dvh min-h-0 w-full flex-1 flex-col overflow-hidden bg-background transition-[margin] duration-200 ease-linear',
           controller.sidebarOpen ? 'md:ml-64' : 'md:ml-0',
         )}
       >
@@ -128,45 +129,47 @@ export function ChatClient() {
                 onNotice={controller.showNotice}
               />
             )}
+            {hasConversation && !showConversationTransition ? (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="回到底部"
+                  className={cn(
+                    'pointer-events-auto rounded-full border bg-background p-2 shadow-lg transition-all hover:bg-muted',
+                    isPinnedToBottom
+                      ? 'pointer-events-none scale-0 opacity-0'
+                      : 'scale-100 opacity-100',
+                  )}
+                  onClick={scrollToBottom}
+                >
+                  <ArrowDown className="size-4" />
+                </Button>
+              </div>
+            ) : null}
+          </div>
 
-            <div className="relative">
-              {hasConversation && !showConversationTransition ? (
-                <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 mb-12 flex justify-center">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label="回到底部"
-                    className={cn(
-                      '-translate-x-1/2 rounded-full border bg-background p-2 shadow-lg transition-all hover:bg-muted',
-                      'pointer-events-auto absolute left-1/2',
-                      isPinnedToBottom
-                        ? 'pointer-events-none scale-0 opacity-0'
-                        : 'scale-100 opacity-100',
-                    )}
-                    onClick={scrollToBottom}
-                  >
-                    <ArrowDown className="size-4" />
-                  </Button>
-                </div>
-              ) : null}
-
-              <ChatComposer
-                hasConversation={hasConversation}
-                suppressQuickPrompts={showConversationTransition}
-                quickPrompts={controller.quickPrompts}
-                inputValue={controller.inputValue}
-                selectedModelId={controller.selectedModelId}
-                sending={controller.sending}
-                loading={controller.activeSessionLoading}
-                inputRef={composerInputRef}
-                onInputChange={controller.setInputValue}
-                onSubmit={() => handleSubmitMessage(controller.inputValue)}
-                onStop={controller.stopMessageGeneration}
-                onQuickPrompt={handleQuickPrompt}
-                onModelChange={controller.setSelectedModelId}
-              />
-            </div>
+          <div
+            className={`${CHAT_CONTENT_SHELL_CLASS} sticky bottom-0 z-10 bg-background pb-3 md:pb-4`}
+          >
+            <ChatComposer
+              hasConversation={hasConversation}
+              suppressQuickPrompts={showConversationTransition}
+              quickPrompts={controller.quickPrompts}
+              inputValue={controller.inputValue}
+              selectedModelId={controller.selectedModelId}
+              sending={controller.sending}
+              loading={controller.activeSessionLoading}
+              usage={controller.chatUsage}
+              usageLoading={controller.usageLoading}
+              inputRef={composerInputRef}
+              onInputChange={controller.setInputValue}
+              onSubmit={() => handleSubmitMessage(controller.inputValue)}
+              onStop={controller.stopMessageGeneration}
+              onQuickPrompt={handleQuickPrompt}
+              onModelChange={controller.setSelectedModelId}
+            />
           </div>
         </div>
       </main>

@@ -2,16 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { ChatSession } from '@mianshitong/shared';
 import {
   appendUserAssistantMessages,
-  createDraftLocalSession,
+  createDraftChatSession,
   rebuildSessionAfterEdit,
   toStreamTurns,
-} from './chat-local-session';
+} from './chat-session-draft';
 
 function createBaseSession(): ChatSession {
-  return createDraftLocalSession('deepseek-chat', 'session_test_local');
+  return createDraftChatSession('deepseek-chat', 'session_test_draft');
 }
 
-describe('chat-local-session', () => {
+describe('chat-session-draft', () => {
   it('新会话默认不包含系统消息', () => {
     const session = createBaseSession();
 

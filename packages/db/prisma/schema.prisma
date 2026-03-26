@@ -10,6 +10,7 @@ model AuthUser {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
+  actor        UserActor?
   chatSessions ChatSessionRecord[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -23,9 +24,43 @@ model AdminUser {
   updatedAt    DateTime @updatedAt
 }
 
+enum UserActorType {
+  guest
+  registered
+}
+
+model UserActor {
+  id                 String             @id @default(cuid())
+  type               UserActorType
+  displayName        String
+  authUserId         String?            @unique
+  guestTokenHash     String?            @unique
+  chatSessions       ChatSessionRecord[]
+  dailyUsageCounters DailyUsageCounter[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  lastSeenAt         DateTime           @default(now())
+  authUser           AuthUser?          @relation(fields: [authUserId], references: [id], onDelete: SetNull)
+
+  @@index([type, lastSeenAt(sort: Desc)])
+}
+
+model DailyUsageCounter {
+  actorId    String
+  dateKey    String
+  usedCount  Int       @default(0)
+  maxCount   Int
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  actor      UserActor @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@id([actorId, dateKey])
+}
+
 model ChatSessionRecord {
   id        String   @id
-  userId    String
+  actorId   String
+  userId    String?
   title     String
   modelId   String
   isPrivate Boolean  @default(true)
@@ -36,8 +71,10 @@ model ChatSessionRecord {
   messages  Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actor     UserActor @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  user      AuthUser? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([actorId, updatedAt(sort: Desc)])
   @@index([userId, updatedAt(sort: Desc)])
 }
 

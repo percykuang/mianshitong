@@ -1,7 +1,12 @@
 import { processSessionMessage } from '@mianshitong/interview-engine';
 import type { PostMessageResponse } from '@mianshitong/shared';
-import { getCurrentUserId } from '@/lib/server/auth-session';
-import { getUserSession, saveUserSession } from '@/lib/server/chat-session-repository';
+import { getCurrentChatActor } from '@/lib/server/chat-actor';
+import {
+  consumeChatUsage,
+  getChatUsageLimitMessage,
+  rollbackChatUsage,
+} from '@/lib/server/chat-usage';
+import { getActorSession, saveActorSession } from '@/lib/server/chat-session-repository';
 import { listActiveQuestionBank } from '@/lib/server/question-bank-repository';
 import { resolveQuestionRetriever } from '@/lib/server/question-retriever';
 
@@ -13,9 +18,9 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return Response.json({ message: '无法初始化会话身份' }, { status: 500 });
   }
 
   const { sessionId } = await context.params;
@@ -27,30 +32,54 @@ export async function POST(
     return Response.json({ message: 'content is required' }, { status: 400 });
   }
 
-  const session = await getUserSession(userId, sessionId);
+  const session = await getActorSession(actor.id, sessionId);
   if (!session) {
     return Response.json({ message: 'Session not found' }, { status: 404 });
   }
 
-  const questionBank = session.status === 'idle' ? await listActiveQuestionBank() : [];
-  const retriever = session.status === 'idle' ? await resolveQuestionRetriever(questionBank) : null;
-
-  const result = await processSessionMessage({
-    session,
-    content,
-    questionBank: session.status === 'idle' ? questionBank : undefined,
-    questionRetriever: retriever?.questionRetriever,
-    retrievalStrategy: retriever?.retrievalStrategy,
+  const usage = await consumeChatUsage({
+    actorId: actor.id,
+    actorType: actor.type,
   });
-
-  const savedSession = await saveUserSession(userId, result.session);
-  if (!savedSession) {
-    return Response.json({ message: 'Session not found' }, { status: 404 });
+  if (!usage.allowed) {
+    return Response.json({ message: getChatUsageLimitMessage(actor.type) }, { status: 429 });
   }
 
-  const payload: PostMessageResponse = {
-    session: savedSession,
-    assistantMessages: result.assistantMessages,
-  };
-  return Response.json(payload);
+  try {
+    const questionBank = session.status === 'idle' ? await listActiveQuestionBank() : [];
+    const retriever =
+      session.status === 'idle' ? await resolveQuestionRetriever(questionBank) : null;
+
+    const result = await processSessionMessage({
+      session,
+      content,
+      questionBank: session.status === 'idle' ? questionBank : undefined,
+      questionRetriever: retriever?.questionRetriever,
+      retrievalStrategy: retriever?.retrievalStrategy,
+    });
+
+    const savedSession = await saveActorSession(actor.id, result.session);
+    if (!savedSession) {
+      await rollbackChatUsage({
+        actorId: actor.id,
+        actorType: actor.type,
+      });
+      return Response.json({ message: 'Session not found' }, { status: 404 });
+    }
+
+    const payload: PostMessageResponse = {
+      session: savedSession,
+      assistantMessages: result.assistantMessages,
+    };
+    return Response.json(payload);
+  } catch (error) {
+    await rollbackChatUsage({
+      actorId: actor.id,
+      actorType: actor.type,
+    });
+    return Response.json(
+      { message: error instanceof Error ? error.message : '发送失败，请稍后重试' },
+      { status: 500 },
+    );
+  }
 }

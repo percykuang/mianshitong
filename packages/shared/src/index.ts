@@ -1,5 +1,7 @@
 export {
+  type ActorType,
   type ChatMessage,
+  type ChatUsageSummary,
   type ChatMessageFeedback,
   type ChatSession,
   type ChatSessionResponse,

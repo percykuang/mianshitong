@@ -1,17 +1,17 @@
 import type { ChatSession } from '@mianshitong/shared';
-import { getUserSession, saveUserSession } from './chat-session-repository';
+import { getActorSession, saveActorSession } from './chat-session-repository';
 
-export async function setUserSessionPinnedState(
-  userId: string,
+export async function setActorSessionPinnedState(
+  actorId: string,
   sessionId: string,
   pinned: boolean,
 ): Promise<ChatSession | null> {
-  const session = await getUserSession(userId, sessionId);
+  const session = await getActorSession(actorId, sessionId);
   if (!session) {
     return null;
   }
 
-  return saveUserSession(userId, {
+  return saveActorSession(actorId, {
     ...session,
     pinnedAt: pinned ? new Date().toISOString() : null,
   });

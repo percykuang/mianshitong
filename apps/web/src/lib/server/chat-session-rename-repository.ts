@@ -2,15 +2,15 @@ import { prisma } from '@mianshitong/db';
 import type { ChatSession } from '@mianshitong/shared';
 import { toSession, type SessionRecord } from './chat-session-model';
 
-export async function renameUserSession(
-  userId: string,
+export async function renameActorSession(
+  actorId: string,
   sessionId: string,
   title: string,
 ): Promise<ChatSession | null> {
   const result = await prisma.$executeRaw`
     UPDATE "ChatSessionRecord"
     SET "title" = ${title}
-    WHERE "id" = ${sessionId} AND "userId" = ${userId}
+    WHERE "id" = ${sessionId} AND "actorId" = ${actorId}
   `;
 
   if (result === 0) {
@@ -18,7 +18,7 @@ export async function renameUserSession(
   }
 
   const record = await prisma.chatSessionRecord.findFirst({
-    where: { id: sessionId, userId },
+    where: { id: sessionId, actorId },
   });
 
   return record ? toSession(record as SessionRecord) : null;

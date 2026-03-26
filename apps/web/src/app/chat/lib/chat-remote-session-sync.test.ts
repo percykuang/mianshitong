@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDraftLocalSession } from './chat-local-session';
+import { createDraftChatSession } from './chat-session-draft';
 import {
   syncFetchedRemoteSession,
   syncResolvedRemoteSession,
@@ -8,7 +8,7 @@ import {
 
 describe('chat-remote-session-sync', () => {
   it('可以同步已解析的服务端会话到当前状态', async () => {
-    const session = createDraftLocalSession('deepseek-chat', 'remote_session_1');
+    const session = createDraftChatSession('deepseek-chat', 'remote_session_1');
     const refreshSessions = vi.fn(async () => undefined);
     const setActiveSession = vi.fn();
     const setActiveSessionId = vi.fn();
@@ -31,7 +31,7 @@ describe('chat-remote-session-sync', () => {
   });
 
   it('可以拉取并同步服务端会话', async () => {
-    const session = createDraftLocalSession('deepseek-chat', 'remote_session_2');
+    const session = createDraftChatSession('deepseek-chat', 'remote_session_2');
     const fetchSessionById = vi.fn(async () => session);
     const refreshSessions = vi.fn(async () => undefined);
     const setActiveSession = vi.fn();

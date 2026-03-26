@@ -4,6 +4,9 @@ export type {
   AdminUser,
   AuthUser,
   ChatSessionRecord,
+  DailyUsageCounter,
   QuestionBankItem,
   QuestionRetrievalDoc,
+  UserActor,
+  UserActorType,
 } from '@prisma/client';

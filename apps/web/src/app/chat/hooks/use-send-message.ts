@@ -16,6 +16,7 @@ interface SendMessageDeps {
   readActiveSession: () => ChatSession | null;
   createOptimisticSession: () => ChatSession;
   refreshSessions: () => Promise<unknown>;
+  refreshChatUsage: () => Promise<unknown>;
   setSending: (value: boolean) => void;
   setNotice: (value: string | null) => void;
   setInputValue: (value: string) => void;
@@ -34,6 +35,7 @@ export function useSendMessage({
   readActiveSession,
   createOptimisticSession,
   refreshSessions,
+  refreshChatUsage,
   setSending,
   setNotice,
   setInputValue,
@@ -148,6 +150,7 @@ export function useSendMessage({
         }
         setNotice(error instanceof Error ? error.message : '发送失败，请稍后重试');
       } finally {
+        await refreshChatUsage().catch(() => undefined);
         if (sessionIdToClear) {
           clearRouteBootstrapBypass(sessionIdToClear);
         }
@@ -160,6 +163,7 @@ export function useSendMessage({
       readActiveSession,
       createOptimisticSession,
       refreshSessions,
+      refreshChatUsage,
       setSending,
       setNotice,
       setInputValue,

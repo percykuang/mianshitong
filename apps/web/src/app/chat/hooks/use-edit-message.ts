@@ -13,6 +13,7 @@ interface EditMessageDeps {
   activeSession: ChatSession | null;
   sending: boolean;
   refreshSessions: () => Promise<unknown>;
+  refreshChatUsage: () => Promise<unknown>;
   setSending: (value: boolean) => void;
   setNotice: (value: string | null) => void;
   setActiveSession: (
@@ -25,6 +26,7 @@ export function useEditMessage({
   activeSession,
   sending,
   refreshSessions,
+  refreshChatUsage,
   setSending,
   setNotice,
   setActiveSession,
@@ -96,9 +98,11 @@ export function useEditMessage({
         }
         return true;
       } catch (error) {
+        setActiveSession(session);
         setNotice(error instanceof Error ? error.message : '编辑失败，请稍后重试');
         return false;
       } finally {
+        await refreshChatUsage().catch(() => undefined);
         setSending(false);
       }
     },
@@ -106,6 +110,7 @@ export function useEditMessage({
       activeSession,
       sending,
       refreshSessions,
+      refreshChatUsage,
       setSending,
       setNotice,
       setActiveSession,

@@ -5,7 +5,7 @@ import '../../../../vitest.setup';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatSession } from '@mianshitong/shared';
-import { createDraftLocalSession } from '../lib/chat-local-session';
+import { createDraftChatSession } from '../lib/chat-session-draft';
 import { useChatControllerActions } from './use-chat-controller-actions';
 
 function setViewportWidth(width: number): void {
@@ -18,9 +18,7 @@ function setViewportWidth(width: number): void {
 
 function createDeps(overrides: Partial<Parameters<typeof useChatControllerActions>[0]> = {}) {
   return {
-    fetchSessionById: vi.fn(async () =>
-      createDraftLocalSession('deepseek-chat', 'fetched_session'),
-    ),
+    fetchSessionById: vi.fn(async () => createDraftChatSession('deepseek-chat', 'fetched_session')),
     refreshSessions: vi.fn(async () => []),
     deleteSessionById: vi.fn(async () => undefined),
     deleteAllSessions: vi.fn(async () => undefined),
@@ -53,7 +51,7 @@ function createDeps(overrides: Partial<Parameters<typeof useChatControllerAction
 describe('useChatControllerActions', () => {
   it('选择已有缓存会话时会立即应用缓存并在移动端关闭侧栏', async () => {
     setViewportWidth(375);
-    const cachedSession = createDraftLocalSession('deepseek-chat', 'cached_session_1');
+    const cachedSession = createDraftChatSession('deepseek-chat', 'cached_session_1');
     const deps = createDeps({
       readCachedSession: vi.fn((sessionId: string): ChatSession | null =>
         sessionId === cachedSession.id ? cachedSession : null,

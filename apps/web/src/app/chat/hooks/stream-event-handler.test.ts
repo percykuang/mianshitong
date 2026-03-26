@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDraftLocalSession } from '../lib/chat-local-session';
+import { createDraftChatSession } from '../lib/chat-session-draft';
 import { createStreamEventHandler } from './stream-event-handler';
 
 describe('createStreamEventHandler', () => {
   it('收到 delta 时会把内容追加到 optimistic assistant 消息上', () => {
     const session = {
-      ...createDraftLocalSession('deepseek-chat', 'stream_session_1'),
+      ...createDraftChatSession('deepseek-chat', 'stream_session_1'),
       messages: [
-        ...createDraftLocalSession('deepseek-chat', 'stream_session_1').messages,
+        ...createDraftChatSession('deepseek-chat', 'stream_session_1').messages,
         {
           id: 'assistant_tmp_1',
           role: 'assistant' as const,
@@ -43,7 +43,7 @@ describe('createStreamEventHandler', () => {
     const setActiveSession = vi.fn();
     const setNotice = vi.fn();
     const setSyncedSession = vi.fn();
-    const syncedSession = createDraftLocalSession('deepseek-chat', 'stream_session_2');
+    const syncedSession = createDraftChatSession('deepseek-chat', 'stream_session_2');
 
     const handler = createStreamEventHandler({
       optimisticAssistantId: 'assistant_tmp_1',

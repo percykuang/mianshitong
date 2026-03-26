@@ -1,4 +1,4 @@
-import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
+import type { ChatSession, ChatUsageSummary, ModelId, SessionSummary } from '@mianshitong/shared';
 
 export interface ChatController {
   sessions: SessionSummary[];
@@ -9,6 +9,8 @@ export interface ChatController {
   selectedModelId: ModelId;
   sending: boolean;
   activeSessionLoading: boolean;
+  chatUsage: ChatUsageSummary | null;
+  usageLoading: boolean;
   notice: string | null;
   toast: string | null;
   sidebarOpen: boolean;

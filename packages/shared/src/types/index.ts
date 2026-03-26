@@ -1,4 +1,5 @@
 export type ModelId = 'deepseek-chat' | 'deepseek-reasoner';
+export type ActorType = 'guest' | 'registered';
 
 export type InterviewLevel = 'junior' | 'mid' | 'senior';
 export type InterviewTopic =
@@ -310,3 +311,10 @@ export interface ChatSessionResponse {
 }
 
 export type PostMessageResponse = PostMessageResult;
+
+export interface ChatUsageSummary {
+  actorType: ActorType;
+  used: number;
+  max: number;
+  remaining: number;
+}

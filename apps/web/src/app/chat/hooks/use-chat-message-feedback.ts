@@ -1,7 +1,5 @@
 import type { ChatMessageFeedback } from '@mianshitong/shared';
-import { useSession } from 'next-auth/react';
 import { useCallback, useState } from 'react';
-import { setLocalMessageFeedback } from '../lib/chat-local-message-feedback';
 import { setMessageFeedbackRequest } from '../lib/chat-message-feedback-api';
 import { cacheSession } from '../stores/chat-session-cache-store';
 import { useChatControllerStore } from './use-chat-controller-store';
@@ -12,7 +10,6 @@ interface UseChatMessageFeedbackInput {
 }
 
 export function useChatMessageFeedback({ sessionId, onError }: UseChatMessageFeedbackInput) {
-  const { status } = useSession();
   const { setActiveSession } = useChatControllerStore();
   const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
 
@@ -25,10 +22,7 @@ export function useChatMessageFeedback({ sessionId, onError }: UseChatMessageFee
       setPendingMessageId(messageId);
 
       try {
-        const session =
-          status === 'authenticated'
-            ? await setMessageFeedbackRequest(sessionId, messageId, feedback)
-            : await setLocalMessageFeedback(sessionId, messageId, feedback);
+        const session = await setMessageFeedbackRequest(sessionId, messageId, feedback);
 
         cacheSession(session);
         setActiveSession((current) => (current?.id === session.id ? session : current));
@@ -39,7 +33,7 @@ export function useChatMessageFeedback({ sessionId, onError }: UseChatMessageFee
         setPendingMessageId(null);
       }
     },
-    [onError, pendingMessageId, sessionId, setActiveSession, status],
+    [onError, pendingMessageId, sessionId, setActiveSession],
   );
 
   return {

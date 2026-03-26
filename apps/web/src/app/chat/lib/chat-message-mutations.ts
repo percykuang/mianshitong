@@ -60,7 +60,7 @@ export function removeOptimisticMessages(
   };
 }
 
-export function buildStoredLocalSession(input: {
+export function buildStoredChatSession(input: {
   session: ChatSession | null;
   optimisticUser: ChatMessage | null;
   optimisticAssistant: ChatMessage | null;

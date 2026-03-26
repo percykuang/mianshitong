@@ -15,7 +15,8 @@ import { decodeSessionRuntime, encodeSessionRuntime } from './chat-session-ui-st
 
 export type SessionRecord = {
   id: string;
-  userId: string;
+  actorId: string;
+  userId: string | null;
   title: string;
   modelId: string;
   isPrivate: boolean;
@@ -146,10 +147,11 @@ export function toSessionSummary(session: ChatSession): SessionSummary {
 }
 
 export function toSessionCreateData(
-  userId: string,
+  actorId: string,
   session: ChatSession,
+  userId?: string | null,
 ): Prisma.ChatSessionRecordCreateInput {
-  return {
+  const data: Prisma.ChatSessionRecordCreateInput = {
     id: session.id,
     title: session.title,
     modelId: session.modelId,
@@ -158,8 +160,14 @@ export function toSessionCreateData(
     config: session.config as unknown as Prisma.InputJsonValue,
     runtime: encodeSessionRuntime(session),
     messages: session.messages as unknown as Prisma.InputJsonValue,
-    user: { connect: { id: userId } },
+    actor: { connect: { id: actorId } },
   };
+
+  if (userId) {
+    data.user = { connect: { id: userId } };
+  }
+
+  return data;
 }
 
 export function toSessionUpdateData(

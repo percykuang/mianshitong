@@ -1,14 +1,14 @@
 import type { ChatMessageFeedback, ChatSession } from '@mianshitong/shared';
 import { setSessionMessageFeedback } from '@/lib/chat-message-feedback';
-import { getUserSession, saveUserSession } from './chat-session-repository';
+import { getActorSession, saveActorSession } from './chat-session-repository';
 
-export async function setUserMessageFeedback(
-  userId: string,
+export async function setActorMessageFeedback(
+  actorId: string,
   sessionId: string,
   messageId: string,
   feedback: ChatMessageFeedback | null,
 ): Promise<ChatSession | null> {
-  const session = await getUserSession(userId, sessionId);
+  const session = await getActorSession(actorId, sessionId);
   if (!session) {
     return null;
   }
@@ -22,5 +22,5 @@ export async function setUserMessageFeedback(
     return null;
   }
 
-  return saveUserSession(userId, nextSession);
+  return saveActorSession(actorId, nextSession);
 }

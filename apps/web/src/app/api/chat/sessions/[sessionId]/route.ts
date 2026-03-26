@@ -1,8 +1,8 @@
 import type { ChatSessionResponse } from '@mianshitong/shared';
-import { getCurrentUserId } from '@/lib/server/auth-session';
-import { setUserSessionPinnedState } from '@/lib/server/chat-session-pin-repository';
-import { renameUserSession } from '@/lib/server/chat-session-rename-repository';
-import { deleteUserSession, getUserSession } from '@/lib/server/chat-session-repository';
+import { getCurrentChatActor } from '@/lib/server/chat-actor';
+import { setActorSessionPinnedState } from '@/lib/server/chat-session-pin-repository';
+import { renameActorSession } from '@/lib/server/chat-session-rename-repository';
+import { deleteActorSession, getActorSession } from '@/lib/server/chat-session-repository';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -21,13 +21,13 @@ export async function GET(
   _request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return Response.json({ message: '无法初始化会话身份' }, { status: 500 });
   }
 
   const { sessionId } = await context.params;
-  const session = await getUserSession(userId, sessionId);
+  const session = await getActorSession(actor.id, sessionId);
 
   if (!session) {
     return Response.json({ message: 'Session not found' }, { status: 404 });
@@ -41,9 +41,9 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return Response.json({ message: '无法初始化会话身份' }, { status: 500 });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -54,9 +54,9 @@ export async function PATCH(
 
   const session =
     title !== null
-      ? await renameUserSession(userId, sessionId, title)
+      ? await renameActorSession(actor.id, sessionId, title)
       : pinned !== null
-        ? await setUserSessionPinnedState(userId, sessionId, pinned)
+        ? await setActorSessionPinnedState(actor.id, sessionId, pinned)
         : null;
 
   if (!session) {
@@ -74,13 +74,13 @@ export async function DELETE(
   _request: Request,
   context: { params: Promise<{ sessionId: string }> },
 ): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return Response.json({ message: '无法初始化会话身份' }, { status: 500 });
   }
 
   const { sessionId } = await context.params;
-  const deleted = await deleteUserSession(userId, sessionId);
+  const deleted = await deleteActorSession(actor.id, sessionId);
   if (!deleted) {
     return Response.json({ message: 'Session not found' }, { status: 404 });
   }

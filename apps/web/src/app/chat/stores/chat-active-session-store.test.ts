@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createDraftLocalSession } from '../lib/chat-local-session';
+import { createDraftChatSession } from '../lib/chat-session-draft';
 import { createChatActiveSessionStore } from './chat-active-session-store';
 
 describe('chat-active-session-store', () => {
   it('支持更新 activeSession 与局部派生更新', () => {
     const store = createChatActiveSessionStore();
-    const session = createDraftLocalSession('deepseek-chat', 'active_session_1');
+    const session = createDraftChatSession('deepseek-chat', 'active_session_1');
 
     store.getState().setActiveSessionId(session.id);
     store.getState().setActiveSession(session);

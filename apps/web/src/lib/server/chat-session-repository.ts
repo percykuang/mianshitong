@@ -27,6 +27,7 @@ function toMigratedSessionCreateData(
 ): Prisma.ChatSessionRecordUncheckedCreateInput {
   return {
     id: nextId,
+    actorId: record.actorId,
     userId: record.userId,
     title: record.title,
     modelId: record.modelId,
@@ -63,7 +64,7 @@ async function migrateLegacySessionRecord(record: SessionRecord): Promise<Sessio
       throw new Error('会话迁移失败');
     }
 
-    return migrated;
+    return migrated as SessionRecord;
   });
 }
 
@@ -72,28 +73,29 @@ async function getSessionRecordById(sessionId: string): Promise<SessionRecord | 
     where: { id: sessionId },
   });
 
-  return record as SessionRecord | null;
+  return (record as SessionRecord | null) ?? null;
 }
 
-async function createUserSessionRecord(
-  userId: string,
+async function createActorSessionRecord(
+  actorId: string,
   session: ChatSession,
+  userId?: string | null,
 ): Promise<ChatSession | null> {
   const existing = await getSessionRecordById(session.id);
   if (existing) {
-    return existing.userId === userId ? toSession(existing) : null;
+    return existing.actorId === actorId ? toSession(existing) : null;
   }
 
   await prisma.chatSessionRecord.create({
-    data: toSessionCreateData(userId, session),
+    data: toSessionCreateData(actorId, session, userId),
   });
 
   return session;
 }
 
-export async function listUserSessionSummaries(userId: string): Promise<SessionSummary[]> {
+export async function listActorSessionSummaries(actorId: string): Promise<SessionSummary[]> {
   const records = await prisma.chatSessionRecord.findMany({
-    where: { userId },
+    where: { actorId },
     orderBy: { createdAt: 'desc' },
   });
   const migratedRecords = await Promise.all(
@@ -105,24 +107,25 @@ export async function listUserSessionSummaries(userId: string): Promise<SessionS
     .sort(compareSessionsByPinnedAndCreated);
 }
 
-export async function getUserSession(
-  userId: string,
+export async function getActorSession(
+  actorId: string,
   sessionId: string,
 ): Promise<ChatSession | null> {
   const record = await prisma.chatSessionRecord.findFirst({
-    where: { id: sessionId, userId },
+    where: { id: sessionId, actorId },
   });
 
   return toSessionOrNull(record as SessionRecord | null);
 }
 
-export async function createUserSession(
-  userId: string,
+export async function createActorSession(
+  actorId: string,
   input?: CreateSessionInput,
   sessionId?: string | null,
+  userId?: string | null,
 ): Promise<ChatSession> {
   const session = createDraftSession(input, sessionId);
-  const created = await createUserSessionRecord(userId, session);
+  const created = await createActorSessionRecord(actorId, session, userId);
   if (!created) {
     throw new Error('会话创建失败');
   }
@@ -130,12 +133,12 @@ export async function createUserSession(
   return created;
 }
 
-export async function saveUserSession(
-  userId: string,
+export async function saveActorSession(
+  actorId: string,
   session: ChatSession,
 ): Promise<ChatSession | null> {
   const result = await prisma.chatSessionRecord.updateMany({
-    where: { id: session.id, userId },
+    where: { id: session.id, actorId },
     data: toSessionUpdateData(session),
   });
 
@@ -143,46 +146,48 @@ export async function saveUserSession(
     return null;
   }
 
-  return getUserSession(userId, session.id);
+  return getActorSession(actorId, session.id);
 }
 
-export async function saveOrCreateUserSession(
-  userId: string,
+export async function saveOrCreateActorSession(
+  actorId: string,
   session: ChatSession,
+  userId?: string | null,
 ): Promise<ChatSession | null> {
-  const existing = await getUserSession(userId, session.id);
+  const existing = await getActorSession(actorId, session.id);
 
   if (existing) {
-    return saveUserSession(userId, session);
+    return saveActorSession(actorId, session);
   }
 
-  return createUserSessionRecord(userId, session);
+  return createActorSessionRecord(actorId, session, userId);
 }
 
-export async function appendUserSessionExchange(
-  userId: string,
+export async function appendActorSessionExchange(
+  actorId: string,
   sessionId: string,
   input: { userContent: string; assistantContent: string; now?: string; modelId?: ModelId },
+  userId?: string | null,
 ): Promise<ChatSession | null> {
-  const current = await getUserSession(userId, sessionId);
+  const current = await getActorSession(actorId, sessionId);
   const nextSession = appendSessionMessages(
     current ?? createDraftSession({ modelId: input.modelId }, sessionId),
     input,
   );
 
   if (current) {
-    return saveUserSession(userId, nextSession);
+    return saveActorSession(actorId, nextSession);
   }
 
-  return createUserSessionRecord(userId, nextSession);
+  return createActorSessionRecord(actorId, nextSession, userId);
 }
 
-export async function truncateUserSessionForEdit(
-  userId: string,
+export async function truncateActorSessionForEdit(
+  actorId: string,
   sessionId: string,
   messageId: string,
 ): Promise<ChatSession | null> {
-  const current = await getUserSession(userId, sessionId);
+  const current = await getActorSession(actorId, sessionId);
   if (!current) {
     return null;
   }
@@ -192,20 +197,20 @@ export async function truncateUserSessionForEdit(
     return null;
   }
 
-  return saveUserSession(userId, truncated);
+  return saveActorSession(actorId, truncated);
 }
 
-export async function deleteUserSession(userId: string, sessionId: string): Promise<boolean> {
+export async function deleteActorSession(actorId: string, sessionId: string): Promise<boolean> {
   const result = await prisma.chatSessionRecord.deleteMany({
-    where: { id: sessionId, userId },
+    where: { id: sessionId, actorId },
   });
 
   return result.count > 0;
 }
 
-export async function deleteAllUserSessions(userId: string): Promise<number> {
+export async function deleteAllActorSessions(actorId: string): Promise<number> {
   const result = await prisma.chatSessionRecord.deleteMany({
-    where: { userId },
+    where: { actorId },
   });
 
   return result.count;

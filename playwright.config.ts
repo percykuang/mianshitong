@@ -3,13 +3,21 @@ import { defineConfig, devices } from '@playwright/test';
 const playwrightScope = process.env.PLAYWRIGHT_SCOPE;
 const shouldSkipWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER === '1';
 const browserChannel = process.env.CI ? 'chromium' : 'chrome';
+const webBaseUrl = 'http://127.0.0.1:3100';
+const webDistDir = `.next-playwright/web-${process.pid}`;
+const webServerCommand = [
+  'LLM_PROVIDER=mock',
+  'MOCK_STREAM_CHAT_PREFIX=[web-e2e]',
+  `NEXT_DIST_DIR=${webDistDir}`,
+  'pnpm -C apps/web exec next dev -p 3100 -H 127.0.0.1',
+].join(' ');
 const webServers = [
   ...(playwrightScope === 'admin'
     ? []
     : [
         {
-          command: 'pnpm dev:web',
-          url: 'http://127.0.0.1:3000/chat',
+          command: webServerCommand,
+          url: `${webBaseUrl}/chat`,
           timeout: 120 * 1000,
           reuseExistingServer: !process.env.CI,
         },
@@ -43,7 +51,7 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         channel: browserChannel,
-        baseURL: 'http://127.0.0.1:3000',
+        baseURL: webBaseUrl,
       },
     },
     {

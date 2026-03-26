@@ -1,18 +1,31 @@
-import type { ChatTurn } from '@mianshitong/llm';
 import type {
   ChatSession,
   ChatSessionResponse,
   ChatSessionsResponse,
+  ChatUsageSummary,
   ModelId,
   SessionSummary,
 } from '@mianshitong/shared';
 
 export type SseEventHandler = (eventName: string, payload: string) => void;
 
+async function readErrorMessage(response: Response): Promise<string> {
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json().catch(() => null)) as { message?: unknown } | null;
+    if (payload && typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message;
+    }
+  }
+
+  const message = await response.text();
+  return message || '请求失败';
+}
+
 async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || '请求失败');
+    throw new Error(await readErrorMessage(response));
   }
 
   return (await response.json()) as T;
@@ -32,6 +45,11 @@ export async function fetchSessionById(sessionId: string): Promise<ChatSession> 
   const response = await fetch(`/api/chat/sessions/${sessionId}`, { cache: 'no-store' });
   const data = await readJson<ChatSessionResponse>(response);
   return data.session;
+}
+
+export async function fetchChatUsageSummary(): Promise<ChatUsageSummary> {
+  const response = await fetch('/api/chat/usage', { cache: 'no-store' });
+  return readJson<ChatUsageSummary>(response);
 }
 
 export async function createSessionRequest(input: {
@@ -65,8 +83,7 @@ export async function deleteSessionRequest(sessionId: string): Promise<void> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || '删除会话失败');
+    throw new Error((await readErrorMessage(response)) || '删除会话失败');
   }
 }
 
@@ -76,8 +93,7 @@ export async function deleteAllSessionsRequest(): Promise<void> {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || '删除所有会话失败');
+    throw new Error((await readErrorMessage(response)) || '删除所有会话失败');
   }
 }
 
@@ -95,31 +111,7 @@ export async function openStreamRequest(
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || '发送失败，请稍后重试');
-  }
-
-  return response;
-}
-
-export async function openGuestStreamRequest(
-  input: {
-    modelId: ModelId;
-    messages: ChatTurn[];
-    session?: ChatSession;
-  },
-  signal?: AbortSignal,
-): Promise<Response> {
-  const response = await fetch('/api/chat/stream', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(input),
-    signal,
-  });
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || '发送失败，请稍后重试');
+    throw new Error((await readErrorMessage(response)) || '发送失败，请稍后重试');
   }
 
   return response;
@@ -140,8 +132,7 @@ export async function openEditStreamRequest(
   );
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || '编辑失败，请稍后重试');
+    throw new Error((await readErrorMessage(response)) || '编辑失败，请稍后重试');
   }
 
   return response;

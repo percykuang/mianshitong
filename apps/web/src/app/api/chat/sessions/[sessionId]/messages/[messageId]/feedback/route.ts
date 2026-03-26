@@ -1,6 +1,6 @@
 import type { ChatMessageFeedback, ChatSessionResponse } from '@mianshitong/shared';
-import { getCurrentUserId } from '@/lib/server/auth-session';
-import { setUserMessageFeedback } from '@/lib/server/chat-message-feedback-repository';
+import { getCurrentChatActor } from '@/lib/server/chat-actor';
+import { setActorMessageFeedback } from '@/lib/server/chat-message-feedback-repository';
 
 function isFeedback(value: unknown): value is ChatMessageFeedback | null {
   return value === 'like' || value === 'dislike' || value === null;
@@ -10,9 +10,9 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ sessionId: string; messageId: string }> },
 ): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return Response.json({ message: '无法初始化会话身份' }, { status: 500 });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -26,7 +26,7 @@ export async function PATCH(
   }
 
   const { sessionId, messageId } = await context.params;
-  const session = await setUserMessageFeedback(userId, sessionId, messageId, feedback);
+  const session = await setActorMessageFeedback(actor.id, sessionId, messageId, feedback);
 
   if (!session) {
     return Response.json({ message: 'Session or message not found' }, { status: 404 });

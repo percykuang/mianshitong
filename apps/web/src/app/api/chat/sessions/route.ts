@@ -4,11 +4,11 @@ import {
   type ChatSessionsResponse,
   type CreateSessionInput,
 } from '@mianshitong/shared';
-import { getCurrentUserId } from '@/lib/server/auth-session';
+import { getCurrentChatActor } from '@/lib/server/chat-actor';
 import {
-  createUserSession,
-  deleteAllUserSessions,
-  listUserSessionSummaries,
+  createActorSession,
+  deleteAllActorSessions,
+  listActorSessionSummaries,
 } from '@/lib/server/chat-session-repository';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -20,43 +20,48 @@ function isModelId(value: unknown): value is (typeof MODEL_OPTIONS)[number]['id'
 }
 
 export async function GET(): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return Response.json({ message: '无法初始化会话身份' }, { status: 500 });
   }
 
   const payload: ChatSessionsResponse = {
-    sessions: await listUserSessionSummaries(userId),
+    sessions: await listActorSessionSummaries(actor.id),
   };
 
   return Response.json(payload);
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return Response.json({ message: '无法初始化会话身份' }, { status: 500 });
   }
 
   const body = await request.json().catch(() => ({}));
   const input = isRecord(body) ? body : {};
-  const session = await createUserSession(userId, {
-    title: typeof input.title === 'string' ? input.title : undefined,
-    modelId: isModelId(input.modelId) ? input.modelId : undefined,
-    isPrivate: typeof input.isPrivate === 'boolean' ? input.isPrivate : undefined,
-    config: isRecord(input.config) ? (input.config as CreateSessionInput['config']) : undefined,
-  });
+  const session = await createActorSession(
+    actor.id,
+    {
+      title: typeof input.title === 'string' ? input.title : undefined,
+      modelId: isModelId(input.modelId) ? input.modelId : undefined,
+      isPrivate: typeof input.isPrivate === 'boolean' ? input.isPrivate : undefined,
+      config: isRecord(input.config) ? (input.config as CreateSessionInput['config']) : undefined,
+    },
+    undefined,
+    actor.authUserId,
+  );
 
   const payload: ChatSessionResponse = { session };
   return Response.json(payload, { status: 201 });
 }
 
 export async function DELETE(): Promise<Response> {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    return Response.json({ message: 'Unauthorized' }, { status: 401 });
+  const actor = await getCurrentChatActor({ createGuest: true });
+  if (!actor) {
+    return Response.json({ message: '无法初始化会话身份' }, { status: 500 });
   }
 
-  const deletedCount = await deleteAllUserSessions(userId);
+  const deletedCount = await deleteAllActorSessions(actor.id);
   return Response.json({ ok: true, deletedCount });
 }

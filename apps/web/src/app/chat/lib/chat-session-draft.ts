@@ -1,10 +1,10 @@
 import type { ChatTurn } from '@mianshitong/llm';
 import {
-  normalizeInterviewConfig,
   type ChatMessage,
   type ChatSession,
   type ModelId,
   type SessionSummary,
+  normalizeInterviewConfig,
 } from '@mianshitong/shared';
 import { createChatSessionId, normalizeChatSessionId } from '@/lib/chat-session-id';
 
@@ -40,21 +40,7 @@ export function createMessage(input: {
   };
 }
 
-export function normalizeStoredSession(session: ChatSession): ChatSession {
-  return {
-    ...session,
-    pinnedAt: session.pinnedAt ?? null,
-    runtime: {
-      ...session.runtime,
-      followUpTrace: session.runtime.followUpTrace ?? [],
-      assessmentTrace: session.runtime.assessmentTrace ?? [],
-      planningTrace: session.runtime.planningTrace ?? null,
-      reportTrace: session.runtime.reportTrace ?? null,
-    },
-  };
-}
-
-export function createDraftLocalSession(modelId: ModelId, sessionId?: string | null): ChatSession {
+export function createDraftChatSession(modelId: ModelId, sessionId?: string | null): ChatSession {
   const now = new Date().toISOString();
 
   return {
@@ -85,10 +71,6 @@ export function createDraftLocalSession(modelId: ModelId, sessionId?: string | n
     pinnedAt: null,
     messages: [],
   };
-}
-
-export function createGuestSession(modelId: ModelId, sessionId?: string | null): ChatSession {
-  return createDraftLocalSession(modelId, sessionId);
 }
 
 export function toSessionSummary(session: ChatSession): SessionSummary {

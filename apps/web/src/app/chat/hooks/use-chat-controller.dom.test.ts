@@ -8,14 +8,17 @@ import type { ChatSession } from '@mianshitong/shared';
 
 const controllerState = vi.hoisted(() => ({
   sending: false,
-  isAuthenticated: true,
 }));
 
 const sendMocks = vi.hoisted(() => ({
   remoteSendMessage: vi.fn(async () => undefined),
-  localSendMessage: vi.fn(async () => undefined),
   remoteEditMessage: vi.fn(async () => true),
-  localEditMessage: vi.fn(async () => true),
+  refreshChatUsage: vi.fn(async () => ({
+    actorType: 'guest' as const,
+    used: 0,
+    max: 10,
+    remaining: 10,
+  })),
   abortCurrentStream: vi.fn(),
   setSending: vi.fn(),
   setSessions: vi.fn(),
@@ -71,7 +74,11 @@ vi.mock('./use-chat-navigation', () => ({
 vi.mock('./use-chat-storage', () => ({
   useChatStorage: () => ({
     ready: true,
-    isAuthenticated: controllerState.isAuthenticated,
+    isAuthenticated: false,
+    chatUsage: { actorType: 'guest', used: 0, max: 10, remaining: 10 },
+    usageLoading: false,
+    usageError: null,
+    refreshChatUsage: sendMocks.refreshChatUsage,
     fetchSessionList: vi.fn(async () => []),
     fetchSessionDetail: vi.fn(async () => null),
     deleteSessionById: vi.fn(async () => undefined),
@@ -83,16 +90,8 @@ vi.mock('./use-send-message', () => ({
   useSendMessage: () => sendMocks.remoteSendMessage,
 }));
 
-vi.mock('./use-local-send-message', () => ({
-  useLocalSendMessage: () => sendMocks.localSendMessage,
-}));
-
 vi.mock('./use-edit-message', () => ({
   useEditMessage: () => sendMocks.remoteEditMessage,
-}));
-
-vi.mock('./use-local-edit-message', () => ({
-  useLocalEditMessage: () => sendMocks.localEditMessage,
 }));
 
 vi.mock('./use-chat-controller-actions', () => ({
@@ -121,15 +120,12 @@ import { useChatController } from './use-chat-controller';
 describe('useChatController', () => {
   beforeEach(() => {
     controllerState.sending = false;
-    controllerState.isAuthenticated = true;
     sendMocks.remoteSendMessage.mockClear();
-    sendMocks.localSendMessage.mockClear();
     sendMocks.abortCurrentStream.mockClear();
     sendMocks.setSending.mockClear();
   });
 
-  it('登录用户发送消息时走远端发送', async () => {
-    controllerState.isAuthenticated = true;
+  it('发送消息时统一走远端发送', async () => {
     const { result } = renderHook(() => useChatController());
 
     await act(async () => {
@@ -137,19 +133,6 @@ describe('useChatController', () => {
     });
 
     expect(sendMocks.remoteSendMessage).toHaveBeenCalledWith('你好');
-    expect(sendMocks.localSendMessage).not.toHaveBeenCalled();
-  });
-
-  it('游客发送消息时走本地发送', async () => {
-    controllerState.isAuthenticated = false;
-    const { result } = renderHook(() => useChatController());
-
-    await act(async () => {
-      await result.current.sendMessage('你好');
-    });
-
-    expect(sendMocks.localSendMessage).toHaveBeenCalledWith('你好');
-    expect(sendMocks.remoteSendMessage).not.toHaveBeenCalled();
   });
 
   it('发送中再次发送非空内容时会阻止发送并提示 toast', async () => {
@@ -161,7 +144,6 @@ describe('useChatController', () => {
     });
 
     expect(sendMocks.remoteSendMessage).not.toHaveBeenCalled();
-    expect(sendMocks.localSendMessage).not.toHaveBeenCalled();
     expect(result.current.toast).toBe('AI 回复生成中，请先停止当前回复');
   });
 

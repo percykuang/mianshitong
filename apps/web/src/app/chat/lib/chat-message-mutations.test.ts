@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createDraftLocalSession, createMessage } from './chat-local-session';
+import { createDraftChatSession, createMessage } from './chat-session-draft';
 import {
   appendAssistantDelta,
   appendOptimisticMessages,
-  buildStoredLocalSession,
+  buildStoredChatSession,
   getEditableUserMessageIndex,
   removeOptimisticMessages,
   toSessionTitle,
@@ -18,7 +18,7 @@ describe('chat-message-mutations', () => {
   });
 
   it('会追加 optimistic 消息并更新会话时间', () => {
-    const session = createDraftLocalSession('deepseek-chat', 'mutation_session_1');
+    const session = createDraftChatSession('deepseek-chat', 'mutation_session_1');
     const optimisticUser = createMessage({
       role: 'user',
       kind: 'text',
@@ -40,7 +40,7 @@ describe('chat-message-mutations', () => {
       createdAt: '2026-03-09T15:00:00.000Z',
     });
     const session = appendOptimisticMessages(
-      createDraftLocalSession('deepseek-chat', 'mutation_session_2'),
+      createDraftChatSession('deepseek-chat', 'mutation_session_2'),
       [optimisticAssistant],
       '2026-03-09T15:00:00.000Z',
     );
@@ -54,7 +54,7 @@ describe('chat-message-mutations', () => {
   });
 
   it('会构造用于本地持久化的会话，并在首条用户消息时更新标题', () => {
-    const session = createDraftLocalSession('deepseek-chat', 'mutation_session_3');
+    const session = createDraftChatSession('deepseek-chat', 'mutation_session_3');
     const optimisticUser = createMessage({
       role: 'user',
       kind: 'text',
@@ -68,7 +68,7 @@ describe('chat-message-mutations', () => {
       createdAt: '2026-03-09T15:00:00.000Z',
     });
 
-    const stored = buildStoredLocalSession({
+    const stored = buildStoredChatSession({
       session,
       optimisticUser,
       optimisticAssistant,

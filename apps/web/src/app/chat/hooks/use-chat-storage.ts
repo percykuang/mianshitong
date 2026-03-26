@@ -1,26 +1,23 @@
-import type { ChatSession, SessionSummary } from '@mianshitong/shared';
+import type { ChatSession, ChatUsageSummary, SessionSummary } from '@mianshitong/shared';
 import { useSession } from 'next-auth/react';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   deleteAllSessionsRequest,
   deleteSessionRequest,
+  fetchChatUsageSummary,
   fetchSessionById,
   fetchSessions,
   renameSessionRequest,
 } from '../lib/chat-api';
 import { setSessionPinnedRequest } from '../lib/chat-session-settings-api';
-import {
-  clearLocalSessions,
-  deleteLocalSession,
-  getLocalSessionById,
-  listLocalSessions,
-  renameLocalSession,
-  setLocalSessionPinnedState,
-} from '../lib/chat-local-storage';
 
 interface UseChatStorageResult {
   ready: boolean;
   isAuthenticated: boolean;
+  chatUsage: ChatUsageSummary | null;
+  usageLoading: boolean;
+  usageError: string | null;
+  refreshChatUsage: () => Promise<ChatUsageSummary>;
   fetchSessionList: () => Promise<SessionSummary[]>;
   fetchSessionDetail: (sessionId: string) => Promise<ChatSession>;
   renameSessionById: (sessionId: string, title: string) => Promise<ChatSession>;
@@ -32,74 +29,76 @@ interface UseChatStorageResult {
 export function useChatStorage(): UseChatStorageResult {
   const { status } = useSession();
   const isAuthenticated = status === 'authenticated';
-  const ready = status !== 'loading';
+  const [chatUsage, setChatUsage] = useState<ChatUsageSummary | null>(null);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageBootstrapped, setUsageBootstrapped] = useState(false);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
-  const fetchSessionList = useCallback(async () => {
-    return isAuthenticated ? fetchSessions() : listLocalSessions();
-  }, [isAuthenticated]);
+  const refreshChatUsage = useCallback(async () => {
+    const nextUsage = await fetchChatUsageSummary();
+    setChatUsage(nextUsage);
+    setUsageError(null);
+    return nextUsage;
+  }, []);
 
-  const fetchSessionDetail = useCallback(
-    async (sessionId: string) => {
-      if (isAuthenticated) {
-        return fetchSessionById(sessionId);
-      }
-
-      const local = await getLocalSessionById(sessionId);
-      if (!local) {
-        throw new Error('Session not found');
-      }
-      return local;
-    },
-    [isAuthenticated],
-  );
-
-  const renameSessionById = useCallback(
-    async (sessionId: string, title: string) => {
-      return isAuthenticated
-        ? renameSessionRequest(sessionId, title)
-        : renameLocalSession(sessionId, title);
-    },
-    [isAuthenticated],
-  );
-
-  const setSessionPinnedState = useCallback(
-    async (sessionId: string, pinned: boolean) => {
-      return isAuthenticated
-        ? setSessionPinnedRequest(sessionId, pinned)
-        : setLocalSessionPinnedState(sessionId, pinned);
-    },
-    [isAuthenticated],
-  );
-
-  const deleteSessionById = useCallback(
-    async (sessionId: string) => {
-      if (isAuthenticated) {
-        await deleteSessionRequest(sessionId);
-        return;
-      }
-
-      await deleteLocalSession(sessionId);
-    },
-    [isAuthenticated],
-  );
-
-  const deleteAllSessions = useCallback(async () => {
-    if (isAuthenticated) {
-      await deleteAllSessionsRequest();
+  useEffect(() => {
+    if (status === 'loading') {
       return;
     }
 
-    await clearLocalSessions();
-  }, [isAuthenticated]);
+    let cancelled = false;
+    const requestTimer = window.setTimeout(() => {
+      if (cancelled) {
+        return;
+      }
+
+      setUsageLoading(true);
+      setUsageBootstrapped(false);
+      void fetchChatUsageSummary()
+        .then((nextUsage) => {
+          if (cancelled) {
+            return;
+          }
+
+          setChatUsage(nextUsage);
+          setUsageError(null);
+        })
+        .catch((error) => {
+          if (cancelled) {
+            return;
+          }
+
+          setChatUsage(null);
+          setUsageError(error instanceof Error ? error.message : '额度初始化失败');
+        })
+        .finally(() => {
+          if (cancelled) {
+            return;
+          }
+
+          setUsageLoading(false);
+          setUsageBootstrapped(true);
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(requestTimer);
+    };
+  }, [status]);
 
   return {
-    ready,
+    ready: status !== 'loading' && usageBootstrapped,
     isAuthenticated,
-    fetchSessionList,
-    fetchSessionDetail,
-    renameSessionById,
-    setSessionPinnedState,
-    deleteSessionById,
-    deleteAllSessions,
+    chatUsage,
+    usageLoading,
+    usageError,
+    refreshChatUsage,
+    fetchSessionList: fetchSessions,
+    fetchSessionDetail: fetchSessionById,
+    renameSessionById: renameSessionRequest,
+    setSessionPinnedState: setSessionPinnedRequest,
+    deleteSessionById: deleteSessionRequest,
+    deleteAllSessions: deleteAllSessionsRequest,
   };
 }

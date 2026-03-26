@@ -1,5 +1,6 @@
 import type { ChatMessage } from '@mianshitong/shared';
 import type { RefObject } from 'react';
+import { ChatEmptyState } from './chat-empty-state';
 import { CHAT_MESSAGE_COLUMN_CLASS } from './chat-layout';
 import { ChatMessageItem } from './chat-message-item';
 
@@ -18,8 +19,6 @@ interface ChatMessageListProps {
   onSubmitEditUserMessage: () => Promise<void>;
   onNotice: (content: string) => void;
 }
-
-import { ChatEmptyState } from './chat-empty-state';
 
 export function ChatMessageList({
   sessionId,
@@ -42,7 +41,7 @@ export function ChatMessageList({
   const messageKeyPrefix = sessionId ?? 'empty';
 
   return (
-    <div ref={scrollContainerRef} className="min-h-0 flex-1 touch-pan-y overflow-y-auto">
+    <div ref={scrollContainerRef} className="absolute inset-0 touch-pan-y overflow-y-auto">
       <div className={CHAT_MESSAGE_COLUMN_CLASS}>
         {!hasConversation && !suppressEmptyState ? <ChatEmptyState /> : null}
 
@@ -57,6 +56,9 @@ export function ChatMessageList({
               message.role === 'assistant' &&
               !message.content.trim()
             }
+            isStreaming={
+              sending && index === visibleMessages.length - 1 && message.role === 'assistant'
+            }
             isEditing={message.id === editingMessageId}
             editingValue={editingValue}
             sending={sending}
@@ -67,6 +69,8 @@ export function ChatMessageList({
             onNotice={onNotice}
           />
         ))}
+
+        <div aria-hidden="true" className="min-h-6 min-w-6 shrink-0" />
       </div>
     </div>
   );

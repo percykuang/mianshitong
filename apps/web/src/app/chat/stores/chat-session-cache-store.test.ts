@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createDraftLocalSession } from '../lib/chat-local-session';
+import { createDraftChatSession } from '../lib/chat-session-draft';
 import { createChatSessionCacheStore } from './chat-session-cache-store';
 
 describe('chat-session-cache-store', () => {
   it('会按 sessionId 缓存并覆盖会话', () => {
     const store = createChatSessionCacheStore();
-    const session = createDraftLocalSession('deepseek-chat', 'session_cache_1');
+    const session = createDraftChatSession('deepseek-chat', 'session_cache_1');
     const updated = { ...session, title: '已更新标题' };
 
     store.getState().upsertSession(session);
@@ -16,8 +16,8 @@ describe('chat-session-cache-store', () => {
 
   it('删除与清空操作会同步更新缓存', () => {
     const store = createChatSessionCacheStore();
-    const first = createDraftLocalSession('deepseek-chat', 'session_cache_1');
-    const second = createDraftLocalSession('deepseek-chat', 'session_cache_2');
+    const first = createDraftChatSession('deepseek-chat', 'session_cache_1');
+    const second = createDraftChatSession('deepseek-chat', 'session_cache_2');
 
     store.getState().upsertSession(first);
     store.getState().upsertSession(second);
