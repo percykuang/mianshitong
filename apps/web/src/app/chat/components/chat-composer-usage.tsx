@@ -91,7 +91,7 @@ export function ChatComposerUsage({ usage, usageLoading }: ChatComposerUsageProp
 
             <div className="h-1.5 rounded-full bg-zinc-100">
               <div
-                className="h-full rounded-full bg-zinc-400 transition-[width] duration-300"
+                className="h-full rounded-full bg-zinc-500 transition-[width] duration-300"
                 style={{ width: `${usagePercent}%` }}
               />
             </div>
