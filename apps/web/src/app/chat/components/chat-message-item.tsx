@@ -91,7 +91,7 @@ export function ChatMessageItem({
                     onClick={onCancelEditUserMessage}
                     disabled={sending}
                   >
-                    Cancel
+                    取消
                   </Button>
                   <Button
                     type="button"
@@ -99,7 +99,7 @@ export function ChatMessageItem({
                     onClick={() => void onSubmitEditUserMessage()}
                     disabled={sending || !editingValue.trim()}
                   >
-                    Send
+                    确定
                   </Button>
                 </div>
               </div>

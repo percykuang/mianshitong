@@ -111,4 +111,26 @@ describe('ChatMessageItem', () => {
     expect(wrapper?.className).toContain('items-end');
     expect(container.querySelector('article')).toBeTruthy();
   });
+
+  it('编辑用户消息时应显示中文操作文案', () => {
+    render(
+      <ChatMessageItem
+        sessionId="session-1"
+        message={USER_MESSAGE}
+        isLoading={false}
+        isStreaming={false}
+        isEditing
+        editingValue={USER_MESSAGE.content}
+        sending={false}
+        onStartEditUserMessage={() => {}}
+        onEditingValueChange={() => {}}
+        onCancelEditUserMessage={() => {}}
+        onSubmitEditUserMessage={async () => {}}
+        onNotice={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '确定' })).toBeInTheDocument();
+  });
 });
