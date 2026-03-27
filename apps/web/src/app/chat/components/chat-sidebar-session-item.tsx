@@ -26,12 +26,11 @@ export function ChatSidebarSessionItem({
 }: ChatSidebarSessionItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pinned = Boolean(session.pinnedAt);
-  const showActionTrigger = menuOpen || pinned;
 
   return (
     <div
       className={cn(
-        'group/session flex min-w-0 items-center gap-1 rounded-[18px] px-3 py-0.5 transition-colors',
+        'group/session flex min-w-0 items-center rounded-[18px] px-3 py-0.5 transition-colors',
         active
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
           : 'text-sidebar-foreground hover:bg-sidebar-accent',
@@ -42,12 +41,19 @@ export function ChatSidebarSessionItem({
         onClick={() => void onSelect(session.id)}
         className="flex min-w-0 flex-1 cursor-pointer items-center rounded-[14px] py-1 text-left"
       >
-        <span className="line-clamp-1 min-w-0 flex-1 text-sm leading-6 font-medium">
+        <span className="block min-w-0 flex-1 truncate text-sm leading-6 font-medium">
           {session.title}
         </span>
       </button>
 
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center self-center">
+      <div
+        className={cn(
+          'flex h-8 shrink-0 items-center justify-center self-center overflow-hidden transition-[width,margin,opacity] duration-150',
+          menuOpen
+            ? 'ml-1 w-8 opacity-100'
+            : 'ml-0 w-0 opacity-0 group-hover/session:ml-1 group-hover/session:w-8 group-hover/session:opacity-100',
+        )}
+      >
         <Popover open={menuOpen} onOpenChange={setMenuOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -56,24 +62,13 @@ export function ChatSidebarSessionItem({
               aria-label="更多会话操作"
               onClick={(event) => event.stopPropagation()}
               className={cn(
-                'relative h-7 w-7 cursor-pointer rounded-xl p-0 text-sidebar-foreground/56 transition-all hover:bg-black/5 hover:text-sidebar-foreground dark:hover:bg-white/7',
-                showActionTrigger
-                  ? 'pointer-events-auto opacity-100'
-                  : 'pointer-events-none opacity-0 group-hover/session:pointer-events-auto group-hover/session:opacity-100',
+                'h-7 w-7 cursor-pointer rounded-xl p-0 text-sidebar-foreground/56 transition-colors hover:bg-black/5 hover:text-sidebar-foreground dark:hover:bg-white/7',
+                menuOpen
+                  ? 'pointer-events-auto'
+                  : 'pointer-events-none group-hover/session:pointer-events-auto',
               )}
             >
-              <Pin
-                className={cn(
-                  'absolute inset-0 m-auto size-3.5 transition-opacity duration-150',
-                  pinned && !menuOpen ? 'opacity-100 group-hover/session:opacity-0' : 'opacity-0',
-                )}
-              />
-              <MoreHorizontal
-                className={cn(
-                  'absolute inset-0 m-auto size-3.5 transition-opacity duration-150',
-                  menuOpen || !pinned ? 'opacity-100' : 'opacity-0 group-hover/session:opacity-100',
-                )}
-              />
+              <MoreHorizontal className="size-3.5" />
             </Button>
           </PopoverTrigger>
           <PopoverContent
