@@ -11,6 +11,7 @@ interface HoverTooltipProps {
   side?: 'top' | 'right' | 'bottom' | 'left';
   align?: 'start' | 'center' | 'end';
   contentClassName?: string;
+  disabled?: boolean;
 }
 
 export function HoverTooltip({
@@ -19,6 +20,7 @@ export function HoverTooltip({
   side = 'bottom',
   align = 'center',
   contentClassName,
+  disabled = false,
 }: HoverTooltipProps) {
   const mounted = useSyncExternalStore(
     () => () => {},
@@ -26,7 +28,7 @@ export function HoverTooltip({
     () => false,
   );
 
-  if (!mounted) {
+  if (!mounted || disabled) {
     return <span className="inline-flex">{children}</span>;
   }
 

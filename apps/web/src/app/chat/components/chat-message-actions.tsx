@@ -38,7 +38,10 @@ const resolveNextFeedback = (
 ): ChatMessageFeedback | null => (currentFeedback === targetFeedback ? null : targetFeedback);
 
 const feedbackButtonClass = (active: boolean) =>
-  cn(active && 'text-foreground hover:text-foreground disabled:opacity-100');
+  cn(
+    'transition-transform duration-150 ease-out hover:scale-[1.06] active:scale-95',
+    active && 'text-foreground hover:text-foreground disabled:opacity-100',
+  );
 
 function CopyMessageButton({ content, defaultLabel, testId, onNotice }: CopyMessageButtonProps) {
   const [copied, setCopied] = useState(false);
@@ -69,7 +72,7 @@ function CopyMessageButton({ content, defaultLabel, testId, onNotice }: CopyMess
   }, [content, onNotice]);
 
   return (
-    <HoverTooltip content={copied ? '已复制' : defaultLabel} side="top">
+    <HoverTooltip content={copied ? '已复制' : defaultLabel} side="top" disabled>
       <Button
         type="button"
         variant="ghost"
@@ -125,7 +128,7 @@ export function ChatMessageActions({
         testId="assistant-message-copy"
         onNotice={onNotice}
       />
-      <HoverTooltip content="喜欢" side="top">
+      <HoverTooltip content="喜欢" side="top" disabled>
         <Button
           type="button"
           variant="ghost"
@@ -140,14 +143,20 @@ export function ChatMessageActions({
             void onSetMessageFeedback(messageId, resolveNextFeedback(activeFeedback, 'like'))
           }
         >
-          {activeFeedback === 'like' ? (
-            <ThumbsUpFill className="size-3.5" />
-          ) : (
-            <ThumbsUp className="size-3.5" />
-          )}
+          <span
+            key={activeFeedback === 'like' ? 'upvote-fill' : 'upvote-line'}
+            data-testid="message-upvote-icon"
+            className="inline-flex animate-in items-center justify-center duration-150 ease-out zoom-in-75"
+          >
+            {activeFeedback === 'like' ? (
+              <ThumbsUpFill className="size-3.5" />
+            ) : (
+              <ThumbsUp className="size-3.5" />
+            )}
+          </span>
         </Button>
       </HoverTooltip>
-      <HoverTooltip content="不喜欢" side="top">
+      <HoverTooltip content="不喜欢" side="top" disabled>
         <Button
           type="button"
           variant="ghost"
@@ -162,11 +171,17 @@ export function ChatMessageActions({
             void onSetMessageFeedback(messageId, resolveNextFeedback(activeFeedback, 'dislike'))
           }
         >
-          {activeFeedback === 'dislike' ? (
-            <ThumbsDownFill className="size-3.5" />
-          ) : (
-            <ThumbsDown className="size-3.5" />
-          )}
+          <span
+            key={activeFeedback === 'dislike' ? 'downvote-fill' : 'downvote-line'}
+            data-testid="message-downvote-icon"
+            className="inline-flex animate-in items-center justify-center duration-150 ease-out zoom-in-75"
+          >
+            {activeFeedback === 'dislike' ? (
+              <ThumbsDownFill className="size-3.5" />
+            ) : (
+              <ThumbsDown className="size-3.5" />
+            )}
+          </span>
         </Button>
       </HoverTooltip>
     </>

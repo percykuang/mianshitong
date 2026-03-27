@@ -74,7 +74,7 @@ export function renderInlineCode({ className, children, ...rest }: CodeProps) {
 
 function CodeActionButton({ label, icon, onClick }: CodeActionButtonProps) {
   return (
-    <HoverTooltip content={label} side="top">
+    <HoverTooltip content={label} side="top" disabled>
       <button
         type="button"
         aria-label={label}
