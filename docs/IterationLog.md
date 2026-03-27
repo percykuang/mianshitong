@@ -7,6 +7,576 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 5.04（2026-03-28）：点赞与点踩按钮补充轻量反馈动效
+
+### 目标
+
+- 让 AI 回复下方的点赞、点踩按钮在状态切换时有更明确的交互反馈，但不引入喧宾夺主的重动画。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 按钮本身新增轻量 `hover / active` 缩放反馈
+  - 点赞与点踩图标在“线框 / 填充”状态切换时会重新挂载，并通过 `animate-in + zoom-in` 播放一次短促 pop 动效
+  - 新增 `message-upvote-icon`、`message-downvote-icon` 测试钩子，便于稳定回归
+- 新增 `apps/web/src/app/chat/components/chat-message-actions.dom.test.tsx`
+  - 覆盖反馈状态切换时图标重挂载与动画 class 保留的断言
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整 AI 回复动作区里点赞、点踩按钮的视觉反馈。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/components/chat-message-actions.dom.test.tsx apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+- `pnpm -C apps/web exec eslint src/app/chat/components/chat-message-actions.tsx src/app/chat/components/chat-message-actions.dom.test.tsx`
+- `pnpm exec prettier -c apps/web/src/app/chat/components/chat-message-actions.tsx apps/web/src/app/chat/components/chat-message-actions.dom.test.tsx apps/web/src/app/globals.css`
+
+### 下一步
+
+- 若后续还想继续增强反馈感，可再评估是否给“复制成功”图标也补同等级别的轻动画，但应保持整个动作区动画节奏统一。
+
+## Iteration 5.03（2026-03-28）：聊天页通用图标按钮移除 hover 文案提示
+
+### 目标
+
+- 去掉聊天页里一批语义已足够明确的通用图标按钮 hover 提示，减少不必要的视觉噪音。
+- 保留图标按钮的可访问性标签，不影响读屏和按钮语义。
+
+### 主要改动
+
+- 调整 `apps/web/src/components/ui/hover-tooltip.tsx`
+  - 新增 `disabled` 开关，允许在具体场景关闭 tooltip，而不影响其它仍需提示的入口
+- 调整 `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 关闭 AI 回复下方复制、点赞、点踩按钮的 hover 文案提示
+  - 关闭用户消息气泡下方复制按钮的 hover 文案提示
+- 调整 `apps/web/src/app/chat/components/chat-code-block.tsx`
+  - 关闭代码块下载、复制按钮的 hover 文案提示
+- 新增 `apps/web/src/components/ui/hover-tooltip.dom.test.tsx`
+  - 覆盖 tooltip 启用与禁用两种行为，避免后续回归
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整聊天页部分图标按钮的 hover 提示展示。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/components/ui/hover-tooltip.dom.test.tsx apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+- `pnpm -C apps/web exec eslint src/components/ui/hover-tooltip.tsx src/components/ui/hover-tooltip.dom.test.tsx src/app/chat/components/chat-message-actions.tsx src/app/chat/components/chat-code-block.tsx`
+
+### 下一步
+
+- 若后续还要继续收口交互噪音，可统一盘点“哪些按钮保留 tooltip，哪些按钮只保留 aria-label”，形成一套聊天页动作区规范。
+
+## Iteration 5.02（2026-03-28）：额度弹层进度条颜色加深
+
+### 目标
+
+- 提升聊天输入区额度弹层内进度条的可见性，避免当前前景色过浅看起来接近灰底。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/components/chat-composer-usage.tsx`
+  - 额度弹层进度条前景色从 `bg-zinc-400` 加深为 `bg-zinc-500`
+  - 不调整进度条尺寸、圆角、布局和文案，仅收口颜色层级
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整额度弹层进度条的视觉颜色。
+
+### 验证
+
+- `pnpm -C apps/web exec eslint src/app/chat/components/chat-composer-usage.tsx`
+
+### 下一步
+
+- 若后续还觉得弱，可继续把轨道色与触发器圆环一起纳入统一色板收口，但这次先维持最小改动。
+
+## Iteration 5.01（2026-03-28）：会话列表更多操作按钮改为严格 hover 才显示
+
+### 目标
+
+- 修复左侧会话列表项在点击后即使鼠标移出仍残留显示 `...` 操作按钮的问题。
+- 让会话项操作按钮只在 `hover` 或菜单已打开时显示，不再受焦点状态影响。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/components/chat-sidebar-session-item.tsx`
+  - 移除操作区展开逻辑中的 `group-focus-within/session:*`
+  - 移除按钮可点击逻辑中的 `group-focus-within/session:pointer-events-auto`
+  - 当前行为收口为：仅 `hover` 会话项时显示 `...`，或菜单已打开时保持可见
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整会话列表项操作按钮的显隐条件。
+
+### 验证
+
+- `pnpm -C apps/web exec eslint src/app/chat/components/chat-sidebar-session-item.tsx`
+- `pnpm exec prettier -c apps/web/src/app/chat/components/chat-sidebar-session-item.tsx`
+
+### 下一步
+
+- 若后续要兼顾键盘可访问性，可单独为列表项补一版不影响 hover 视觉的键盘操作入口，而不是继续复用 `focus-within` 展示逻辑。
+
+## Iteration 5.00（2026-03-28）：聊天页消息编辑操作文案改为中文
+
+### 目标
+
+- 统一聊天页消息编辑表单的中文文案，避免在中文界面里混入英文按钮文字。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 编辑态按钮文案从 `Cancel / Send` 改为 `取消 / 确定`
+- 调整 `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - 新增编辑态中文文案断言，防止后续回归到英文
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整聊天页消息编辑表单的展示文案。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+- `pnpm -C apps/web exec eslint src/app/chat/components/chat-message-item.tsx src/app/chat/components/chat-message-item.dom.test.tsx`
+
+### 下一步
+
+- 若后续继续做中文化收口，可统一扫一遍聊天页残留的英文 tooltip、空态与按钮文案，而不是逐处被动修补。
+
+## Iteration 4.99（2026-03-28）：聊天页会话列表改为 hover 时才显示更多操作占位
+
+### 目标
+
+- 让聊天页左侧会话列表默认尽量给标题文本更多宽度，不再被右侧操作按钮预留空位。
+- 让 hover 某一项时再显示 `...` 操作入口，并让长标题在此时自然收缩为单行省略。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/components/chat-sidebar-session-item.tsx`
+  - 右侧操作区从“固定 `w-8` 占位 + 透明隐藏”改为“默认 `w-0` 零占位，`hover / focus-within / menuOpen` 时扩展到 `w-8`”
+  - 移除列表项常驻 `gap`，改为仅在操作区展开时补 `ml-1`
+  - 标题文本从 `line-clamp-1` 收口为标准单行 `truncate`，确保 hover 后能稳定出现 `...` 省略
+  - 操作按钮图标统一为 `MoreHorizontal`，避免置顶会话在非 hover 状态下仍占据右侧空间
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整聊天页左侧会话列表项的显示与 hover 交互。
+
+### 验证
+
+- `pnpm -C apps/web exec eslint src/app/chat/components/chat-sidebar-session-item.tsx`
+- `pnpm -C apps/web typecheck`
+
+### 下一步
+
+- 若后续还要继续打磨会话列表，可再评估是否为“置顶状态”补一个不占布局的弱提示，但不应回退到常驻操作位占宽的实现。
+
+## Iteration 4.98（2026-03-27）：技术问答增加深度档位并接入 reasoner 路由与流式调参
+
+### 目标
+
+- 提升普通技术问答在“讲一下 / 详细讲解”场景下的信息密度与结构化深度。
+- 对机制题、对比题和 deep 档位问题优先使用 `deepseek-reasoner`，改善回答完整度。
+- 给 DeepSeek 流式调用补齐 `max_tokens / temperature` 可配置能力，便于线上调优。
+
+### 主要改动
+
+- 技术问答意图新增深度档位：
+  - `apps/web/src/lib/server/chat-general-policy.types.ts`
+  - `apps/web/src/lib/server/chat-general-policy.constants.ts`
+  - `apps/web/src/lib/server/chat-general-policy-intent.ts`
+  - `technical_question` 从 `{ style }` 扩展为 `{ style, detailLevel }`，`detailLevel` 支持 `standard | deep`。
+- 技术问答提示词、few-shot 与 fallback 同步支持 deep 场景：
+  - `apps/web/src/lib/server/chat-general-policy-instruction.ts`
+  - `apps/web/src/lib/server/chat-general-policy-examples.ts`
+  - `apps/web/src/lib/server/chat-general-policy-fallback.ts`
+- 普通聊天流式路由新增“模型选择 + 采样参数”策略：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 技术机制题、技术对比题、deep 技术题会将 `deepseek-chat` 自动切到 `deepseek-reasoner`。
+  - 新增环境变量读取：`DEEPSEEK_TECH_MAX_TOKENS`、`DEEPSEEK_TECH_TEMPERATURE`、`DEEPSEEK_TECH_DEEP_MAX_TOKENS`、`DEEPSEEK_TECH_DEEP_TEMPERATURE`（deep 默认兜底 `2200 / 0.25`）。
+- DeepSeek Stream Provider 支持透传调参：
+  - `packages/llm/src/contracts.ts`
+  - `packages/llm/src/deepseek-stream-provider.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - `streamChat` 输入新增 `maxTokens / temperature`，并映射到 `max_tokens / temperature` 请求字段。
+- 测试与断言同步补齐：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - 增加“讲一下 JS 的事件循环 => mechanism + deep”断言。
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无外部 API 破坏性变更；仅调整普通聊天技术问答的模型选择与输出策略。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/chat-general-policy.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+- `pnpm typecheck`
+- `pnpm lint`
+
+### 下一步
+
+- 上线后观察“技术题平均回复长度、用户继续追问率、满意度反馈”，按数据微调 deep 档位默认 `max_tokens / temperature`。
+
+## Iteration 4.97（2026-03-27）：对齐四类快捷入口的真实产品话术骨架
+
+### 目标
+
+- 基于对 `zhitalk.chat/chat` 四个预置入口的真实重复采样，提炼更稳定的话术结构与版式骨架。
+- 把这些骨架映射到我方快捷入口提示词，减少“像固定模板”或“结构过散”的回复。
+
+### 主要改动
+
+- 真实站点采样结论已转译为两层约束：
+  - `apps/web/src/lib/server/chat-general-policy-instruction.ts`
+  - `apps/web/src/lib/server/chat-general-policy-examples.ts`
+  - `apps/web/src/lib/server/chat-general-policy-fallback.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+- `简历优化` 快捷入口现在更明确收口为：
+  - 先确认可帮助
+  - 明确说明“尚未看到简历内容”
+  - 使用 `**请确保：**` + 有序列表索取完整简历
+  - 使用 `**我会重点帮你看这些方面：**` + 无序列表说明评审维度
+  - 最后给明确 CTA
+- `开始模拟面试` 快捷入口的开场自然化约束进一步加强：
+  - 优先输出“欢迎语 / 过渡语 / **第一个问题：** / 可选括号提示”四段式轻量 Markdown
+  - 禁止回退成“准备好了吗”“技术栈：React”“系统播报规则”这类旁白式表达
+- `前端面试自我介绍` 快捷入口已从“先追问一串背景信息”改为：
+  - 先给 60 到 90 秒可直接套用的结构
+  - 再给常见误区
+  - 再给一句简短模板
+  - 最后引导用户贴自己的版本继续打磨
+- `项目亮点提炼` 快捷入口已对齐为“先索取简历/项目经历，再声明评审维度”的模式，不再只给抽象四象限建议。
+- 相关测试已同步更新：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅影响四类快捷入口在真实模型环境和 fallback 下的回复风格。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/chat-general-policy.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+- 仓库级自检继续作为提交前基线。
+
+### 下一步
+
+- 如果线上观察仍觉得某个快捷入口过于“教程化”或“像运营文案”，下一轮应继续把四类入口拆成更细的专属 few-shot，而不是再靠单条系统指令硬压风格。
+
+## Iteration 4.96（2026-03-27）：让预置模拟面试走真实流式回复并更新默认快捷文案
+
+### 目标
+
+- 修复“点击开始模拟面试后整块吐出固定模板”的体验问题，让面试开场与第一问回到逐步流式输出。
+- 把默认快捷入口文案从 Vue 技术栈切到 React 技术栈。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 面试链路不再只在 `done` 时一次性回完整 session。
+  - 新增“可见 assistant 消息合并 + delta 流式推送”逻辑。
+  - `mock` 环境继续输出稳定测试前缀，真实模型环境会把面试引擎的内部动作改写成自然面试官口吻后再流式输出。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - 新增 mock 回复构造、provider 流式转发、面试内部意图转隐藏提示词等 helper。
+  - 自然化约束进一步收紧：禁止把已选定问题改写成“你想先聊哪个项目”，并要求一次只保留一个核心问题。
+  - 针对“开始模拟面试但尚未拿到足够自我介绍”的场景，新增更强的开场风格约束和 few-shot 示例，禁止出现“面试官视角”“准备好了吗”“技术栈：React”这类不自然话术。
+  - 同时为这个开场场景增加固定的轻量 Markdown 版式约束：欢迎语、过渡语、`**第一个问题：**`、括号补充说明分段输出，避免再挤成一整段。
+- `packages/interview-engine/src/interview-planning.ts`
+  - `project_probe` 不再让候选人自己选项目，而是优先锁定“最近且足够有信号”的具体项目。
+  - 会从简历项目经历中提取项目名和亮点条目，并生成单问题的项目深挖题。
+  - 当前已进一步收口为“先基础、后项目”的出题顺序；项目题策略改为稳定随机，允许在“AI 指定具体项目”与“候选人自选代表项目”之间切换，但仍保持一次只问一个问题。
+  - `skill_probe` 也已从偏方案设计的问题改为更接近基础知识核验的单问题，用来补齐题库未覆盖的简历技能点。
+- `packages/shared/src/constants/index.ts`
+  - 默认快捷文案改为 `开始模拟面试，我是前端工程师 React 技术栈`
+- 回归测试补充：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - `packages/interview-engine/src/interview-planning.test.ts`
+  - `packages/shared/src/index.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 历史会话不做迁移；仅新触发的面试回复会使用新的流式与自然化输出链路。
+
+### 验证
+
+- 优先运行与流式接口、共享常量直接相关的单测。
+- 完整仓库检查继续作为提交前基线。
+
+### 下一步
+
+- 若线上观察仍觉得面试官开场过于模式化，可继续把“开场白 / 项目追问 / 收尾总结”拆成更细粒度的专用提示词模板，而不是共用一层自然化改写。
+
+## Iteration 4.95（2026-03-27）：将压力题升级为时序化事故演练
+
+### 目标
+
+- 不让压力题只停留在“单轮问你怎么处理事故”，而是进一步验证候选人在事故升级后的二次决策能力。
+- 让后台和 Trace 能明确区分“补边界”与“进入事故升级推演”。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - `InterviewFollowUpSignal` 新增 `pressure_timeline_shift`
+- `packages/agent-skills/src/follow-up-skill.ts`
+  - `pressure_probe` 在基础止损、协同、边界、取舍都覆盖后，第一轮不再直接结束，而是触发 `pressure_timeline_shift`
+  - 新增事故升级信号识别，允许把“10 分钟后继续恶化/影响面扩大”等回答视为有效增量，而不是误判成无增量
+- `packages/llm/src/mock-provider.ts`
+  - 新增事故升级后的二次决策追问文案
+- `apps/admin/src/components/session-execution-trace-card.tsx`
+  - 执行 Trace 新增 `事故升级推演` 信号标签
+- 回归测试补充：
+  - `packages/agent-skills/src/follow-up-skill.test.ts`
+    - 覆盖“进入事故升级推演”
+    - 覆盖“升级回答被视为有效增量并正常收尾”
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 旧压力题追问记录不会回填 `pressure_timeline_shift`，仅新执行链路会产生该信号。
+
+### 验证
+
+- `pnpm exec vitest run packages/agent-skills/src/follow-up-skill.test.ts`
+- 完整仓库检查作为提交前基线继续执行。
+
+### 下一步
+
+- 下一阶段可把压力题升级为多节点事故脚本，例如引入“监控恢复但投诉增加”“回滚失败”“依赖方延迟响应”等分支事件。
+
+## Iteration 4.94（2026-03-27）：细化 pressure_test 的专属追问信号
+
+### 目标
+
+- 让压力题不再只复用通用 `missing_key_point / tradeoff_gap`，而是能更明确地暴露真实事故面试中的关键短板。
+- 把压力题追问收口到更贴近现场处理的几个固定焦点。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - `InterviewFollowUpSignal` 新增：
+    - `pressure_boundary_gap`
+    - `pressure_rollback_gap`
+    - `pressure_incident_command_gap`
+- `packages/agent-skills/src/follow-up-skill.ts`
+  - 新增压力题专属模式识别：
+    - 边界判断
+    - 止损 / 回滚 / 降级
+    - 现场分工与信息同步
+  - `pressure_probe` 现优先按以下顺序触发追问：
+    - rollback
+    - incident-command
+    - boundary
+    - tradeoff
+- `packages/llm/src/mock-provider.ts`
+  - 新增压力题三类专属追问文案
+- `apps/admin/src/components/session-execution-trace-card.tsx`
+  - 执行 Trace 新增三类压力题专属信号标签展示
+- 回归测试补充：
+  - `packages/agent-skills/src/follow-up-skill.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 旧 follow-up trace 不会补出这些新信号，仅新执行的压力题会产生对应追问记录。
+
+### 验证
+
+- `pnpm exec vitest run packages/agent-skills/src/follow-up-skill.test.ts`
+- 完整仓库检查作为提交前基线继续执行。
+
+### 下一步
+
+- 下一阶段可继续把压力题追问从“单轮焦点确认”升级到“多角色现场协同 + 时序推进”的更复杂场景模拟。
+
+## Iteration 4.93（2026-03-27）：将 pressure_test 落地为独立压力题
+
+### 目标
+
+- 把 `pressure_test` 从“阶段占位标签”升级为真正的独立题源。
+- 让长时长场次能稳定覆盖事故止损、排查路径、取舍边界这类更接近真实高级面试的问题。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - `InterviewQuestionSource` 新增 `pressure_probe`
+- `packages/interview-engine/src/interview-planning.ts`
+  - 新增 `pressure_probe` 生成逻辑
+  - 规则收口为：
+    - 仅 `45` 分钟及以上场次插入
+    - 题位放在题单末段
+    - 聚焦止损优先级、排查路径、方案取舍、边界预案
+- `packages/interview-engine/src/process-helpers.ts`
+  - `pressure_probe` 现会映射到 `pressure_test` 阶段
+- `packages/llm/src/mock-provider.ts`
+  - 新增压力题专属提问与追问文案
+- `packages/agent-skills/src/assessment-skill.ts`
+  - 压力题纳入统一评分，权重设为 `1.1`
+- Admin 展示层同步更新：
+  - `apps/admin/src/components/session-planning-trace-card.tsx`
+  - `apps/admin/src/components/session-execution-trace-card.tsx`
+  - 现可明确展示“压力题”
+- 回归测试补充：
+  - `packages/interview-engine/src/interview-planning.test.ts`
+  - `packages/interview-engine/src/index.test.ts`
+  - `packages/agent-skills/src/assessment-skill.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 旧会话不会自动补压力题，仅新规划的长时长场次会生成 `pressure_probe`。
+
+### 验证
+
+- `pnpm exec vitest run packages/interview-engine/src/interview-planning.test.ts packages/interview-engine/src/index.test.ts packages/agent-skills/src/assessment-skill.test.ts`
+- 完整仓库检查作为提交前基线继续执行。
+
+### 下一步
+
+- 下一阶段可继续把压力题的追问信号细化成 `boundary / rollback / incident-command` 等更明确的类型，而不是先复用通用追问信号。
+
+## Iteration 4.92（2026-03-27）：落地预算感知的动态追问约束
+
+### 目标
+
+- 让追问更像真实面试，而不是“命中规则就一直追问”。
+- 把追问约束接入题型差异和时间预算，避免短时长场次被追问拖住。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - `InterviewFollowUpDecision` 新增：
+    - `skip_budget_exhausted`
+    - `skip_no_signal_gain`
+  - `InterviewFollowUpSignal` 新增：
+    - `budget_exhausted`
+    - `no_signal_gain`
+- `packages/agent-skills/src/follow-up-skill.ts`
+  - 增加题型差异化追问上限：
+    - `standard / skill_probe` 最多 `1` 次
+    - `project_probe` 最多 `2` 次
+  - 增加“无增量证据则切题”规则：
+    - 若连续追问后没有新增关键点或新增项目/技能信号，则结束当前题
+  - 增加整场追问预算输入，支持由流程层按时长控制追问总量
+- `packages/interview-engine/src/process-helpers.ts`
+  - 新增按时长推导的整场追问预算：
+    - `15` 分钟 `1` 次
+    - `30` 分钟 `2` 次
+    - `45` 分钟 `3` 次
+    - `60+` 分钟 `4` 次
+  - `maybeAskFollowUp` 现会同时传入“当前题上限”和“整场剩余追问预算”
+- `apps/admin/src/components/session-execution-trace-card.tsx`
+  - 执行 Trace 新增“追问预算耗尽 / 无增量切题”两类决策和信号展示
+- 回归测试补充：
+  - `packages/agent-skills/src/follow-up-skill.test.ts`
+  - `packages/interview-engine/src/index.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 旧 follow-up trace 缺少新决策和信号时，不影响运行；仅历史展示不会出现新标签。
+
+### 验证
+
+- `pnpm exec vitest run packages/agent-skills/src/follow-up-skill.test.ts packages/interview-engine/src/index.test.ts`
+- 完整仓库检查作为提交前基线继续执行。
+
+### 下一步
+
+- 下一阶段可继续把 `pressure_test` 做成真正独立的压力追问/边界题，而不是只在阶段层保留占位状态。
+
+## Iteration 4.91（2026-03-27）：落地时间预算驱动的阶段切换与提前结束
+
+### 目标
+
+- 让模拟面试不再只按固定题数顺序机械执行，而是能围绕时间预算推进阶段、估算耗时，并在合适时机提前结束。
+- 为 Admin Trace 和前端历史会话兼容层补齐新的运行态字段，避免新状态机落地后旧会话直接失配。
+
+### 主要改动
+
+- 扩展共享运行态类型：
+  - `InterviewRuntimeState` 新增 `currentStage / stagePlan / visitedStages / estimatedMinutesUsed / completionReason`
+  - 新增 `InterviewStage`、`InterviewCompletionReason`
+- 面试引擎补齐预算驱动状态机：
+  - 根据题目来源映射 `project_deep_dive / fundamental_check / skill_validation / pressure_test / wrap_up`
+  - 生成 `stagePlan` 并在每题结束后推进 `currentStage`
+  - 引入 `estimateQuestionMinutes`，按题型和追问轮次估算耗时
+  - 引入 `resolveCompletionReason`，支持 `plan_exhausted / time_budget_reached / early_stop_low_signal / early_stop_high_confidence`
+- 兼容层同步更新：
+  - `packages/interview-engine/src/session-core.ts`
+  - `apps/admin/src/lib/chat-session-runtime.ts`
+  - `apps/web/src/app/chat/lib/chat-session-draft.ts`
+  - `apps/web/src/lib/server/chat-session-model.ts`
+  - `apps/web/src/lib/server/chat-session-ui-state.ts`
+- Admin 观测面补充：
+  - `session-planning-trace-card` 新增阶段、预算耗时、完成原因展示
+- 回归测试补充：
+  - `packages/interview-engine/src/index.test.ts`
+  - `packages/interview-engine/src/interview-planning.test.ts`
+  - `apps/web/src/lib/server/chat-session-ui-state.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无环境变量变更。
+- 旧 runtime 读取路径已补默认值与类型兼容，不需要数据迁移脚本。
+
+### 验证
+
+- `pnpm exec vitest run packages/interview-engine/src/index.test.ts packages/interview-engine/src/interview-planning.test.ts apps/web/src/lib/server/chat-session-ui-state.test.ts`
+- 完整仓库检查作为提交前基线继续执行。
+
+### 下一步
+
+- 下一阶段可继续把“时间预算”更深地接入开场文案、追问强度和最终报告总结，而不是只用于状态切换与提前结束。
+
+## Iteration 4.90（2026-03-27）：补充模拟面试流程重构方案文档
+
+### 目标
+
+- 将下一阶段模拟面试重构方向正式沉淀为可执行设计，而不是继续停留在口头讨论。
+- 统一明确开场、自我介绍、时间预算、问题来源、追问、评分和落地顺序。
+
+### 主要改动
+
+- 新增文档：
+  - `docs/InterviewFlowRedesign.md`
+- 文档内容覆盖：
+  - 时间驱动的面试状态机
+  - 自我介绍与自然开场策略
+  - `standard / skill_probe / project_probe` 三类问题来源
+  - 评估驱动的动态追问设计
+  - 主问题 + 追问组成评估单元的统一评分方案
+  - 分阶段落地计划（Phase 1 ~ Phase 4）
+- 同步更新：
+  - `docs/ProjectContext.md`
+    - 补充该文档入口
+    - 追加 2026-03-27 的关键决策摘要
+
+### 迁移/破坏性变更
+
+- 无代码变更。
+- 无数据库变更。
+- 当前仅完成设计收口与文档沉淀。
+
+### 验证
+
+- 后续以完整仓库检查通过为提交前基线。
+
+### 下一步
+
+- 进入 Phase 1：先重构开场与面试状态机，再落地结构化评估和动态追问，不建议一开始就同时改完整个出题与报告链路。
+
 ## Iteration 4.89（2026-03-26）：修复 Web E2E 在 CI 中缺少数据库依赖的问题
 
 ### 目标
@@ -9454,6 +10024,193 @@
 ### 验证
 
 - 已执行：
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.12（2026-03-27）：模拟面试流程 Phase 1 落地
+
+### 目标
+
+- 落地“先自我介绍，再自然开场”的第一阶段流程重构。
+- 为后续按时长驱动出题、动态追问和统一评分补齐共享状态字段。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - `InterviewConfig` 新增 `durationMinutes`。
+  - 新增 `InterviewPhase`，并为 runtime 增加 `interviewPhase / introductionCompletedAt / introductionText`。
+- `packages/shared/src/defaults/index.ts`
+  - 默认面试时长设为 `30` 分钟。
+- `packages/shared/src/utils/index.ts`
+  - `normalizeInterviewConfig` 新增时长归一化，并按时长推导默认题量。
+- `packages/interview-engine/src/process-helpers.ts`
+  - 空闲态开始面试时，若缺少有效自我介绍则先进入 `awaiting_intro`。
+  - 若开始命令中已包含足够背景信息，则直接完成规划并进入自然开场。
+  - 题库无可用题目时回退为 `idle`，避免进入假开场状态。
+- `packages/interview-engine/src/process-session-message.ts`
+  - 增加 `awaiting_intro` 分支，接收自我介绍后再进入正式提问。
+- `packages/interview-engine/src/session-core.ts`
+  - 补齐 runtime 兼容与克隆逻辑，并增加自我介绍启发式识别。
+- `packages/llm/src/contracts.ts`
+  - provider 契约新增 `generateInterviewIntroRequest`。
+- `packages/llm/src/mock-provider.ts`
+  - 开场文案不再向用户暴露固定题数、反馈模式和内部追问机制。
+- `apps/admin/src/lib/chat-session-runtime.ts`
+  - Admin 端 runtime 解码补齐新阶段字段兼容。
+- `apps/web/src/app/chat/lib/chat-session-draft.ts`
+  - Web 端草稿会话默认 runtime 补齐新字段。
+- `packages/interview-engine/src/index.test.ts`
+  - 单测改为覆盖 `awaiting_intro -> questioning -> closing` 新流程。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 旧会话 runtime 若缺少新字段，当前已由兼容层自动补默认值。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts packages/shared/src/index.test.ts packages/interview-engine/src/interview-planning.test.ts packages/agent-skills/src/planning-skills.test.ts`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.13（2026-03-27）：混合出题第一版
+
+### 目标
+
+- 让面试规划不再只依赖题库标准题。
+- 在保证性能和稳定性的前提下，先落地项目深挖题与技能验证题。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - 新增 `InterviewQuestionSource`。
+  - `InterviewQuestion` 增加 `sourceType / probeTarget / generationReason`。
+  - `InterviewPlanningStepTrace` 增加 `sourceType / reason`，并支持 `generated_probe`。
+- `packages/interview-engine/src/interview-planning.ts`
+  - 规划器现在会在标准题之外，按规则插入：
+    - `project_probe`：项目深挖题
+    - `skill_probe`：技能验证题
+  - 四题及以上时，优先补项目题；检测到题库未覆盖或标准题未覆盖的技能时，再补技能题。
+  - 即使题库为空，只要候选人信息充分，也能生成最小可用的混合题单。
+  - `planningSummary` 不再包含固定题数表述。
+- `packages/agent-skills/src/planning-skills.ts`
+  - 简历画像规则标签扩展到 `reactnative / electron / microfrontend / miniprogram` 等题库外技能。
+- `packages/llm/src/mock-provider.ts`
+  - 根据题目来源切换更自然的提问引导文案。
+- `apps/admin/src/components/session-planning-trace-card.tsx`
+  - 规划 Trace 增加题目来源与生成原因展示。
+- `apps/admin/src/components/session-execution-trace-card.tsx`
+  - 执行 Trace 增加题目来源、探针目标与生成原因展示。
+- `packages/interview-engine/src/interview-planning.test.ts`
+  - 新增项目题、技能题、空题库混合题单回归测试。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 旧会话没有 `sourceType` 等字段时，仍按兼容默认值处理。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/interview-planning.test.ts`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.14（2026-03-27）：评估驱动追问第一版
+
+### 目标
+
+- 让追问不再只依赖题目预设追问数组或单一 keyPoints 覆盖率。
+- 先按题目来源和回答信号做稳定的规则分流，为后续模型化追问做接口准备。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - 新增 `InterviewFollowUpSignal`。
+  - `InterviewFollowUpTrace` 新增 `signal / reason` 字段。
+- `packages/agent-skills/src/follow-up-skill.ts`
+  - 重构为 `v2` 规则：
+    - `standard`：优先追缺失关键点
+    - `skill_probe`：优先追机制深度与工程取舍
+    - `project_probe`：优先追职责边界、结果验证和方案取舍
+  - 追问决策会结合回答长度、机制信号、取舍信号、项目 ownership/evidence 信号。
+- `packages/llm/src/contracts.ts`
+  - `generateFollowUpMessage` 契约补充 `signal / reason`。
+- `packages/llm/src/mock-provider.ts`
+  - 按追问信号输出更自然的项目题/技能题追问文案。
+- `packages/interview-engine/src/process-helpers.ts`
+  - 透传新的追问信号与原因给 provider。
+- `apps/admin/src/components/session-execution-trace-card.tsx`
+  - 执行 Trace 增加追问信号与决策原因展示。
+- `packages/agent-skills/src/follow-up-skill.test.ts`
+  - 新增项目题与技能题追问回归测试。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 旧追问 trace 若缺少 `signal / reason`，只影响旧会话展示，不影响主链路执行。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/agent-skills/src/follow-up-skill.test.ts packages/interview-engine/src/index.test.ts packages/interview-engine/src/interview-planning.test.ts`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 4.15（2026-03-27）：统一评分权重第一版
+
+### 目标
+
+- 让 `standard / skill_probe / project_probe` 全部进入统一评分体系。
+- 避免项目题和技能题“问了但不真正影响最终结论”。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - `QuestionAssessment` 新增 `sourceType / scoreWeight / weightReason`。
+  - 报告 Trace 的维度来源与要点来源新增权重信息。
+- `packages/agent-skills/src/assessment-skill.ts`
+  - 评估阶段按题目来源写入显式权重：
+    - `standard = 1.0`
+    - `skill_probe = 1.15`
+    - `project_probe = 1.25`
+- `packages/agent-skills/src/report-skill.ts`
+  - 维度均分与总分改为按题目权重聚合，不再简单平均。
+  - 优势/短板提炼与排序也改为按加权来源聚合。
+  - 报告聚合公式说明同步更新到 Trace。
+- `packages/interview-engine/src/session-core.ts`
+  - 运行时克隆逻辑补齐新权重字段兼容。
+- `apps/admin/src/components/session-report-trace-card.tsx`
+  - 报告 Trace 现可展示每个维度来源的权重，以及优势/短板来源的权重标签。
+- `packages/agent-skills/src/assessment-skill.test.ts`
+  - 新增项目题权重回归测试。
+- `packages/agent-skills/src/report-skill.test.ts`
+  - 新增强权重聚合回归测试。
+- `packages/evals/src/report-trace-fixtures.ts`
+  - 报告评测 fixture 补齐默认权重字段，保持契约完整。
+
+### 迁移/破坏性变更
+
+- 无数据库迁移。
+- 历史 assessment/report trace 缺少权重字段时，会按兼容默认值 `1.0` 处理。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/agent-skills/src/assessment-skill.test.ts packages/agent-skills/src/report-skill.test.ts packages/evals/src/report-trace-evals.test.ts`
   - `pnpm format:check`
   - `pnpm lint`
   - `pnpm typecheck`
