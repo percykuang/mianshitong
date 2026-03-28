@@ -94,3 +94,45 @@ test('消息 like/dislike 应支持三态切换和填充图标', async ({ page }
   await expect(upvote).toHaveAttribute('aria-pressed', 'true');
   await expect(upvote).toHaveAttribute('data-icon-variant', 'fill');
 });
+
+test('已有远端会话时停止生成仍应保留本轮用户消息', async ({ page }) => {
+  const session = await createRemoteSession(page, '你好');
+  const prompt = '第二条消息发送后立刻停止：请详细解释 React Fiber 的工作原理。';
+
+  await page.goto(`/chat/${session.id}`);
+  await page.getByTestId('multimodal-input').fill(prompt);
+  await page.getByTestId('send-button').click();
+
+  const stopButton = page.getByRole('button', { name: '停止生成' });
+  await expect(stopButton).toBeVisible();
+  await stopButton.click();
+
+  await page.waitForTimeout(1200);
+  await expect(page.getByRole('main')).toContainText(prompt);
+  await expect(page.getByRole('main')).not.toContainText('思考中');
+});
+
+test('停止生成后应保留并持久化已输出的 assistant 部分内容', async ({ page }) => {
+  await openChat(page);
+  const prompt =
+    '请非常详细地解释 React Fiber、调度优先级、可中断渲染、lane 模型，以及它们之间的关系，要求分很多段展开。';
+
+  await page.getByTestId('multimodal-input').fill(prompt);
+  await page.getByTestId('send-button').click();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f]{32}$/);
+
+  const stopButton = page.getByRole('button', { name: '停止生成' });
+  const latestAssistantMessage = page.locator('article').last();
+
+  await expect(latestAssistantMessage).toContainText('[web-e2e]');
+  await stopButton.click();
+
+  await expect(latestAssistantMessage).toContainText('已停止生成');
+  await expect(latestAssistantMessage).toContainText('[web-e2e]');
+
+  await page.reload();
+
+  const persistedAssistantMessage = page.locator('article').last();
+  await expect(persistedAssistantMessage).toContainText('已停止生成');
+  await expect(persistedAssistantMessage).toContainText('[web-e2e]');
+});

@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { createStreamProvider, splitShortcutReplyIntoDeltas } from './stream-utils';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  createStreamProvider,
+  enqueueSseEvent,
+  finalizeSseStream,
+  splitShortcutReplyIntoDeltas,
+} from './stream-utils';
 
 const originalEnv = {
   ...process.env,
@@ -11,8 +16,7 @@ afterEach(() => {
 
 describe('splitShortcutReplyIntoDeltas', () => {
   it('会把快捷回复拆成多个流式分片，且拼接后可还原原文', () => {
-    const content =
-      '你好！我是面试通，一名资深程序员和前端 AI 面试官，专注于前端求职、简历优化和模拟面试。';
+    const content = '你好！我是面试通，一个互联网大公司的资深程序员和面试官，专注于前端技术领域。';
 
     const chunks = splitShortcutReplyIntoDeltas(content);
 
@@ -53,5 +57,38 @@ describe('createStreamProvider', () => {
 
     expect(provider.name).toBe('mock-stream-provider');
     expect(content).toBe('[web-e2e] 已按真实模型链路处理：可以帮我优化简历吗？');
+  });
+});
+
+describe('finalizeSseStream', () => {
+  it('控制器已关闭时会静默忽略普通 SSE enqueue 的 invalid state 错误', () => {
+    const closedError = new TypeError('Invalid state: Controller is already closed');
+    const enqueue = vi.fn(() => {
+      throw closedError;
+    });
+
+    expect(enqueueSseEvent({ enqueue }, 'error', { message: 'aborted' })).toBe(false);
+  });
+
+  it('会在控制器仍然可写时补发 end 事件并关闭流', () => {
+    const enqueue = vi.fn();
+    const close = vi.fn();
+
+    finalizeSseStream({ enqueue, close }, { ok: true });
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('控制器已关闭时会静默忽略 end enqueue / close 的 invalid state 错误', () => {
+    const closedError = new TypeError('Invalid state: Controller is already closed');
+    const enqueue = vi.fn(() => {
+      throw closedError;
+    });
+    const close = vi.fn(() => {
+      throw closedError;
+    });
+
+    expect(() => finalizeSseStream({ enqueue, close }, { ok: false })).not.toThrow();
   });
 });

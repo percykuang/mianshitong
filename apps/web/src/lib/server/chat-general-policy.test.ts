@@ -4,7 +4,6 @@ import {
   prependGeneralChatIntentInstruction,
   prependChatReplyFormattingInstruction,
   resolveGeneralChatIntent,
-  stripMarkdownHorizontalRules,
 } from './chat-general-policy';
 
 describe('prependChatReplyFormattingInstruction', () => {
@@ -17,10 +16,11 @@ describe('prependChatReplyFormattingInstruction', () => {
     ]);
 
     expect(messages[0]?.role).toBe('system');
-    expect(messages[0]?.content).toContain('专注前端领域的编程面试官');
-    expect(messages[0]?.content).toContain('不要使用 Markdown 分割线');
+    expect(messages[0]?.content).toContain('面试通，一个互联网大公司的资深程序员和面试官');
     expect(messages[0]?.content).toContain('如果用户请求优化简历');
     expect(messages[0]?.content).toContain('技术问答场景不要使用 H1');
+    expect(messages[0]?.content).not.toContain('不要使用 Markdown 分割线');
+    expect(messages[0]?.content).not.toContain('不要输出 mermaid 图');
   });
 });
 
@@ -174,6 +174,8 @@ describe('prependGeneralChatIntentInstruction', () => {
     expect(messages[0]?.content).toContain('前端技术问答');
     expect(messages[0]?.content).toContain('优先使用 `##` 和 `###`');
     expect(messages[0]?.content).toContain('## 一句话区别');
+    expect(messages[0]?.content).not.toContain('Markdown 分割线');
+    expect(messages[0]?.content).not.toContain('mermaid 图');
     expect(messages[1]).toEqual({
       role: 'user',
       content: 'React useMemo 和 useCallback 的区别',
@@ -197,7 +199,7 @@ describe('buildGeneralChatFallbackReply', () => {
     });
 
     expect(reply).toContain('1+2 等于 3');
-    expect(reply).toContain('前端面试助手');
+    expect(reply).toContain('作为面试通');
   });
 
   it('会为技术问答生成结构化兜底回复', () => {
@@ -210,21 +212,5 @@ describe('buildGeneralChatFallbackReply', () => {
     expect(reply).toContain('## 一句话区别');
     expect(reply).toContain('## 建议按这个顺序回答');
     expect(reply).toContain('## 你可以继续这样追问');
-  });
-});
-
-describe('stripMarkdownHorizontalRules', () => {
-  it('会移除普通文本中的分割线', () => {
-    const content = ['第一段', '---', '', '第二段', '***', '第三段'].join('\n');
-
-    expect(stripMarkdownHorizontalRules(content)).toBe('第一段\n\n第二段\n第三段');
-  });
-
-  it('不会移除代码块中的分割线内容', () => {
-    const content = ['```bash', 'echo "---"', '```', '---', '说明'].join('\n');
-
-    expect(stripMarkdownHorizontalRules(content)).toBe(
-      ['```bash', 'echo "---"', '```', '说明'].join('\n'),
-    );
   });
 });

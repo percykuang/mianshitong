@@ -56,4 +56,10 @@ describe('normalizeAssistantMarkdown', () => {
 
     expect(normalizeAssistantMarkdown(content)).toBe('1. 先看简历\n2. 再模拟面试');
   });
+
+  it('会保留普通文本中的 Markdown 分割线', () => {
+    const content = ['第一段', '---', '', '第二段'].join('\n');
+
+    expect(normalizeAssistantMarkdown(content)).toBe('第一段\n---\n\n第二段');
+  });
 });

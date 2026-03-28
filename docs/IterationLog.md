@@ -7,6 +7,211 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 5.09（2026-03-28）：停止生成后的中断消息持久化与状态展示
+
+### 目标
+
+- 把“AI 已经输出部分内容，用户点击停止”的链路从纯前端临时状态升级为可持久化的正式消息状态。
+- 让聊天页与 Admin 对这类中断消息看到的是同一份数据，而不是“前端能看见、刷新或后台看不见”。
+
+### 主要改动
+
+- 扩展共享消息类型：
+  - `packages/shared/src/types/index.ts`
+  - 新增 `ChatMessageCompletionStatus = 'completed' | 'interrupted'`
+  - `ChatMessage` 新增可选字段 `completionStatus`
+- 调整服务端会话写入模型：
+  - `apps/web/src/lib/server/chat-session-model.ts`
+  - `apps/web/src/lib/server/chat-session-repository.ts`
+  - assistant 正常落库时写入 `completed`
+  - 新增 `appendActorInterruptedTurn()`，用于持久化“仅用户消息”或“用户消息 + interrupted assistant 部分回复”
+  - 因为消息本来就存于 `ChatSessionRecord.messages` 的 JSONB 中，本次无需 Prisma migration
+- 新增中断持久化接口：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/interrupted/route.ts`
+  - 前端停止生成后，如果远端尚未推进，会显式调用这条接口把当前中断态写回服务端
+  - 接口支持 `expectedMessageCount`，避免前端补写与原 SSE 路由收尾同时发生时重复落库
+- 调整停止生成前端链路：
+  - `apps/web/src/app/chat/hooks/use-send-message.ts`
+  - 本地仍会立即保留用户消息，并在已有部分 assistant 内容时把本地消息标成 `interrupted`
+  - 之后再显式同步到服务端；成功后用远端会话覆盖本地 optimistic ID，保证刷新与 Admin 一致
+- 调整展示层：
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - `apps/admin/src/lib/session-messages.ts`
+  - `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - `apps/admin/src/components/session-detail-view.tsx`
+  - Web 与 Admin 都会对 `completionStatus === 'interrupted'` 的 assistant 消息显示“已停止生成”轻量标识
+- 额外修复 SSE 中断时的服务端异常噪音：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - 普通聊天在用户中止后，`ReadableStream` 控制器可能已关闭；之前路由继续 `enqueue error/end` 会触发 `Controller is already closed`
+  - 现在统一通过安全 `enqueue / finalize` helper 收口，避免未处理异常污染日志
+- 调整测试：
+  - `apps/web/src/app/chat/hooks/use-send-message.dom.test.ts`
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - `apps/web/src/app/chat/lib/chat-message-mutations.test.ts`
+  - `apps/web/src/app/chat/lib/chat-session-draft.test.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - `apps/admin/src/lib/session-messages.test.ts`
+  - `apps/web/e2e/chat-smoke.spec.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 历史消息没有 `completionStatus` 也不会受影响；前端与 Admin 会把缺失状态视为普通已完成消息。
+
+### 验证
+
+- `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts' apps/web/src/app/chat/hooks/use-send-message.dom.test.ts apps/web/src/app/chat/lib/chat-message-mutations.test.ts apps/web/src/app/chat/components/chat-message-item.dom.test.tsx apps/web/src/app/chat/lib/chat-session-draft.test.ts apps/admin/src/lib/session-messages.test.ts`
+- `pnpm -C apps/web exec eslint 'src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts' 'src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts' 'src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts' 'src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts' src/app/chat/hooks/use-send-message.ts src/app/chat/lib/chat-api.ts src/app/chat/lib/chat-message-mutations.ts src/app/chat/components/chat-message-item.tsx src/lib/server/chat-session-model.ts src/lib/server/chat-session-repository.ts 'src/app/api/chat/sessions/[sessionId]/messages/interrupted/route.ts'`
+- `pnpm exec prettier -c 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts' 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts' 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts' 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts'`
+- `PLAYWRIGHT_SKIP_WEBSERVER=1 pnpm test:e2e:web --grep '停止生成'`
+
+### 下一步
+
+- 若后续要支持“继续生成”，可直接基于 `completionStatus: 'interrupted'` 扩展，而不需要再为这类消息重新设计数据结构。
+
+## Iteration 5.08（2026-03-28）：终止生成时保留已发送的用户消息
+
+### 目标
+
+- 修复聊天页在“AI 仍在生成中，用户点击终止”时把本轮用户消息一起移除的问题。
+- 让终止语义收口为“取消 assistant 继续生成”，而不是“整轮消息回滚”。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/hooks/use-send-message.ts`
+  - 修复“已有远端会话时，停止生成后又拉回远端旧会话，导致本轮用户消息被覆盖”的竞态
+  - 当前中止分支会先判断远端会话是否真的已经推进
+  - 若远端没有推进，则保留本地用户消息；若远端其实已落库，则优先采用远端完整结果
+- 调整 `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - 新增 `finalizeInterruptedAssistantMessage()`
+  - 终止生成时会：
+    - 保留已发送的用户消息
+    - 仅在 assistant 仍为空占位时移除该占位
+    - 若 assistant 已有部分流式内容，则保留这段部分回复
+    - 把会话状态收口为 `idle`
+    - 若这是首条用户消息，则同步收口本地标题
+- 调整测试：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.test.ts`
+  - `apps/web/src/app/chat/hooks/use-send-message.dom.test.ts`
+  - `apps/web/e2e/chat-smoke.spec.ts`
+  - 覆盖“终止时保留用户消息”“保留部分 assistant 回复”以及“已有远端会话时不被旧远端数据覆盖”三类回归
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整前端本地 optimistic 状态在中止生成时的收口策略。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/lib/chat-message-mutations.test.ts apps/web/src/app/chat/hooks/use-send-message.dom.test.ts`
+- `pnpm -C apps/web exec eslint src/app/chat/lib/chat-message-mutations.ts src/app/chat/lib/chat-message-mutations.test.ts src/app/chat/hooks/use-send-message.ts src/app/chat/hooks/use-send-message.dom.test.ts`
+- `pnpm exec prettier -c apps/web/src/app/chat/lib/chat-message-mutations.ts apps/web/src/app/chat/lib/chat-message-mutations.test.ts apps/web/src/app/chat/hooks/use-send-message.ts apps/web/src/app/chat/hooks/use-send-message.dom.test.ts`
+- Playwright 手工复核：真实浏览器下复现“已有远端会话 -> 发送第二条消息 -> 立刻停止”，确认用户消息保留且不再被远端旧会话覆盖
+
+### 下一步
+
+- 如果后续还想继续完善“终止生成”体验，可再评估是否在 UI 上显式标注“已停止生成”，但应避免把这类提示做成打断阅读的强提醒。
+
+## Iteration 5.07（2026-03-28）：统一普通聊天的 AI 身份口径
+
+### 目标
+
+- 把 Web 端普通聊天里 AI 的默认身份，从“面试通的 AI 助手”统一收口为“面试通，一个互联网大公司的资深程序员和面试官，专注于前端技术领域”。
+- 避免 system prompt、问候语示例和 fallback 之间出现“助手 / 面试官 / 资深程序员”混用。
+
+### 主要改动
+
+- 调整 `apps/web/src/lib/server/chat-general-policy.constants.ts`
+  - 更新全局 system prompt 的首句角色定义
+  - 将“通用百科助手”对比语境下的目标角色同步收口为“资深从业者、技术顾问与面试官”
+- 调整 `apps/web/src/lib/server/chat-general-policy-instruction.ts`
+  - 更新问候语意图里的自我介绍要求，显式要求模型按新身份开场
+- 调整 `apps/web/src/lib/server/chat-general-policy-examples.ts`
+  - 更新问候语 few-shot 示例的自我介绍文案
+  - 同步把简单算术意图里的“前端面试助手”改为更中性的“作为面试通”
+- 调整 `apps/web/src/lib/server/chat-general-policy-fallback.ts`
+  - 更新问候语、简历优化、简单算术 fallback 的自我身份表述
+- 调整测试：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整普通聊天 prompt 与 fallback 的角色文案。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/chat-general-policy.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+- `pnpm -C apps/web exec eslint src/lib/server/chat-general-policy.constants.ts src/lib/server/chat-general-policy-instruction.ts src/lib/server/chat-general-policy-examples.ts src/lib/server/chat-general-policy-fallback.ts src/lib/server/chat-general-policy.test.ts 'src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+
+### 下一步
+
+- 如果后续还要继续打磨产品口吻，可再把首页空态、欢迎文案与普通聊天 prompt 的身份表述统一抽成共享常量，避免同类文案再次分叉。
+
+## Iteration 5.06（2026-03-28）：聊天 Markdown 分割线补充垂直间距
+
+### 目标
+
+- 让聊天区 Markdown 分割线在上下都保留稳定留白，避免贴近正文导致视觉上过紧。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/components/chat-markdown.tsx`
+  - 为 `react-markdown` 的 `hr` 节点新增自定义渲染
+  - 给聊天区分割线显式补上 `my-6`，将留白收口在聊天 Markdown 渲染层，而不是放到全局样式
+- 调整 `apps/web/src/app/chat/components/chat-table-block.dom.test.tsx`
+  - 新增 Markdown 分割线渲染断言，校验 `hr` 节点存在且保留 `my-6` class
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整聊天区 Markdown 分割线的展示样式。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/components/chat-table-block.dom.test.tsx`
+- `pnpm -C apps/web exec eslint src/app/chat/components/chat-markdown.tsx src/app/chat/components/chat-table-block.dom.test.tsx`
+
+### 下一步
+
+- 如果后续还要继续打磨 Markdown 阅读节奏，可再统一收口 `blockquote / list / table / hr` 的垂直间距比例，形成一套聊天区排版节奏规范。
+
+## Iteration 5.05（2026-03-28）：移除普通聊天对分割线与 mermaid 的输出限制
+
+### 目标
+
+- 去掉 Web 端普通聊天 prompt 中“不要使用 Markdown 分割线”和“不要输出 mermaid 图”的限制。
+- 确保服务端后处理不会再把模型生成的 Markdown 分割线清洗掉，真正放开这类输出。
+
+### 主要改动
+
+- 调整 `apps/web/src/lib/server/chat-general-policy.constants.ts`
+  - 移除全局 system prompt 中对 Markdown 分割线与 mermaid 图的显式禁止
+- 调整 `apps/web/src/lib/server/chat-general-policy-instruction.ts`
+  - 移除简历优化、项目亮点、技术问答、技术机制题等意图指令里对分割线与 mermaid 图的限制文案
+- 调整 `apps/web/src/lib/server/chat-response-format.ts`
+  - `normalizeAssistantMarkdown()` 不再额外清洗普通文本中的 Markdown 分割线
+  - 保留既有 fenced code block 包装、语言修正与不平衡 fence 清理逻辑
+- 调整测试：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - `apps/web/src/lib/server/chat-response-format.test.ts`
+  - 同步改为断言相关限制文案已移除，并补充分割线保留回归
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整普通聊天的 prompt 约束与 Markdown 规范化策略。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/chat-general-policy.test.ts apps/web/src/lib/server/chat-response-format.test.ts`
+- `pnpm -C apps/web exec eslint src/lib/server/chat-general-policy.constants.ts src/lib/server/chat-general-policy-instruction.ts src/lib/server/chat-general-policy.test.ts src/lib/server/chat-response-format.ts src/lib/server/chat-response-format.test.ts`
+
+### 下一步
+
+- 如果后续还想继续放开更丰富的 Markdown 能力，可再评估是否允许更复杂的表格、引用块或流程图说明，但应单独定义渲染与回归边界。
+
 ## Iteration 5.04（2026-03-28）：点赞与点踩按钮补充轻量反馈动效
 
 ### 目标

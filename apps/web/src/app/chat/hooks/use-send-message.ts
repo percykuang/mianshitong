@@ -1,13 +1,23 @@
 import type { ChatSession } from '@mianshitong/shared';
 import { useCallback } from 'react';
-import { fetchSessionById, isAbortError, openStreamRequest, readSseStream } from '../lib/chat-api';
+import {
+  fetchSessionById,
+  isAbortError,
+  openStreamRequest,
+  persistInterruptedSessionTurn,
+  readSseStream,
+} from '../lib/chat-api';
 import { createTemporaryMessage } from '../lib/chat-helpers';
 import {
   syncFetchedRemoteSession,
   syncResolvedRemoteSession,
   trySyncFetchedRemoteSession,
 } from '../lib/chat-remote-session-sync';
-import { appendOptimisticMessages, removeOptimisticMessages } from '../lib/chat-message-mutations';
+import {
+  appendOptimisticMessages,
+  finalizeInterruptedAssistantMessage,
+  removeOptimisticMessages,
+} from '../lib/chat-message-mutations';
 import { clearRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 import { createStreamEventHandler } from './stream-event-handler';
 
@@ -28,6 +38,21 @@ interface SendMessageDeps {
   ) => void;
   setActiveSessionId: (value: string | null) => void;
   replaceSession: (sessionId: string) => void;
+}
+
+function hasRemoteSessionAdvanced(
+  baseSession: ChatSession | null,
+  remoteSession: ChatSession | null,
+): boolean {
+  if (!remoteSession) {
+    return false;
+  }
+
+  if (!baseSession) {
+    return remoteSession.messages.length > 0;
+  }
+
+  return remoteSession.messages.length > baseSession.messages.length;
 }
 
 export function useSendMessage({
@@ -62,6 +87,8 @@ export function useSendMessage({
       let session = readActiveSession();
       let optimisticUserId: string | null = null;
       let optimisticAssistantId: string | null = null;
+      let optimisticUserCreatedAt: string | null = null;
+      let optimisticAssistantCreatedAt: string | null = null;
       let sessionIdToClear: string | null = null;
 
       try {
@@ -72,6 +99,8 @@ export function useSendMessage({
         const optimisticAssistant = createTemporaryMessage({ role: 'assistant', content: '' });
         optimisticUserId = optimisticUser.id;
         optimisticAssistantId = optimisticAssistant.id;
+        optimisticUserCreatedAt = optimisticUser.createdAt;
+        optimisticAssistantCreatedAt = optimisticAssistant.createdAt;
 
         setActiveSession((previous) =>
           appendOptimisticMessages(
@@ -120,6 +149,59 @@ export function useSendMessage({
           });
         }
       } catch (error) {
+        if (isAbortError(error)) {
+          const remoteSession = session
+            ? await fetchSessionById(session.id).catch(() => null)
+            : null;
+
+          if (hasRemoteSessionAdvanced(session, remoteSession)) {
+            await syncResolvedRemoteSession({
+              session: remoteSession!,
+              refreshSessions,
+              setActiveSession,
+              setActiveSessionId,
+              replaceSession,
+            });
+          } else {
+            const interruptedSession = finalizeInterruptedAssistantMessage({
+              session: readActiveSession(),
+              optimisticAssistantId,
+              submittedContent: trimmed,
+            });
+
+            setActiveSession(interruptedSession);
+
+            const interruptedAssistant = interruptedSession?.messages.find(
+              (message) => message.id === optimisticAssistantId,
+            );
+            if (interruptedSession && session) {
+              const persistedSession = await persistInterruptedSessionTurn({
+                sessionId: session.id,
+                userContent: trimmed,
+                assistantContent: interruptedAssistant?.content,
+                modelId: session.modelId,
+                expectedMessageCount: session.messages.length,
+                userCreatedAt: optimisticUserCreatedAt ?? undefined,
+                assistantCreatedAt:
+                  interruptedAssistant && optimisticAssistantCreatedAt
+                    ? optimisticAssistantCreatedAt
+                    : undefined,
+              }).catch(() => null);
+
+              if (persistedSession) {
+                await syncResolvedRemoteSession({
+                  session: persistedSession,
+                  refreshSessions,
+                  setActiveSession,
+                  setActiveSessionId,
+                  replaceSession,
+                });
+              }
+            }
+          }
+          return;
+        }
+
         const synced = session
           ? await trySyncFetchedRemoteSession({
               sessionId: session.id,
@@ -130,15 +212,6 @@ export function useSendMessage({
               replaceSession,
             })
           : false;
-
-        if (isAbortError(error)) {
-          if (!synced) {
-            setActiveSession((previous) =>
-              removeOptimisticMessages(previous, [optimisticUserId, optimisticAssistantId]),
-            );
-          }
-          return;
-        }
 
         if (readInputValue() === '') {
           setInputValue(content);

@@ -4,6 +4,7 @@ import {
   appendAssistantDelta,
   appendOptimisticMessages,
   buildStoredChatSession,
+  finalizeInterruptedAssistantMessage,
   getEditableUserMessageIndex,
   removeOptimisticMessages,
   toSessionTitle,
@@ -53,6 +54,69 @@ describe('chat-message-mutations', () => {
     expect(removed?.status).toBe('idle');
   });
 
+  it('终止生成时会保留用户消息、移除空 assistant 占位，并收口本地标题', () => {
+    const optimisticUser = createMessage({
+      role: 'user',
+      kind: 'text',
+      content: '帮我解释一下事件循环',
+      createdAt: '2026-03-09T15:00:00.000Z',
+    });
+    const optimisticAssistant = createMessage({
+      role: 'assistant',
+      kind: 'text',
+      content: '',
+      createdAt: '2026-03-09T15:00:01.000Z',
+    });
+    const session = appendOptimisticMessages(
+      createDraftChatSession('deepseek-chat', 'mutation_session_4'),
+      [optimisticUser, optimisticAssistant],
+      optimisticUser.createdAt,
+    );
+
+    const next = finalizeInterruptedAssistantMessage({
+      session,
+      optimisticAssistantId: optimisticAssistant.id,
+      submittedContent: optimisticUser.content,
+    });
+
+    expect(next?.title).toBe('帮我解释一下事件循环');
+    expect(next?.status).toBe('idle');
+    expect(next?.messages.map((message) => message.role)).toEqual(['user']);
+    expect(next?.messages[0]?.content).toBe('帮我解释一下事件循环');
+  });
+
+  it('终止生成时如果 assistant 已有部分内容，会保留这段部分回复', () => {
+    const optimisticUser = createMessage({
+      role: 'user',
+      kind: 'text',
+      content: '什么是闭包',
+      createdAt: '2026-03-09T15:00:00.000Z',
+    });
+    const optimisticAssistant = createMessage({
+      role: 'assistant',
+      kind: 'text',
+      content: '',
+      createdAt: '2026-03-09T15:00:01.000Z',
+    });
+    const session = appendOptimisticMessages(
+      createDraftChatSession('deepseek-chat', 'mutation_session_5'),
+      [optimisticUser, optimisticAssistant],
+      optimisticUser.createdAt,
+    );
+    const withDelta = appendAssistantDelta(session, optimisticAssistant.id, '闭包就是');
+
+    const next = finalizeInterruptedAssistantMessage({
+      session: withDelta,
+      optimisticAssistantId: optimisticAssistant.id,
+      submittedContent: optimisticUser.content,
+    });
+
+    expect(next?.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(next?.messages[1]?.content).toBe('闭包就是');
+    expect(next?.messages[1]?.completionStatus).toBe('interrupted');
+    expect(next?.status).toBe('idle');
+  });
+
   it('会构造用于本地持久化的会话，并在首条用户消息时更新标题', () => {
     const session = createDraftChatSession('deepseek-chat', 'mutation_session_3');
     const optimisticUser = createMessage({
@@ -82,6 +146,7 @@ describe('chat-message-mutations', () => {
       'user',
       'assistant',
     ]);
+    expect(stored?.messages.at(-1)?.completionStatus).toBe('completed');
   });
 
   it('只允许编辑用户消息', () => {

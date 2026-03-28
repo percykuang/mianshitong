@@ -1,9 +1,6 @@
 import type { ChatTurn } from '@mianshitong/llm';
 import { unwrapMarkdownFenceWrapper } from '@/lib/chat-markdown-normalization';
-import {
-  prependChatReplyFormattingInstruction as prependGeneralChatPolicyInstruction,
-  stripMarkdownHorizontalRules,
-} from '@/lib/server/chat-general-policy';
+import { prependChatReplyFormattingInstruction as prependGeneralChatPolicyInstruction } from '@/lib/server/chat-general-policy';
 import {
   hasCompleteCodeBlock,
   isLikelyCodeLine,
@@ -32,7 +29,7 @@ export function prependChatReplyFormattingInstruction(messages: ChatTurn[]): Cha
 }
 
 export function normalizeAssistantMarkdown(content: string): string {
-  const trimmed = stripMarkdownHorizontalRules(unwrapMarkdownFenceWrapper(content));
+  const trimmed = unwrapMarkdownFenceWrapper(content).trim();
   if (!trimmed) {
     return trimmed;
   }

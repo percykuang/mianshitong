@@ -121,6 +121,42 @@ export function formatSseEvent(type: string, payload: unknown): Uint8Array {
   return encoder.encode(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
 }
 
+function isClosedControllerError(error: unknown): boolean {
+  return error instanceof TypeError && /Controller is already closed/.test(error.message);
+}
+
+export function enqueueSseEvent(
+  controller: Pick<ReadableStreamDefaultController<Uint8Array>, 'enqueue'>,
+  type: string,
+  payload: unknown,
+): boolean {
+  try {
+    controller.enqueue(formatSseEvent(type, payload));
+    return true;
+  } catch (error) {
+    if (isClosedControllerError(error)) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+export function finalizeSseStream(
+  controller: Pick<ReadableStreamDefaultController<Uint8Array>, 'enqueue' | 'close'>,
+  payload: { ok: boolean },
+): void {
+  enqueueSseEvent(controller, 'end', payload);
+
+  try {
+    controller.close();
+  } catch (error) {
+    if (!isClosedControllerError(error)) {
+      throw error;
+    }
+  }
+}
+
 function createAbortError(): Error {
   const error = new Error('The operation was aborted.');
   error.name = 'AbortError';
@@ -216,7 +252,7 @@ export async function emitShortcutReplyAsStream(input: {
 
     const delta = deltas[index]!;
     emitted += delta;
-    input.controller.enqueue(formatSseEvent('delta', { delta }));
+    enqueueSseEvent(input.controller, 'delta', { delta });
 
     if (index < deltas.length - 1) {
       await wait(delayMs, input.signal);

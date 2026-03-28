@@ -15,6 +15,7 @@ type TableBodyComponentProps = ComponentPropsWithoutRef<'tbody'> & ExtraProps;
 type TableRowComponentProps = ComponentPropsWithoutRef<'tr'> & ExtraProps;
 type TableCellComponentProps = ComponentPropsWithoutRef<'th'> & ExtraProps;
 type TableDataComponentProps = ComponentPropsWithoutRef<'td'> & ExtraProps;
+type HorizontalRuleComponentProps = ComponentPropsWithoutRef<'hr'> & ExtraProps;
 
 function stripMarkdownNodeProp<T extends { node?: unknown }>(props: T) {
   const { node, ...rest } = props;
@@ -114,6 +115,11 @@ function renderTableDataCell(props: TableDataComponentProps) {
   );
 }
 
+function renderHorizontalRule(props: HorizontalRuleComponentProps) {
+  const { className, ...rest } = stripMarkdownNodeProp(props);
+  return <hr className={cn('my-6', className)} {...rest} />;
+}
+
 interface ChatMarkdownProps {
   content: string;
   className?: string;
@@ -143,6 +149,7 @@ export function ChatMarkdown({ content, className }: ChatMarkdownProps) {
         remarkPlugins={[remarkGfm]}
         components={{
           code: renderCode,
+          hr: renderHorizontalRule,
           p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
           table: renderTable,
           thead: renderTableHead,

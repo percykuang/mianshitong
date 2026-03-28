@@ -60,6 +60,46 @@ export function removeOptimisticMessages(
   };
 }
 
+export function finalizeInterruptedAssistantMessage(input: {
+  session: ChatSession | null;
+  optimisticAssistantId: string | null;
+  submittedContent: string;
+}): ChatSession | null {
+  const { session, optimisticAssistantId, submittedContent } = input;
+  if (!session) {
+    return session;
+  }
+
+  const nextMessages = session.messages
+    .filter((message) => {
+      if (message.id !== optimisticAssistantId) {
+        return true;
+      }
+
+      return message.content.trim().length > 0;
+    })
+    .map((message) =>
+      message.id === optimisticAssistantId
+        ? { ...message, completionStatus: 'interrupted' as const }
+        : message,
+    );
+
+  const next: ChatSession = {
+    ...session,
+    status: 'idle',
+    messages: nextMessages,
+  };
+
+  if (
+    next.title === '新的对话' &&
+    next.messages.filter((item) => item.role === 'user').length === 1
+  ) {
+    next.title = toSessionTitle(submittedContent);
+  }
+
+  return next;
+}
+
 export function buildStoredChatSession(input: {
   session: ChatSession | null;
   optimisticUser: ChatMessage | null;
@@ -81,7 +121,13 @@ export function buildStoredChatSession(input: {
       ...session.messages,
       optimisticUser,
       ...(normalizedAssistantContent && optimisticAssistant
-        ? [{ ...optimisticAssistant, content: normalizedAssistantContent }]
+        ? [
+            {
+              ...optimisticAssistant,
+              content: normalizedAssistantContent,
+              completionStatus: 'completed' as const,
+            },
+          ]
         : []),
     ],
     updatedAt: now,

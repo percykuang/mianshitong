@@ -1,6 +1,7 @@
 import type { ChatTurn } from '@mianshitong/llm';
 import {
   type ChatMessage,
+  type ChatMessageCompletionStatus,
   type ChatSession,
   type ModelId,
   type SessionSummary,
@@ -30,6 +31,7 @@ export function createMessage(input: {
   kind: ChatMessage['kind'];
   content: string;
   createdAt: string;
+  completionStatus?: ChatMessageCompletionStatus;
 }): ChatMessage {
   return {
     id: createId('msg'),
@@ -37,6 +39,7 @@ export function createMessage(input: {
     kind: input.kind,
     content: input.content,
     createdAt: input.createdAt,
+    completionStatus: input.completionStatus,
   };
 }
 
@@ -114,7 +117,13 @@ export function appendUserAssistantMessages(
     createMessage({ role: 'user', kind: 'text', content: userContent, createdAt: now }),
   );
   next.messages.push(
-    createMessage({ role: 'assistant', kind: 'text', content: assistantContent, createdAt: now }),
+    createMessage({
+      role: 'assistant',
+      kind: 'text',
+      content: assistantContent,
+      createdAt: now,
+      completionStatus: 'completed',
+    }),
   );
 
   if (
@@ -160,6 +169,7 @@ export function rebuildSessionAfterEdit(
         kind: 'text',
         content: assistantContent,
         createdAt: now,
+        completionStatus: 'completed',
       }),
     ],
     updatedAt: now,

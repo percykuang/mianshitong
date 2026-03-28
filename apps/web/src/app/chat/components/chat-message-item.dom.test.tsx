@@ -80,6 +80,27 @@ describe('ChatMessageItem', () => {
     expect(screen.getByLabelText('不赞同回复')).toBeInTheDocument();
   });
 
+  it('assistant 中断消息会显示已停止生成标识', () => {
+    render(
+      <ChatMessageItem
+        sessionId="session-1"
+        message={{ ...ASSISTANT_MESSAGE, completionStatus: 'interrupted' }}
+        isLoading={false}
+        isStreaming={false}
+        isEditing={false}
+        editingValue=""
+        sending={false}
+        onStartEditUserMessage={() => {}}
+        onEditingValueChange={() => {}}
+        onCancelEditUserMessage={() => {}}
+        onSubmitEditUserMessage={async () => {}}
+        onNotice={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('已停止生成')).toBeInTheDocument();
+  });
+
   it('user 长消息气泡应保持右对齐，但文本本身使用正常左对齐换行', () => {
     const { container } = render(
       <ChatMessageItem

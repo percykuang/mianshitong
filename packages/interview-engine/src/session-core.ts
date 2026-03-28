@@ -1,5 +1,6 @@
 import {
   type ChatMessage,
+  type ChatMessageCompletionStatus,
   type ChatSession,
   type CreateSessionInput,
   type InterviewQuestion,
@@ -26,6 +27,7 @@ export function createMessage(input: {
   kind: MessageKind;
   content: string;
   createdAt: string;
+  completionStatus?: ChatMessageCompletionStatus;
 }): ChatMessage {
   return {
     id: createId('msg'),
@@ -33,6 +35,7 @@ export function createMessage(input: {
     kind: input.kind,
     content: input.content,
     createdAt: input.createdAt,
+    completionStatus: input.completionStatus,
   };
 }
 
@@ -230,6 +233,7 @@ export function pushAssistantMessage(
     kind: input.kind,
     content: input.content,
     createdAt: input.now,
+    completionStatus: 'completed',
   });
   session.messages.push(message);
   assistantMessages.push(message);

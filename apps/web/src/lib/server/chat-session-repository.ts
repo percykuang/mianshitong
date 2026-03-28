@@ -1,5 +1,11 @@
 import { Prisma, prisma } from '@mianshitong/db';
-import type { ChatSession, CreateSessionInput, ModelId, SessionSummary } from '@mianshitong/shared';
+import type {
+  ChatMessageCompletionStatus,
+  ChatSession,
+  CreateSessionInput,
+  ModelId,
+  SessionSummary,
+} from '@mianshitong/shared';
 import { compareSessionsByPinnedAndCreated } from '@/lib/chat-session-order';
 import {
   createChatSessionId,
@@ -166,13 +172,64 @@ export async function saveOrCreateActorSession(
 export async function appendActorSessionExchange(
   actorId: string,
   sessionId: string,
-  input: { userContent: string; assistantContent: string; now?: string; modelId?: ModelId },
+  input: {
+    userContent: string;
+    assistantContent: string;
+    now?: string;
+    modelId?: ModelId;
+    userCreatedAt?: string;
+    assistantCreatedAt?: string;
+    assistantCompletionStatus?: ChatMessageCompletionStatus;
+  },
   userId?: string | null,
 ): Promise<ChatSession | null> {
   const current = await getActorSession(actorId, sessionId);
   const nextSession = appendSessionMessages(
     current ?? createDraftSession({ modelId: input.modelId }, sessionId),
     input,
+  );
+
+  if (current) {
+    return saveActorSession(actorId, nextSession);
+  }
+
+  return createActorSessionRecord(actorId, nextSession, userId);
+}
+
+export async function appendActorInterruptedTurn(
+  actorId: string,
+  sessionId: string,
+  input: {
+    userContent: string;
+    assistantContent?: string;
+    now?: string;
+    modelId?: ModelId;
+    userCreatedAt?: string;
+    assistantCreatedAt?: string;
+    expectedMessageCount?: number;
+  },
+  userId?: string | null,
+): Promise<ChatSession | null> {
+  const current = await getActorSession(actorId, sessionId);
+
+  if (
+    current &&
+    typeof input.expectedMessageCount === 'number' &&
+    current.messages.length > input.expectedMessageCount
+  ) {
+    return current;
+  }
+
+  const nextSession = appendSessionMessages(
+    current ?? createDraftSession({ modelId: input.modelId }, sessionId),
+    {
+      userContent: input.userContent,
+      assistantContent: input.assistantContent,
+      now: input.now,
+      userCreatedAt: input.userCreatedAt,
+      assistantCreatedAt: input.assistantCreatedAt,
+      assistantCompletionStatus: input.assistantContent ? 'interrupted' : undefined,
+    },
   );
 
   if (current) {

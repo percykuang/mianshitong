@@ -9,6 +9,7 @@ import {
 import { normalizeAssistantMarkdown } from '@/lib/server/chat-response-format';
 import { createDraftSession } from '@/lib/server/chat-session-model';
 import {
+  appendActorInterruptedTurn,
   appendActorSessionExchange,
   getActorSession,
   saveOrCreateActorSession,
@@ -22,8 +23,9 @@ import { listActiveQuestionBank } from '@/lib/server/question-bank-repository';
 import { resolveQuestionRetriever } from '@/lib/server/question-retriever';
 import {
   createStreamProvider,
+  enqueueSseEvent,
   emitShortcutReplyAsStream,
-  formatSseEvent,
+  finalizeSseStream,
   isRecord,
   resolveErrorMessage,
   toChatTurns,
@@ -112,7 +114,7 @@ export async function POST(
           let shouldRollback = true;
 
           try {
-            controller.enqueue(formatSseEvent('start', { sessionId }));
+            enqueueSseEvent(controller, 'start', { sessionId });
 
             const questionBank = session.status === 'idle' ? await listActiveQuestionBank() : [];
             const retriever =
@@ -135,7 +137,7 @@ export async function POST(
             }
 
             shouldRollback = false;
-            controller.enqueue(formatSseEvent('done', { session: updatedSession }));
+            enqueueSseEvent(controller, 'done', { session: updatedSession });
           } catch (error) {
             hasError = true;
             if (shouldRollback) {
@@ -144,10 +146,9 @@ export async function POST(
                 actorType: actor.type,
               });
             }
-            controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));
+            enqueueSseEvent(controller, 'error', { message: resolveErrorMessage(error) });
           } finally {
-            controller.enqueue(formatSseEvent('end', { ok: !hasError }));
-            controller.close();
+            finalizeSseStream(controller, { ok: !hasError });
           }
         };
 
@@ -174,7 +175,7 @@ export async function POST(
         let hasError = false;
 
         try {
-          controller.enqueue(formatSseEvent('start', { sessionId }));
+          enqueueSseEvent(controller, 'start', { sessionId });
 
           for await (const delta of provider!.streamChat({
             messages: turns,
@@ -182,7 +183,7 @@ export async function POST(
             signal: request.signal,
           })) {
             assistantText += delta;
-            controller.enqueue(formatSseEvent('delta', { delta }));
+            enqueueSseEvent(controller, 'delta', { delta });
           }
 
           const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
@@ -204,22 +205,36 @@ export async function POST(
             throw new Error('会话不存在或已失效');
           }
 
-          controller.enqueue(formatSseEvent('done', { session: updatedSession }));
+          enqueueSseEvent(controller, 'done', { session: updatedSession });
         } catch (error) {
           const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
           if (normalizedAssistantText) {
             hasError = true;
-            await appendActorSessionExchange(
-              actor.id,
-              sessionId,
-              {
-                userContent: content,
-                assistantContent: normalizedAssistantText,
-                modelId: session.modelId,
-              },
-              actor.authUserId,
-            );
-            controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));
+            if (request.signal.aborted) {
+              await appendActorInterruptedTurn(
+                actor.id,
+                sessionId,
+                {
+                  userContent: content,
+                  assistantContent: normalizedAssistantText,
+                  modelId: session.modelId,
+                  expectedMessageCount: session.messages.length,
+                },
+                actor.authUserId,
+              );
+            } else {
+              await appendActorSessionExchange(
+                actor.id,
+                sessionId,
+                {
+                  userContent: content,
+                  assistantContent: normalizedAssistantText,
+                  modelId: session.modelId,
+                },
+                actor.authUserId,
+              );
+            }
+            enqueueSseEvent(controller, 'error', { message: resolveErrorMessage(error) });
           } else if (fallbackAssistantText) {
             const streamedFallbackText = await emitShortcutReplyAsStream({
               controller,
@@ -239,18 +254,17 @@ export async function POST(
             if (!updatedSession) {
               throw new Error('会话不存在或已失效');
             }
-            controller.enqueue(formatSseEvent('done', { session: updatedSession }));
+            enqueueSseEvent(controller, 'done', { session: updatedSession });
           } else {
             hasError = true;
             await rollbackChatUsage({
               actorId: actor.id,
               actorType: actor.type,
             });
-            controller.enqueue(formatSseEvent('error', { message: resolveErrorMessage(error) }));
+            enqueueSseEvent(controller, 'error', { message: resolveErrorMessage(error) });
           }
         } finally {
-          controller.enqueue(formatSseEvent('end', { ok: !hasError }));
-          controller.close();
+          finalizeSseStream(controller, { ok: !hasError });
         }
       };
 

@@ -1,5 +1,6 @@
 import type { ChatMessage } from '@mianshitong/shared';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useChatMessageFeedback } from '../hooks/use-chat-message-feedback';
@@ -39,6 +40,8 @@ export function ChatMessageItem({
 }: ChatMessageItemProps) {
   const isEditableUserMessage = message.role === 'user' && !isLoading;
   const shouldShowActions = !isLoading && !isEditing && !isStreaming;
+  const isInterruptedAssistantMessage =
+    message.role === 'assistant' && message.completionStatus === 'interrupted';
   const { pendingMessageId, setMessageFeedback } = useChatMessageFeedback({
     sessionId,
     onError: onNotice,
@@ -111,6 +114,15 @@ export function ChatMessageItem({
               <ChatMarkdown content={message.content} className="text-foreground" />
             )}
           </div>
+
+          {isInterruptedAssistantMessage ? (
+            <Badge
+              variant="outline"
+              className="w-fit border-amber-200 bg-amber-50 text-[11px] font-medium text-amber-700"
+            >
+              已停止生成
+            </Badge>
+          ) : null}
 
           {shouldShowActions ? (
             <div

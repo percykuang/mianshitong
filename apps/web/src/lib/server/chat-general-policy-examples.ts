@@ -11,7 +11,7 @@ export function buildGeneralChatIntentExamples(intent: GeneralChatIntent): ChatT
       {
         role: 'assistant',
         content: [
-          '你好！我是面试通，一名专注前端求职、简历优化和模拟面试的 AI 助手。',
+          '你好！我是面试通，一个互联网大公司的资深程序员和面试官，专注于前端技术领域。',
           '',
           '我可以直接帮你做这些事：',
           '- 优化简历和项目经历表达',
@@ -56,7 +56,7 @@ export function buildGeneralChatIntentExamples(intent: GeneralChatIntent): ChatT
         content: [
           '1+2 等于 3。',
           '',
-          '不过，作为你的前端面试助手，我更擅长帮你解决技术问题、优化简历或进行模拟面试。如果你愿意，我可以继续帮你。',
+          '不过，作为面试通，我更擅长帮你解决前端技术问题、优化简历或进行模拟面试。如果你愿意，我可以继续帮你。',
         ].join('\n'),
       },
     ];

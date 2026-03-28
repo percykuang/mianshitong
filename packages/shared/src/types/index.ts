@@ -223,6 +223,7 @@ export interface InterviewReport {
 
 export type MessageRole = 'system' | 'user' | 'assistant';
 export type ChatMessageFeedback = 'like' | 'dislike';
+export type ChatMessageCompletionStatus = 'completed' | 'interrupted';
 export type MessageKind =
   | 'text'
   | 'question'
@@ -256,6 +257,7 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   feedback?: ChatMessageFeedback | null;
+  completionStatus?: ChatMessageCompletionStatus;
 }
 
 export interface ChatSession {

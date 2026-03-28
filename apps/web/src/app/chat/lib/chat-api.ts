@@ -138,6 +138,25 @@ export async function openEditStreamRequest(
   return response;
 }
 
+export async function persistInterruptedSessionTurn(input: {
+  sessionId: string;
+  userContent: string;
+  assistantContent?: string;
+  modelId: ModelId;
+  expectedMessageCount: number;
+  userCreatedAt?: string;
+  assistantCreatedAt?: string;
+}): Promise<ChatSession> {
+  const response = await fetch(`/api/chat/sessions/${input.sessionId}/messages/interrupted`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const data = await readJson<ChatSessionResponse>(response);
+  return data.session;
+}
+
 function emitSseEvent(rawEvent: string, onEvent: SseEventHandler): void {
   const lines = rawEvent
     .split('\n')

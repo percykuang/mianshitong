@@ -30,6 +30,7 @@ describe('chat-session-draft', () => {
     expect(next.title).toBe('请帮我优化一下前端简历项目描述');
     expect(next.updatedAt).toBe('2026-03-09T12:30:00.000Z');
     expect(next.messages.slice(-2).map((item) => item.role)).toEqual(['user', 'assistant']);
+    expect(next.messages.at(-1)?.completionStatus).toBe('completed');
   });
 
   it('编辑首条用户消息后会重建后续内容并同步标题', () => {
@@ -51,6 +52,7 @@ describe('chat-session-draft', () => {
     expect(rebuilt?.messages).toHaveLength(2);
     expect(rebuilt?.messages[0]?.content).toBe('帮我准备一下面试中的自我介绍');
     expect(rebuilt?.messages[1]?.content).toBe('好的，我先给你一个 1 分钟版本。');
+    expect(rebuilt?.messages[1]?.completionStatus).toBe('completed');
   });
 
   it('构造流式上下文时会过滤 report 类型消息', () => {

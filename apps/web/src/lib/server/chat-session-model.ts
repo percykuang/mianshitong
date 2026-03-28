@@ -3,6 +3,7 @@ import {
   MODEL_OPTIONS,
   normalizeInterviewConfig,
   type ChatMessage,
+  type ChatMessageCompletionStatus,
   type ChatSession,
   type CreateSessionInput,
   type InterviewQuestion,
@@ -55,6 +56,7 @@ export function createMessage(input: {
   kind: ChatMessage['kind'];
   content: string;
   createdAt: string;
+  completionStatus?: ChatMessageCompletionStatus;
 }): ChatMessage {
   return {
     id: createId('msg'),
@@ -62,6 +64,7 @@ export function createMessage(input: {
     kind: input.kind,
     content: input.content,
     createdAt: input.createdAt,
+    completionStatus: input.completionStatus,
   };
 }
 
@@ -192,22 +195,42 @@ export function toSessionUpdateData(
 
 export function appendSessionMessages(
   session: ChatSession,
-  input: { userContent: string; assistantContent: string; now?: string },
+  input: {
+    userContent: string;
+    assistantContent?: string;
+    now?: string;
+    userCreatedAt?: string;
+    assistantCreatedAt?: string;
+    assistantCompletionStatus?: ChatMessageCompletionStatus;
+  },
 ): ChatSession {
   const now = input.now ?? new Date().toISOString();
   const userContent = input.userContent.trim();
-  const assistantContent = input.assistantContent.trim();
-  if (!userContent || !assistantContent) {
+  const assistantContent = input.assistantContent?.trim() ?? '';
+  if (!userContent) {
     return session;
   }
 
   const next = { ...session, messages: [...session.messages] };
   next.messages.push(
-    createMessage({ role: 'user', kind: 'text', content: userContent, createdAt: now }),
+    createMessage({
+      role: 'user',
+      kind: 'text',
+      content: userContent,
+      createdAt: input.userCreatedAt ?? now,
+    }),
   );
-  next.messages.push(
-    createMessage({ role: 'assistant', kind: 'text', content: assistantContent, createdAt: now }),
-  );
+  if (assistantContent) {
+    next.messages.push(
+      createMessage({
+        role: 'assistant',
+        kind: 'text',
+        content: assistantContent,
+        createdAt: input.assistantCreatedAt ?? now,
+        completionStatus: input.assistantCompletionStatus ?? 'completed',
+      }),
+    );
+  }
 
   if (next.messages.filter((item) => item.role === 'user').length === 1) {
     next.title = toTitle(userContent);

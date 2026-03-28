@@ -6,6 +6,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { SessionExecutionTraceCard } from '@/components/session-execution-trace-card';
 import { SessionPlanningTraceCard } from '@/components/session-planning-trace-card';
 import { SessionReportTraceCard } from '@/components/session-report-trace-card';
+import type { SessionMessage } from '@/lib/session-messages';
 
 interface SessionMeta {
   id: string;
@@ -17,14 +18,6 @@ interface SessionMeta {
   status: string;
   createdAt: string;
   updatedAt: string;
-}
-
-interface SessionMessage {
-  id: string;
-  role: string;
-  kind: string;
-  content: string;
-  createdAt: string;
 }
 
 interface SessionDetailViewProps {
@@ -126,6 +119,11 @@ export function SessionDetailView({ session, messages, runtime }: SessionDetailV
                           <Tag color={item.role === 'user' ? 'blue' : 'green'}>
                             {item.role === 'user' ? '用户' : 'AI'}
                           </Tag>
+                          {item.role === 'assistant' && item.completionStatus === 'interrupted' ? (
+                            <Tag color="gold" style={{ marginLeft: 8 }}>
+                              已停止生成
+                            </Tag>
+                          ) : null}
                           <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
                             {item.createdAt}
                           </Typography.Text>

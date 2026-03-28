@@ -3,7 +3,7 @@ import { formatArithmeticExpression } from './chat-general-policy-intent';
 
 function buildResumeOptimizationReply(): string {
   return [
-    '当然可以帮你优化简历！作为资深程序员和简历优化助手，我很乐意帮你做针对性的评审和修改。',
+    '当然可以帮你优化简历！我会从一个互联网大公司的资深程序员和面试官视角，帮你做针对性的评审和修改。',
     '',
     '不过，我还没有看到你的简历内容。请先把简历文本粘贴过来，最好是完整内容。',
     '',
@@ -24,7 +24,7 @@ function buildResumeOptimizationReply(): string {
 
 function buildGreetingReply(): string {
   return [
-    '你好！我是面试通，一名资深程序员和前端 AI 面试官，专注于前端求职、简历优化和模拟面试。',
+    '你好！我是面试通，一个互联网大公司的资深程序员和面试官，专注于前端技术领域。',
     '',
     '我可以直接帮你做这些事：',
     '- 优化简历和项目经历表达',
@@ -42,7 +42,7 @@ function buildArithmeticReply(
 ): string {
   return [
     formatArithmeticExpression(intent.arithmetic),
-    '不过，作为你的前端面试助手，我更擅长帮你解决技术问题、优化简历或进行模拟面试。如果你愿意，我可以继续帮你。',
+    '不过，作为面试通，我更擅长帮你解决前端技术问题、优化简历或进行模拟面试。如果你愿意，我可以继续帮你。',
   ].join('\n\n');
 }
 
