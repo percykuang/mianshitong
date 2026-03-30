@@ -17,10 +17,14 @@ interface ChatMessageItemProps {
   isEditing: boolean;
   editingValue: string;
   sending: boolean;
+  canEditUserMessage: boolean;
+  canRestoreOriginalReply: boolean;
+  restoringOriginalReply: boolean;
   onStartEditUserMessage: (messageId: string, content: string) => void;
   onEditingValueChange: (value: string) => void;
   onCancelEditUserMessage: () => void;
   onSubmitEditUserMessage: () => Promise<void>;
+  onRestoreOriginalReply: () => Promise<void>;
   onNotice: (content: string) => void;
 }
 
@@ -32,13 +36,17 @@ export function ChatMessageItem({
   isEditing,
   editingValue,
   sending,
+  canEditUserMessage,
+  canRestoreOriginalReply,
+  restoringOriginalReply,
   onStartEditUserMessage,
   onEditingValueChange,
   onCancelEditUserMessage,
   onSubmitEditUserMessage,
+  onRestoreOriginalReply,
   onNotice,
 }: ChatMessageItemProps) {
-  const isEditableUserMessage = message.role === 'user' && !isLoading;
+  const isUserMessage = message.role === 'user' && !isLoading;
   const shouldShowActions = !isLoading && !isEditing && !isStreaming;
   const isInterruptedAssistantMessage =
     message.role === 'assistant' && message.completionStatus === 'interrupted';
@@ -116,12 +124,26 @@ export function ChatMessageItem({
           </div>
 
           {isInterruptedAssistantMessage ? (
-            <Badge
-              variant="outline"
-              className="w-fit border-amber-200 bg-amber-50 text-[11px] font-medium text-amber-700"
-            >
-              已停止生成
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className="w-fit border-amber-200 bg-amber-50 text-[11px] font-medium text-amber-700"
+              >
+                已停止生成
+              </Badge>
+              {canRestoreOriginalReply ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-2 py-1 text-[11px] font-medium text-muted-foreground"
+                  disabled={restoringOriginalReply}
+                  onClick={() => void onRestoreOriginalReply()}
+                >
+                  {restoringOriginalReply ? '恢复中...' : '恢复原回复'}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
 
           {shouldShowActions ? (
@@ -132,7 +154,8 @@ export function ChatMessageItem({
               )}
             >
               <ChatMessageActions
-                isUserMessage={isEditableUserMessage}
+                isUserMessage={isUserMessage}
+                canEditUserMessage={canEditUserMessage && !sending}
                 content={message.content}
                 messageId={message.id}
                 activeFeedback={message.feedback ?? null}

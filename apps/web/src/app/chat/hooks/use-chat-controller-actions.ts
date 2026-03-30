@@ -12,10 +12,7 @@ interface UseChatControllerActionsInput {
   removeCachedSession: (sessionId: string) => void;
   clearCachedSessions: () => void;
   sendMessage: (content: string) => Promise<void>;
-  editUserMessage: (messageId: string, content: string) => Promise<boolean>;
   activeSessionId: string | null;
-  editingMessageId: string | null;
-  editingValue: string;
   setInputValue: (value: string) => void;
   setSelectedModelId: (value: ModelId) => void;
   setNotice: (value: string | null) => void;
@@ -42,10 +39,7 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     removeCachedSession,
     clearCachedSessions,
     sendMessage,
-    editUserMessage,
     activeSessionId,
-    editingMessageId,
-    editingValue,
     setInputValue,
     setSelectedModelId,
     setNotice,
@@ -160,33 +154,10 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     [setNotice],
   );
 
-  const startEditingUserMessage = useCallback(
-    (messageId: string, content: string) => {
-      setEditingMessageId(messageId);
-      setEditingValue(content);
-    },
-    [setEditingMessageId, setEditingValue],
-  );
-
   const cancelEditingUserMessage = useCallback(() => {
     setEditingMessageId(null);
     setEditingValue('');
   }, [setEditingMessageId, setEditingValue]);
-
-  const submitEditingUserMessage = useCallback(async (): Promise<boolean> => {
-    if (!editingMessageId) {
-      return false;
-    }
-
-    const success = await editUserMessage(editingMessageId, editingValue);
-    if (!success) {
-      return false;
-    }
-
-    setEditingMessageId(null);
-    setEditingValue('');
-    return true;
-  }, [editingMessageId, editingValue, editUserMessage, setEditingMessageId, setEditingValue]);
 
   return {
     handlePickSession,
@@ -196,8 +167,6 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     handleQuickPrompt,
     handleCopy,
     showNotice,
-    startEditingUserMessage,
     cancelEditingUserMessage,
-    submitEditingUserMessage,
   };
 }

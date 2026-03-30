@@ -21,6 +21,38 @@ export function appendOptimisticMessages(
   };
 }
 
+export function buildOptimisticEditSession(input: {
+  session: ChatSession;
+  messageId: string;
+  userContent: string;
+  optimisticAssistant: ChatMessage;
+  updatedAt: string;
+}): ChatSession | null {
+  const { session, messageId, userContent, optimisticAssistant, updatedAt } = input;
+  if (!isEditableUserMessage(session.messages, messageId)) {
+    return null;
+  }
+
+  const targetIndex = getEditableUserMessageIndex(session.messages, messageId);
+  const targetMessage = session.messages[targetIndex];
+  if (!targetMessage) {
+    return null;
+  }
+
+  const firstUserIndex = session.messages.findIndex((item) => item.role === 'user');
+
+  return {
+    ...session,
+    title: targetIndex === firstUserIndex ? toSessionTitle(userContent) : session.title,
+    messages: [
+      ...session.messages.slice(0, targetIndex),
+      { ...targetMessage, content: userContent },
+      optimisticAssistant,
+    ],
+    updatedAt,
+  };
+}
+
 export function appendAssistantDelta(
   session: ChatSession | null,
   optimisticAssistantId: string,
@@ -144,4 +176,19 @@ export function buildStoredChatSession(input: {
 
 export function getEditableUserMessageIndex(messages: ChatMessage[], messageId: string): number {
   return messages.findIndex((item) => item.id === messageId && item.role === 'user');
+}
+
+export function getLastEditableUserMessageId(messages: ChatMessage[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'user') {
+      return message.id;
+    }
+  }
+
+  return null;
+}
+
+export function isEditableUserMessage(messages: ChatMessage[], messageId: string): boolean {
+  return getLastEditableUserMessageId(messages) === messageId;
 }

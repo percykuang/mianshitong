@@ -33,11 +33,18 @@ export function ChatClient() {
     controller.activeSessionLoading &&
     controller.activeSession?.id !== routeSessionId;
   const lastMessageContent = latestMessages.at(-1)?.content;
+  const lastMessage = latestMessages.at(-1) ?? null;
   const activeEditingMessageId = latestMessages.some(
     (item) => item.id === controller.editingMessageId,
   )
     ? controller.editingMessageId
     : null;
+  const restorableInterruptedAssistantMessageId =
+    controller.canRestoreOriginalReply &&
+    lastMessage?.role === 'assistant' &&
+    lastMessage.completionStatus === 'interrupted'
+      ? lastMessage.id
+      : null;
   const toastMessage = controller.notice ?? controller.toast;
   const toastClassName = controller.notice ? 'bg-red-600 text-white' : 'bg-zinc-900 text-white';
 
@@ -121,11 +128,14 @@ export function ChatClient() {
                 sending={controller.sending}
                 editingMessageId={activeEditingMessageId}
                 editingValue={controller.editingValue}
+                restorableInterruptedAssistantMessageId={restorableInterruptedAssistantMessageId}
+                restoringOriginalReply={controller.restoringOriginalReply}
                 scrollContainerRef={scrollContainerRef}
                 onStartEditUserMessage={controller.startEditingUserMessage}
                 onEditingValueChange={controller.setEditingValue}
                 onCancelEditUserMessage={controller.cancelEditingUserMessage}
                 onSubmitEditUserMessage={handleSubmitEditUserMessage}
+                onRestoreOriginalReply={controller.restoreOriginalReply}
                 onNotice={controller.showNotice}
               />
             )}

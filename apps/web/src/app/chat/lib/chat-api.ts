@@ -47,6 +47,17 @@ export async function fetchSessionById(sessionId: string): Promise<ChatSession> 
   return data.session;
 }
 
+export async function restoreSessionSnapshotRequest(session: ChatSession): Promise<ChatSession> {
+  const response = await fetch(`/api/chat/sessions/${session.id}/restore`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ session }),
+  });
+
+  const data = await readJson<ChatSessionResponse>(response);
+  return data.session;
+}
+
 export async function fetchChatUsageSummary(): Promise<ChatUsageSummary> {
   const response = await fetch('/api/chat/usage', { cache: 'no-store' });
   return readJson<ChatUsageSummary>(response);
@@ -121,6 +132,7 @@ export async function openEditStreamRequest(
   sessionId: string,
   messageId: string,
   content: string,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const response = await fetch(
     `/api/chat/sessions/${sessionId}/messages/${messageId}/edit/stream`,
@@ -128,6 +140,7 @@ export async function openEditStreamRequest(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ content }),
+      signal,
     },
   );
 

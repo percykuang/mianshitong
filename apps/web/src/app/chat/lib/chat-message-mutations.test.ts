@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { createDraftChatSession, createMessage } from './chat-session-draft';
+import {
+  appendUserAssistantMessages,
+  createDraftChatSession,
+  createMessage,
+} from './chat-session-draft';
 import {
   appendAssistantDelta,
   appendOptimisticMessages,
   buildStoredChatSession,
   finalizeInterruptedAssistantMessage,
   getEditableUserMessageIndex,
+  getLastEditableUserMessageId,
+  isEditableUserMessage,
   removeOptimisticMessages,
+  buildOptimisticEditSession,
   toSessionTitle,
 } from './chat-message-mutations';
 
@@ -117,6 +124,44 @@ describe('chat-message-mutations', () => {
     expect(next?.status).toBe('idle');
   });
 
+  it('编辑最后一条用户消息时会替换当前轮次并重建 assistant 占位', () => {
+    const session = appendUserAssistantMessages(
+      appendUserAssistantMessages(createDraftChatSession('deepseek-chat', 'mutation_session_6'), {
+        userContent: '第一条问题',
+        assistantContent: '第一条回答',
+        now: '2026-03-09T15:00:00.000Z',
+      }),
+      {
+        userContent: '第二条问题',
+        assistantContent: '第二条回答',
+        now: '2026-03-09T15:02:00.000Z',
+      },
+    );
+    const lastUserMessageId = session.messages[2]?.id;
+    const optimisticAssistant = createMessage({
+      role: 'assistant',
+      kind: 'text',
+      content: '',
+      createdAt: '2026-03-09T15:03:00.000Z',
+    });
+
+    const next = buildOptimisticEditSession({
+      session,
+      messageId: lastUserMessageId ?? '',
+      userContent: '第二条问题（已编辑）',
+      optimisticAssistant,
+      updatedAt: '2026-03-09T15:03:00.000Z',
+    });
+
+    expect(next?.messages.map((message) => message.content)).toEqual([
+      '第一条问题',
+      '第一条回答',
+      '第二条问题（已编辑）',
+      '',
+    ]);
+    expect(next?.title).toBe('第一条问题');
+  });
+
   it('会构造用于本地持久化的会话，并在首条用户消息时更新标题', () => {
     const session = createDraftChatSession('deepseek-chat', 'mutation_session_3');
     const optimisticUser = createMessage({
@@ -166,5 +211,37 @@ describe('chat-message-mutations', () => {
     const messages = [user, assistant];
     expect(getEditableUserMessageIndex(messages, user.id)).toBe(0);
     expect(getEditableUserMessageIndex(messages, assistant.id)).toBe(-1);
+  });
+
+  it('只会把最后一条用户消息视为可编辑目标', () => {
+    const firstUser = createMessage({
+      role: 'user',
+      kind: 'text',
+      content: '第一条问题',
+      createdAt: '2026-03-09T15:00:00.000Z',
+    });
+    const firstAssistant = createMessage({
+      role: 'assistant',
+      kind: 'text',
+      content: '第一条回答',
+      createdAt: '2026-03-09T15:01:00.000Z',
+    });
+    const secondUser = createMessage({
+      role: 'user',
+      kind: 'text',
+      content: '第二条问题',
+      createdAt: '2026-03-09T15:02:00.000Z',
+    });
+
+    expect(getLastEditableUserMessageId([firstUser, firstAssistant, secondUser])).toBe(
+      secondUser.id,
+    );
+    expect(getLastEditableUserMessageId([firstAssistant])).toBe(null);
+    expect(isEditableUserMessage([firstUser, firstAssistant, secondUser], secondUser.id)).toBe(
+      true,
+    );
+    expect(isEditableUserMessage([firstUser, firstAssistant, secondUser], firstUser.id)).toBe(
+      false,
+    );
   });
 });

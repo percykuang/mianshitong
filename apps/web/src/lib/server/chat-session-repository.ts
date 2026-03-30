@@ -239,6 +239,33 @@ export async function appendActorInterruptedTurn(
   return createActorSessionRecord(actorId, nextSession, userId);
 }
 
+export async function replaceActorSessionAfterEdit(
+  actorId: string,
+  sessionId: string,
+  messageId: string,
+  input: {
+    userContent: string;
+    assistantContent?: string;
+    now?: string;
+    userCreatedAt?: string;
+    assistantCreatedAt?: string;
+    assistantCompletionStatus?: ChatMessageCompletionStatus;
+  },
+): Promise<ChatSession | null> {
+  const current = await getActorSession(actorId, sessionId);
+  if (!current) {
+    return null;
+  }
+
+  const truncated = truncateSessionForEdit(current, messageId, input.now);
+  if (!truncated) {
+    return null;
+  }
+
+  const nextSession = appendSessionMessages(truncated, input);
+  return saveActorSession(actorId, nextSession);
+}
+
 export async function truncateActorSessionForEdit(
   actorId: string,
   sessionId: string,

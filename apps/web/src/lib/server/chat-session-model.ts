@@ -241,6 +241,21 @@ export function appendSessionMessages(
   return next;
 }
 
+export function getLastUserMessageId(messages: ChatMessage[]): string | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'user') {
+      return message.id;
+    }
+  }
+
+  return null;
+}
+
+export function isLastUserMessage(session: ChatSession, messageId: string): boolean {
+  return getLastUserMessageId(session.messages) === messageId;
+}
+
 export function truncateSessionForEdit(
   session: ChatSession,
   messageId: string,

@@ -5,11 +5,10 @@ import {
   resolveGeneralChatIntent,
 } from '@/lib/server/chat-general-policy';
 import { normalizeAssistantMarkdown } from '@/lib/server/chat-response-format';
+import { isLastUserMessage, truncateSessionForEdit } from '@/lib/server/chat-session-model';
 import {
-  appendActorInterruptedTurn,
-  appendActorSessionExchange,
   getActorSession,
-  truncateActorSessionForEdit,
+  replaceActorSessionAfterEdit,
 } from '@/lib/server/chat-session-repository';
 import {
   consumeChatUsage,
@@ -61,7 +60,11 @@ export async function POST(
     return Response.json({ message: 'Session not found' }, { status: 404 });
   }
 
-  const truncatedSession = await truncateActorSessionForEdit(actor.id, sessionId, messageId);
+  if (!isLastUserMessage(currentSession, messageId)) {
+    return Response.json({ message: 'Only the last user message can be edited' }, { status: 400 });
+  }
+
+  const truncatedSession = truncateSessionForEdit(currentSession, messageId);
   if (!truncatedSession) {
     return Response.json({ message: 'User message not found' }, { status: 404 });
   }
@@ -126,14 +129,14 @@ export async function POST(
             throw new Error('模型没有返回可用内容');
           }
 
-          const updatedSession = await appendActorSessionExchange(
+          const updatedSession = await replaceActorSessionAfterEdit(
             actor.id,
             sessionId,
+            messageId,
             {
               userContent: content,
               assistantContent: normalizedAssistantText,
             },
-            actor.authUserId,
           );
           if (!updatedSession) {
             throw new Error('会话不存在或已失效');
@@ -144,48 +147,50 @@ export async function POST(
           const normalizedAssistantText = normalizeAssistantMarkdown(assistantText);
           if (normalizedAssistantText) {
             hasError = true;
-            if (request.signal.aborted) {
-              await appendActorInterruptedTurn(
-                actor.id,
-                sessionId,
-                {
-                  userContent: content,
-                  assistantContent: normalizedAssistantText,
-                  expectedMessageCount: truncatedSession.messages.length,
-                },
-                actor.authUserId,
-              );
-            } else {
-              await appendActorSessionExchange(
-                actor.id,
-                sessionId,
-                {
-                  userContent: content,
-                  assistantContent: normalizedAssistantText,
-                },
-                actor.authUserId,
-              );
-            }
+            await replaceActorSessionAfterEdit(actor.id, sessionId, messageId, {
+              userContent: content,
+              assistantContent: normalizedAssistantText,
+              assistantCompletionStatus: request.signal.aborted ? 'interrupted' : 'completed',
+            });
             enqueueSseEvent(controller, 'error', { message: resolveErrorMessage(error) });
           } else if (fallbackAssistantText) {
-            const streamedFallbackText = await emitShortcutReplyAsStream({
+            const fallbackResult = await emitShortcutReplyAsStream({
               controller,
               content: fallbackAssistantText,
               signal: request.signal,
             });
-            const updatedSession = await appendActorSessionExchange(
-              actor.id,
-              sessionId,
-              {
-                userContent: content,
-                assistantContent: streamedFallbackText,
-              },
-              actor.authUserId,
-            );
-            if (!updatedSession) {
-              throw new Error('会话不存在或已失效');
+            const normalizedFallbackText = normalizeAssistantMarkdown(fallbackResult.content);
+
+            if (fallbackResult.aborted) {
+              hasError = true;
+
+              if (normalizedFallbackText) {
+                await replaceActorSessionAfterEdit(actor.id, sessionId, messageId, {
+                  userContent: content,
+                  assistantContent: normalizedFallbackText,
+                  assistantCompletionStatus: 'interrupted',
+                });
+              } else {
+                await rollbackChatUsage({
+                  actorId: actor.id,
+                  actorType: actor.type,
+                });
+              }
+            } else {
+              const updatedSession = await replaceActorSessionAfterEdit(
+                actor.id,
+                sessionId,
+                messageId,
+                {
+                  userContent: content,
+                  assistantContent: normalizedFallbackText,
+                },
+              );
+              if (!updatedSession) {
+                throw new Error('会话不存在或已失效');
+              }
+              enqueueSseEvent(controller, 'done', { session: updatedSession });
             }
-            enqueueSseEvent(controller, 'done', { session: updatedSession });
           } else {
             hasError = true;
             await rollbackChatUsage({

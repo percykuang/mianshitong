@@ -236,25 +236,50 @@ export async function POST(
             }
             enqueueSseEvent(controller, 'error', { message: resolveErrorMessage(error) });
           } else if (fallbackAssistantText) {
-            const streamedFallbackText = await emitShortcutReplyAsStream({
+            const fallbackResult = await emitShortcutReplyAsStream({
               controller,
               content: fallbackAssistantText,
               signal: request.signal,
             });
-            const updatedSession = await appendActorSessionExchange(
-              actor.id,
-              sessionId,
-              {
-                userContent: content,
-                assistantContent: streamedFallbackText,
-                modelId: session.modelId,
-              },
-              actor.authUserId,
-            );
-            if (!updatedSession) {
-              throw new Error('会话不存在或已失效');
+            const normalizedFallbackText = normalizeAssistantMarkdown(fallbackResult.content);
+
+            if (fallbackResult.aborted) {
+              hasError = true;
+
+              if (normalizedFallbackText) {
+                await appendActorInterruptedTurn(
+                  actor.id,
+                  sessionId,
+                  {
+                    userContent: content,
+                    assistantContent: normalizedFallbackText,
+                    modelId: session.modelId,
+                    expectedMessageCount: session.messages.length,
+                  },
+                  actor.authUserId,
+                );
+              } else {
+                await rollbackChatUsage({
+                  actorId: actor.id,
+                  actorType: actor.type,
+                });
+              }
+            } else {
+              const updatedSession = await appendActorSessionExchange(
+                actor.id,
+                sessionId,
+                {
+                  userContent: content,
+                  assistantContent: normalizedFallbackText,
+                  modelId: session.modelId,
+                },
+                actor.authUserId,
+              );
+              if (!updatedSession) {
+                throw new Error('会话不存在或已失效');
+              }
+              enqueueSseEvent(controller, 'done', { session: updatedSession });
             }
-            enqueueSseEvent(controller, 'done', { session: updatedSession });
           } else {
             hasError = true;
             await rollbackChatUsage({

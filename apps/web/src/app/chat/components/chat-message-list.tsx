@@ -1,5 +1,6 @@
 import type { ChatMessage } from '@mianshitong/shared';
 import type { RefObject } from 'react';
+import { isEditableUserMessage } from '../lib/chat-message-mutations';
 import { ChatEmptyState } from './chat-empty-state';
 import { CHAT_MESSAGE_COLUMN_CLASS } from './chat-layout';
 import { ChatMessageItem } from './chat-message-item';
@@ -12,11 +13,14 @@ interface ChatMessageListProps {
   sending: boolean;
   editingMessageId: string | null;
   editingValue: string;
+  restorableInterruptedAssistantMessageId: string | null;
+  restoringOriginalReply: boolean;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   onStartEditUserMessage: (messageId: string, content: string) => void;
   onEditingValueChange: (value: string) => void;
   onCancelEditUserMessage: () => void;
   onSubmitEditUserMessage: () => Promise<void>;
+  onRestoreOriginalReply: () => Promise<void>;
   onNotice: (content: string) => void;
 }
 
@@ -28,11 +32,14 @@ export function ChatMessageList({
   sending,
   editingMessageId,
   editingValue,
+  restorableInterruptedAssistantMessageId,
+  restoringOriginalReply,
   scrollContainerRef,
   onStartEditUserMessage,
   onEditingValueChange,
   onCancelEditUserMessage,
   onSubmitEditUserMessage,
+  onRestoreOriginalReply,
   onNotice,
 }: ChatMessageListProps) {
   const visibleMessages = messages.filter(
@@ -62,10 +69,14 @@ export function ChatMessageList({
             isEditing={message.id === editingMessageId}
             editingValue={editingValue}
             sending={sending}
+            canEditUserMessage={isEditableUserMessage(visibleMessages, message.id)}
+            canRestoreOriginalReply={message.id === restorableInterruptedAssistantMessageId}
+            restoringOriginalReply={restoringOriginalReply}
             onStartEditUserMessage={onStartEditUserMessage}
             onEditingValueChange={onEditingValueChange}
             onCancelEditUserMessage={onCancelEditUserMessage}
             onSubmitEditUserMessage={onSubmitEditUserMessage}
+            onRestoreOriginalReply={onRestoreOriginalReply}
             onNotice={onNotice}
           />
         ))}

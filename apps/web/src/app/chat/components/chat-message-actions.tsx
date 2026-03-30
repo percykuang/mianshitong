@@ -16,6 +16,7 @@ import { copyToClipboard } from '../hooks/chat-controller-helpers';
 
 interface ChatMessageActionsProps {
   isUserMessage: boolean;
+  canEditUserMessage?: boolean;
   content: string;
   messageId: string;
   activeFeedback: ChatMessageFeedback | null;
@@ -90,6 +91,7 @@ function CopyMessageButton({ content, defaultLabel, testId, onNotice }: CopyMess
 
 export function ChatMessageActions({
   isUserMessage,
+  canEditUserMessage = true,
   content,
   messageId,
   activeFeedback,
@@ -101,15 +103,17 @@ export function ChatMessageActions({
   if (isUserMessage) {
     return (
       <>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="编辑消息"
-          onClick={() => onStartEditUserMessage(messageId, content)}
-        >
-          <Pencil className="size-3.5" />
-        </Button>
+        {canEditUserMessage ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="编辑消息"
+            onClick={() => onStartEditUserMessage(messageId, content)}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        ) : null}
         <CopyMessageButton
           content={content}
           defaultLabel="复制"

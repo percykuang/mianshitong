@@ -156,14 +156,14 @@ export function rebuildSessionAfterEdit(
   }
 
   const firstUserIndex = session.messages.findIndex((item) => item.role === 'user');
-  const history = session.messages
-    .slice(0, targetIndex + 1)
-    .map((item) => (item.id === input.messageId ? { ...item, content: editedUserContent } : item));
+  const nextMessage = session.messages[targetIndex + 1];
+  const tailStart = nextMessage?.role === 'assistant' ? targetIndex + 2 : targetIndex + 1;
 
   const next: ChatSession = {
     ...session,
     messages: [
-      ...history,
+      ...session.messages.slice(0, targetIndex),
+      { ...session.messages[targetIndex]!, content: editedUserContent },
       createMessage({
         role: 'assistant',
         kind: 'text',
@@ -171,6 +171,7 @@ export function rebuildSessionAfterEdit(
         createdAt: now,
         completionStatus: 'completed',
       }),
+      ...session.messages.slice(tailStart),
     ],
     updatedAt: now,
     status: 'idle',

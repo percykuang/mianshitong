@@ -12,7 +12,7 @@ const controllerState = vi.hoisted(() => ({
 
 const sendMocks = vi.hoisted(() => ({
   remoteSendMessage: vi.fn(async () => undefined),
-  remoteEditMessage: vi.fn(async () => true),
+  remoteEditMessage: vi.fn(async () => 'completed'),
   refreshChatUsage: vi.fn(async () => ({
     actorType: 'guest' as const,
     used: 0,
@@ -37,9 +37,7 @@ const noopActions = vi.hoisted(() => ({
   handleQuickPrompt: vi.fn(async () => undefined),
   handleCopy: vi.fn(async () => undefined),
   showNotice: vi.fn(),
-  startEditingUserMessage: vi.fn(),
   cancelEditingUserMessage: vi.fn(),
-  submitEditingUserMessage: vi.fn(async () => true),
 }));
 
 vi.mock('./use-chat-controller-store', () => ({

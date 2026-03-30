@@ -6,6 +6,11 @@ export interface CreatedChatSession {
   assistantContent: string;
 }
 
+export interface ChatConversationTurn {
+  user: string;
+  assistant?: string;
+}
+
 export async function openChat(page: Page): Promise<void> {
   await page.goto('/chat');
   await expect(page.getByTestId('multimodal-input')).toBeVisible();
@@ -44,5 +49,32 @@ export async function createRemoteSession(page: Page, prompt: string): Promise<C
     id: resolveSessionIdFromUrl(page.url()),
     title: prompt,
     assistantContent,
+  };
+}
+
+export async function createRemoteConversationSession(
+  page: Page,
+  turns: ChatConversationTurn[],
+): Promise<CreatedChatSession> {
+  if (turns.length === 0) {
+    throw new Error('至少需要一轮对话来创建会话');
+  }
+
+  await openChat(page);
+
+  for (const turn of turns) {
+    await page.getByTestId('multimodal-input').fill(turn.user);
+    await page.getByTestId('send-button').click();
+
+    const assistantContent = turn.assistant ?? resolveExpectedAssistantContent(turn.user);
+    await expect(page.getByRole('main')).toContainText(turn.user);
+    await expect(page.getByRole('main')).toContainText(assistantContent);
+  }
+
+  const lastTurn = turns.at(-1)!;
+  return {
+    id: resolveSessionIdFromUrl(page.url()),
+    title: turns[0]!.user,
+    assistantContent: lastTurn.assistant ?? resolveExpectedAssistantContent(lastTurn.user),
   };
 }

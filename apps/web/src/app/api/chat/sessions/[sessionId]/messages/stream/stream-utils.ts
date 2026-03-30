@@ -15,6 +15,12 @@ const SHORTCUT_STREAM_MIN_DURATION_MS = 320;
 const SHORTCUT_STREAM_MAX_DURATION_MS = 960;
 const SHORTCUT_STREAM_MIN_DELAY_MS = 14;
 const SHORTCUT_STREAM_MAX_CHUNK_LENGTH = 18;
+const MOCK_STREAM_DEFAULT_DELAY_MS = 18;
+
+export interface ShortcutStreamResult {
+  aborted: boolean;
+  content: string;
+}
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -42,6 +48,20 @@ export function toChatTurns(
   );
 }
 
+function resolveMockStreamDelayMs(): number {
+  const raw = process.env.MOCK_STREAM_DELTA_DELAY_MS?.trim();
+  if (!raw) {
+    return MOCK_STREAM_DEFAULT_DELAY_MS;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return MOCK_STREAM_DEFAULT_DELAY_MS;
+  }
+
+  return parsed;
+}
+
 class MockStreamChatProvider implements StreamChatProvider {
   public readonly name = 'mock-stream-provider';
 
@@ -53,6 +73,7 @@ class MockStreamChatProvider implements StreamChatProvider {
         ?.content.trim() ?? '';
     const prefix = process.env.MOCK_STREAM_CHAT_PREFIX?.trim() || '[mock-stream]';
     const reply = `${prefix} 已按真实模型链路处理：${lastUserMessage || '空消息'}`;
+    const delayMs = resolveMockStreamDelayMs();
 
     for (const delta of splitShortcutReplyIntoDeltas(reply)) {
       if (input.signal?.aborted) {
@@ -60,7 +81,7 @@ class MockStreamChatProvider implements StreamChatProvider {
       }
 
       yield delta;
-      await wait(18, input.signal);
+      await wait(delayMs, input.signal);
     }
   }
 }
@@ -163,6 +184,10 @@ function createAbortError(): Error {
   return error;
 }
 
+export function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
   if (ms <= 0) {
     return Promise.resolve();
@@ -228,10 +253,10 @@ export async function emitShortcutReplyAsStream(input: {
   controller: ReadableStreamDefaultController<Uint8Array>;
   content: string;
   signal?: AbortSignal;
-}): Promise<string> {
+}): Promise<ShortcutStreamResult> {
   const deltas = splitShortcutReplyIntoDeltas(input.content);
   if (deltas.length === 0) {
-    return '';
+    return { aborted: false, content: '' };
   }
 
   const targetDuration = Math.min(
@@ -247,7 +272,10 @@ export async function emitShortcutReplyAsStream(input: {
 
   for (let index = 0; index < deltas.length; index += 1) {
     if (input.signal?.aborted) {
-      throw createAbortError();
+      return {
+        aborted: true,
+        content: emitted,
+      };
     }
 
     const delta = deltas[index]!;
@@ -255,11 +283,25 @@ export async function emitShortcutReplyAsStream(input: {
     enqueueSseEvent(input.controller, 'delta', { delta });
 
     if (index < deltas.length - 1) {
-      await wait(delayMs, input.signal);
+      try {
+        await wait(delayMs, input.signal);
+      } catch (error) {
+        if (isAbortError(error)) {
+          return {
+            aborted: true,
+            content: emitted,
+          };
+        }
+
+        throw error;
+      }
     }
   }
 
-  return emitted;
+  return {
+    aborted: false,
+    content: emitted,
+  };
 }
 
 export function resolveErrorMessage(error: unknown): string {

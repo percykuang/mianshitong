@@ -8,6 +8,7 @@ const webDistDir = `.next-playwright/web-${process.pid}`;
 const webServerCommand = [
   'LLM_PROVIDER=mock',
   'MOCK_STREAM_CHAT_PREFIX=[web-e2e]',
+  'MOCK_STREAM_DELTA_DELAY_MS=72',
   `NEXT_DIST_DIR=${webDistDir}`,
   'pnpm -C apps/web exec next dev -p 3100 -H 127.0.0.1',
 ].join(' ');

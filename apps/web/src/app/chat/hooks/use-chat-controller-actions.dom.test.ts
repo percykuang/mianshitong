@@ -26,10 +26,7 @@ function createDeps(overrides: Partial<Parameters<typeof useChatControllerAction
     removeCachedSession: vi.fn(),
     clearCachedSessions: vi.fn(),
     sendMessage: vi.fn(async () => undefined),
-    editUserMessage: vi.fn(async () => true),
     activeSessionId: null,
-    editingMessageId: null,
-    editingValue: '',
     setInputValue: vi.fn(),
     setSelectedModelId: vi.fn(),
     setNotice: vi.fn(),
@@ -165,38 +162,24 @@ describe('useChatControllerActions', () => {
     const { result } = renderHook(() => useChatControllerActions(deps));
 
     act(() => {
-      result.current.startEditingUserMessage('message_1', '原始内容');
       result.current.showNotice('提示文案');
       result.current.cancelEditingUserMessage();
     });
 
-    expect(deps.setEditingMessageId).toHaveBeenNthCalledWith(1, 'message_1');
-    expect(deps.setEditingValue).toHaveBeenNthCalledWith(1, '原始内容');
     expect(deps.setNotice).toHaveBeenCalledWith('提示文案');
     expect(deps.setEditingMessageId).toHaveBeenLastCalledWith(null);
     expect(deps.setEditingValue).toHaveBeenLastCalledWith('');
   });
 
-  it('提交编辑成功后会清理编辑态，失败时保留编辑态', async () => {
-    const successDeps = createDeps({
-      editingMessageId: 'message_1',
-      editingValue: '更新后的内容',
-      editUserMessage: vi.fn(async () => true),
-    });
-    const failDeps = createDeps({
-      editingMessageId: 'message_2',
-      editingValue: '失败内容',
-      editUserMessage: vi.fn(async () => false),
+  it('取消编辑时会清理编辑态', () => {
+    const deps = createDeps();
+    const { result } = renderHook(() => useChatControllerActions(deps));
+
+    act(() => {
+      result.current.cancelEditingUserMessage();
     });
 
-    const successHook = renderHook(() => useChatControllerActions(successDeps));
-    const failHook = renderHook(() => useChatControllerActions(failDeps));
-
-    await expect(successHook.result.current.submitEditingUserMessage()).resolves.toBe(true);
-    await expect(failHook.result.current.submitEditingUserMessage()).resolves.toBe(false);
-
-    expect(successDeps.setEditingMessageId).toHaveBeenCalledWith(null);
-    expect(successDeps.setEditingValue).toHaveBeenCalledWith('');
-    expect(failDeps.setEditingMessageId).not.toHaveBeenCalledWith(null);
+    expect(deps.setEditingMessageId).toHaveBeenCalledWith(null);
+    expect(deps.setEditingValue).toHaveBeenCalledWith('');
   });
 });

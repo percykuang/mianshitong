@@ -44,10 +44,14 @@ describe('ChatMessageItem', () => {
         isEditing={false}
         editingValue=""
         sending
+        canEditUserMessage={false}
+        canRestoreOriginalReply={false}
+        restoringOriginalReply={false}
         onStartEditUserMessage={() => {}}
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
+        onRestoreOriginalReply={async () => {}}
         onNotice={() => {}}
       />,
     );
@@ -67,10 +71,14 @@ describe('ChatMessageItem', () => {
         isEditing={false}
         editingValue=""
         sending={false}
+        canEditUserMessage={false}
+        canRestoreOriginalReply={false}
+        restoringOriginalReply={false}
         onStartEditUserMessage={() => {}}
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
+        onRestoreOriginalReply={async () => {}}
         onNotice={() => {}}
       />,
     );
@@ -90,10 +98,14 @@ describe('ChatMessageItem', () => {
         isEditing={false}
         editingValue=""
         sending={false}
+        canEditUserMessage={false}
+        canRestoreOriginalReply={false}
+        restoringOriginalReply={false}
         onStartEditUserMessage={() => {}}
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
+        onRestoreOriginalReply={async () => {}}
         onNotice={() => {}}
       />,
     );
@@ -111,10 +123,14 @@ describe('ChatMessageItem', () => {
         isEditing={false}
         editingValue=""
         sending={false}
+        canEditUserMessage
+        canRestoreOriginalReply={false}
+        restoringOriginalReply={false}
         onStartEditUserMessage={() => {}}
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
+        onRestoreOriginalReply={async () => {}}
         onNotice={() => {}}
       />,
     );
@@ -143,15 +159,95 @@ describe('ChatMessageItem', () => {
         isEditing
         editingValue={USER_MESSAGE.content}
         sending={false}
+        canEditUserMessage
+        canRestoreOriginalReply={false}
+        restoringOriginalReply={false}
         onStartEditUserMessage={() => {}}
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
+        onRestoreOriginalReply={async () => {}}
         onNotice={() => {}}
       />,
     );
 
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '确定' })).toBeInTheDocument();
+  });
+
+  it('编辑重生成中断后可显示恢复原回复操作', () => {
+    render(
+      <ChatMessageItem
+        sessionId="session-1"
+        message={{ ...ASSISTANT_MESSAGE, completionStatus: 'interrupted' }}
+        isLoading={false}
+        isStreaming={false}
+        isEditing={false}
+        editingValue=""
+        sending={false}
+        canEditUserMessage={false}
+        canRestoreOriginalReply
+        restoringOriginalReply={false}
+        onStartEditUserMessage={() => {}}
+        onEditingValueChange={() => {}}
+        onCancelEditUserMessage={() => {}}
+        onSubmitEditUserMessage={async () => {}}
+        onRestoreOriginalReply={async () => {}}
+        onNotice={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '恢复原回复' })).toBeInTheDocument();
+  });
+
+  it('生成中用户消息不再显示编辑按钮', () => {
+    render(
+      <ChatMessageItem
+        sessionId="session-1"
+        message={USER_MESSAGE}
+        isLoading={false}
+        isStreaming={false}
+        isEditing={false}
+        editingValue=""
+        sending
+        canEditUserMessage={false}
+        canRestoreOriginalReply={false}
+        restoringOriginalReply={false}
+        onStartEditUserMessage={() => {}}
+        onEditingValueChange={() => {}}
+        onCancelEditUserMessage={() => {}}
+        onSubmitEditUserMessage={async () => {}}
+        onRestoreOriginalReply={async () => {}}
+        onNotice={() => {}}
+      />,
+    );
+
+    expect(screen.queryByLabelText('编辑消息')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('复制')).toBeInTheDocument();
+  });
+
+  it('非最后一条用户消息不显示编辑按钮', () => {
+    render(
+      <ChatMessageItem
+        sessionId="session-1"
+        message={USER_MESSAGE}
+        isLoading={false}
+        isStreaming={false}
+        isEditing={false}
+        editingValue=""
+        sending={false}
+        canEditUserMessage={false}
+        canRestoreOriginalReply={false}
+        restoringOriginalReply={false}
+        onStartEditUserMessage={() => {}}
+        onEditingValueChange={() => {}}
+        onCancelEditUserMessage={() => {}}
+        onSubmitEditUserMessage={async () => {}}
+        onRestoreOriginalReply={async () => {}}
+        onNotice={() => {}}
+      />,
+    );
+
+    expect(screen.queryByLabelText('编辑消息')).not.toBeInTheDocument();
   });
 });

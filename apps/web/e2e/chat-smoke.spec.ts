@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { createRemoteSession, openChat } from './support/chat-e2e-fixtures';
+import {
+  createRemoteConversationSession,
+  createRemoteSession,
+  openChat,
+} from './support/chat-e2e-fixtures';
 
 test('新建会话后发送预设消息会走真实流式接口并渲染 provider 输出', async ({ page }) => {
   await openChat(page);
@@ -124,6 +128,7 @@ test('停止生成后应保留并持久化已输出的 assistant 部分内容', 
   const stopButton = page.getByRole('button', { name: '停止生成' });
   const latestAssistantMessage = page.locator('article').last();
 
+  await expect(stopButton).toBeVisible();
   await expect(latestAssistantMessage).toContainText('[web-e2e]');
   await stopButton.click();
 
@@ -135,4 +140,53 @@ test('停止生成后应保留并持久化已输出的 assistant 部分内容', 
   const persistedAssistantMessage = page.locator('article').last();
   await expect(persistedAssistantMessage).toContainText('已停止生成');
   await expect(persistedAssistantMessage).toContainText('[web-e2e]');
+});
+
+test('只有最后一条用户消息显示编辑按钮', async ({ page }) => {
+  const conversation = await createRemoteConversationSession(page, [
+    { user: '第一条问题：解释闭包' },
+    { user: '第二条问题：解释事件循环' },
+    { user: '第三条问题：解释 React Fiber' },
+  ]);
+
+  await page.goto(`/chat/${conversation.id}`);
+
+  const articles = page.locator('article');
+  const firstUserArticle = articles.filter({ hasText: '第一条问题：解释闭包' }).first();
+  const lastUserArticle = articles.filter({ hasText: '第三条问题：解释 React Fiber' }).first();
+  await firstUserArticle.hover();
+  await expect(firstUserArticle.getByLabel('编辑消息')).toHaveCount(0);
+
+  await lastUserArticle.hover();
+  await expect(lastUserArticle.getByLabel('编辑消息')).toBeVisible();
+});
+
+test('编辑最后一条用户消息后仍可正常重生成', async ({ page }) => {
+  const conversation = await createRemoteConversationSession(page, [
+    { user: '第一条原始问题：解释 React 协调过程' },
+    { user: '最后一条原始问题：解释 diff 策略' },
+  ]);
+
+  await page.goto(`/chat/${conversation.id}`);
+
+  const lastUserArticle = page
+    .locator('article')
+    .filter({ hasText: '最后一条原始问题：解释 diff 策略' })
+    .first();
+  await lastUserArticle.hover();
+  await lastUserArticle.getByLabel('编辑消息').click();
+
+  await page.locator('article textarea').fill('最后一条编辑后问题：重新解释 diff 策略，尽量详细');
+  await page.getByRole('button', { name: '确定' }).click();
+
+  await expect(page.getByRole('main')).toContainText('第一条原始问题：解释 React 协调过程');
+  await expect(page.getByRole('main')).toContainText(
+    '[web-e2e] 已按真实模型链路处理：第一条原始问题：解释 React 协调过程',
+  );
+  await expect(page.getByRole('main')).toContainText(
+    '最后一条编辑后问题：重新解释 diff 策略，尽量详细',
+  );
+  await expect(page.getByRole('main')).toContainText(
+    '[web-e2e] 已按真实模型链路处理：最后一条编辑后问题：重新解释 diff 策略，尽量详细',
+  );
 });

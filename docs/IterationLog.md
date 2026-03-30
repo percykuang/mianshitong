@@ -7,6 +7,365 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 5.18（2026-03-30）：将 Next 的 next-env.d.ts 收口为生成文件
+
+### 目标
+
+- 去掉每次运行 Next / Playwright 后都要手动 `git restore apps/web/next-env.d.ts` 的额外心智负担。
+- 让仓库对齐 Next 官方约定：`next-env.d.ts` 作为生成文件存在，但不再进入提交面。
+
+### 主要改动
+
+- 调整仓库忽略规则：
+  - `.gitignore`
+  - 新增 `apps/*/next-env.d.ts`，统一覆盖 `apps/web` 和 `apps/admin` 两个 Next 应用
+- 明确工程约定：
+  - `next-env.d.ts` 仍然保留在各自 `tsconfig.json` 的 `include` 中，由 Next 在 `next dev / next build / next typegen` 时自动生成
+  - 仓库不再跟踪这两个文件，避免临时 `distDir`、Playwright 专用 `.next-playwright` 路径把工作区反复弄脏
+
+### 迁移/破坏性变更
+
+- 无运行时行为变更。
+- Git 层面会把 `apps/web/next-env.d.ts` 与 `apps/admin/next-env.d.ts` 从版本控制中移除，后续由本地/CI 按需自动生成。
+
+### 验证
+
+- 临时移除 `apps/web/next-env.d.ts` 与 `apps/admin/next-env.d.ts` 后分别执行：
+  - `pnpm -C apps/web typecheck`
+  - `pnpm -C apps/admin typecheck`
+  - 结果均通过，说明文件不入库不会阻断现有类型检查链路
+
+### 下一步
+
+- 后续如果再新增 Next app，沿用同一规则即可，不要再把 `next-env.d.ts` 纳入版本控制。
+
+## Iteration 5.17（2026-03-30）：稳定“停止生成 partial 持久化”的 Web E2E
+
+### 目标
+
+- 修复 Web 端“停止生成后应保留并持久化已输出的 assistant 部分内容”这条 Playwright 用例的时序不稳定问题。
+- 不改变当前产品行为，只提升 mock 流式测试环境与断言时机的确定性。
+
+### 主要改动
+
+- 调整 Playwright Web 测试环境的 mock 流式节奏：
+  - `playwright.config.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - mock provider 现在支持通过 `MOCK_STREAM_DELTA_DELAY_MS` 配置分片延迟
+  - Web E2E 启动命令中为 mock stream 显式注入了更稳定的分片延迟，确保“停止生成”按钮有稳定可点击窗口
+- 调整停止生成相关 E2E 的等待顺序：
+  - `apps/web/e2e/chat-smoke.spec.ts`
+  - 用例现在先等待“停止生成”按钮进入可操作状态，再等待 assistant 已输出首段内容并点击中止
+  - 这样更贴近真实交互，也更符合 Playwright 的 auto-wait 断言方式
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无产品行为变更；这次只影响测试环境下的 mock 流式节奏与 E2E 断言时机。
+
+### 验证
+
+- `pnpm -C apps/web exec vitest run src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+- `pnpm -C apps/web typecheck`
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '停止生成后应保留并持久化已输出的 assistant 部分内容|只有最后一条用户消息显示编辑按钮|编辑最后一条用户消息后仍可正常重生成'`
+
+### 下一步
+
+- 如果后续再补更多“流式中止”类 E2E，可以继续复用 `MOCK_STREAM_DELTA_DELAY_MS`，避免每条用例单独堆 `waitForTimeout`。
+
+## Iteration 5.16（2026-03-30）：收口最后一条消息编辑链路的实现边界
+
+### 目标
+
+- 在不改变现有产品行为的前提下，删掉一部分已经不会被当前 UI 触发的过渡逻辑。
+- 让“仅最后一条用户消息可编辑”不仅体现在前端按钮显示上，也体现在前端编辑状态机和服务端编辑接口上。
+
+### 主要改动
+
+- 收口前端编辑实现：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - optimistic 编辑会话不再保留“历史消息 tail 替换”逻辑，而是按当前产品规则只重建最后一轮
+  - “是否可编辑”判断被提取为共享 helper，避免 UI 和 controller 自己各写一套规则
+- 收口服务端编辑实现：
+  - `apps/web/src/lib/server/chat-session-model.ts`
+  - `apps/web/src/lib/server/chat-session-repository.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - 服务端现也会拒绝非最后一条用户消息的编辑请求
+  - 编辑落库改回“truncate 当前最后一轮后重新 append”，删除了不再需要的 tail 保留实现
+- 调整 controller 与 actions hook 的职责边界：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller-actions.ts`
+  - 编辑状态机继续集中在 `use-chat-controller`
+  - `use-chat-controller-actions` 不再保留一套已失活的编辑提交逻辑
+- 同步整理测试：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.test.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无产品行为变更；这是一次实现收口与服务端规则对齐。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/lib/chat-message-mutations.test.ts apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+- `pnpm -C apps/web exec eslint src/app/chat/lib/chat-message-mutations.ts src/app/chat/lib/chat-message-mutations.test.ts src/app/chat/hooks/use-edit-message.ts src/app/chat/hooks/use-chat-controller.ts src/app/chat/hooks/use-chat-controller-actions.ts src/app/chat/hooks/use-chat-controller-actions.dom.test.ts src/app/chat/hooks/use-chat-controller.dom.test.ts src/app/chat/components/chat-message-list.tsx src/app/chat/components/chat-message-item.tsx src/app/chat/components/chat-message-item.dom.test.tsx 'src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts' src/lib/server/chat-session-model.ts src/lib/server/chat-session-repository.ts`
+- `pnpm -C apps/web typecheck`
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '只有最后一条用户消息显示编辑按钮|编辑最后一条用户消息后仍可正常重生成|停止生成后应保留并持久化已输出的 assistant 部分内容'`
+  - 其中两条编辑相关用例通过
+  - “停止生成后应保留并持久化已输出的 assistant 部分内容”仍稳定卡在等待“停止生成”按钮出现，表现更像既有时序不稳定，而不是这次编辑链路收口导致的回归
+
+### 下一步
+
+- 若后续要继续提升测试稳态，可单独调整“停止生成”相关 E2E，让它不再依赖页面里必须能抢到停止按钮这一时序窗口。
+
+## Iteration 5.15（2026-03-30）：聊天编辑能力收口为“仅最后一条用户消息可编辑”
+
+### 目标
+
+- 将聊天页消息编辑规则与豆包一类产品对齐：只有最后一条用户消息展示编辑入口。
+- 避免用户继续从 UI 触发“编辑非最后一条消息”带来的语义分歧和复杂链路。
+
+### 主要改动
+
+- 调整聊天页编辑入口显示规则：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 当前会先解析当前会话里的最后一条用户消息，仅该消息显示“编辑消息”按钮
+- 调整前端编辑拦截逻辑：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 即使通过前端状态尝试编辑非最后一条消息，当前也会直接提示“当前仅支持编辑最后一条用户消息”
+  - 最后一条消息仍保留原有编辑和重生成链路
+- 调整测试：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.test.ts`
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - `apps/web/e2e/chat-smoke.spec.ts`
+  - 覆盖“非最后一条消息不显示编辑按钮”“最后一条消息仍可正常编辑重生成”两类场景
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；这是一次前端产品规则收口，聊天页不再暴露历史消息编辑入口。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/lib/chat-message-mutations.test.ts apps/web/src/app/chat/components/chat-message-item.dom.test.tsx apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+- `pnpm -C apps/web exec eslint src/app/chat/lib/chat-message-mutations.ts src/app/chat/lib/chat-message-mutations.test.ts src/app/chat/components/chat-message-item.tsx src/app/chat/components/chat-message-list.tsx src/app/chat/components/chat-message-item.dom.test.tsx src/app/chat/hooks/use-chat-controller.ts src/app/chat/hooks/use-chat-controller-actions.dom.test.ts src/app/chat/hooks/use-chat-controller-actions.ts e2e/chat-smoke.spec.ts`
+- `pnpm -C apps/web typecheck`
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '只有最后一条用户消息显示编辑按钮|编辑最后一条用户消息后仍可正常重生成'`
+
+### 下一步
+
+- 如果后续还要支持“编辑历史消息”，建议不要直接恢复当前入口，而是单独设计为“分支会话 / 版本快照”能力，避免再次混入主链会话语义。
+
+## Iteration 5.14（2026-03-30）：修复编辑非最后一条消息时误清空后续消息
+
+### 目标
+
+- 修复聊天页在编辑“不是最后一条”的用户消息后，只要本轮 assistant 开始返回内容，就把该消息后面的历史消息一起清空的问题。
+- 让编辑语义收口为“只替换当前轮次的用户消息和 assistant 回复，保留后续 tail 消息不变”。
+
+### 主要改动
+
+- 调整前端编辑 optimistic 更新：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - 新增“替换编辑轮次并保留 tail”的本地消息变换 helper
+  - 编辑非最后一条用户消息时，不再通过 `slice(0, targetIndex + 1)` 截断后续消息
+- 调整服务端编辑后会话重建逻辑：
+  - `apps/web/src/lib/server/chat-session-model.ts`
+  - `apps/web/src/lib/server/chat-session-repository.ts`
+  - 编辑持久化从“truncate 后重新 append”改为“替换当前轮次并拼回 tail”
+  - 普通完成态与 interrupted partial 持久化都会保留被编辑轮次之后的历史消息
+- 同步修正本地 draft helper 与测试：
+  - `apps/web/src/app/chat/lib/chat-session-draft.ts`
+  - `apps/web/src/app/chat/lib/chat-message-mutations.test.ts`
+  - `apps/web/src/app/chat/lib/chat-session-draft.test.ts`
+  - `apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整编辑某一轮消息后的前后端会话替换语义。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/lib/chat-message-mutations.test.ts apps/web/src/app/chat/lib/chat-session-draft.test.ts apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts`
+- `pnpm -C apps/web exec eslint src/app/chat/lib/chat-message-mutations.ts src/app/chat/lib/chat-message-mutations.test.ts src/app/chat/lib/chat-session-draft.ts src/app/chat/lib/chat-session-draft.test.ts src/app/chat/hooks/use-edit-message.ts src/lib/server/chat-session-model.ts src/lib/server/chat-session-repository.ts`
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '编辑非最后一条用户消息'`
+  - 其中“编辑非最后一条用户消息并完成生成时，不应清空其后的消息”已通过
+  - 同组的“0 字停止 / partial 停止”用例仍失败，表现为停止时机与预期语义未完全对齐，属于相邻但未在本次修复内收口的问题
+
+### 下一步
+
+- 若继续收口编辑链路，可单独处理“编辑非最后一条消息时的停止生成”语义，确保 0 字停止与 partial 停止在真实页面里也能稳定命中预期状态。
+
+## Iteration 5.13（2026-03-30）：编辑重生成切换为“确认即退出编辑态 + 可恢复原回复”
+
+### 目标
+
+- 把编辑消息后的交互从“确认后仍停留在编辑框里等待生成完成”切换为更清晰的产品语义：
+  - 点击“确定”后立即退出编辑态
+  - 生成中只保留“停止生成”，不再让用户依赖“取消”收尾
+  - partial 中止后补充“恢复原回复”动作
+
+### 主要改动
+
+- 调整前端编辑提交流程：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - 编辑确认后现在会立即清理编辑态，并为当前会话保存一份“编辑前快照”
+  - 如果生成完整完成、无变化或 0 字中止，快照会被清理
+  - 如果生成 partial 后中止，则保留快照，供后续“恢复原回复”使用
+- 调整编辑中止交互：
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 用户确认编辑后，生成中的用户消息不再继续暴露“编辑消息”入口
+  - assistant interrupted 消息现在可显示“恢复原回复”按钮
+- 新增恢复原回复接口：
+  - `apps/web/src/app/chat/lib/chat-api.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/restore/route.ts`
+  - 恢复动作会把编辑前快照重新保存到服务端，而不是只在本地临时回退
+- 调整测试：
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - `apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts`
+  - 覆盖“恢复原回复”按钮展示、生成中隐藏编辑入口，以及新的编辑结果状态语义
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 破坏；仅新增会话恢复接口，并调整编辑重生成的前端交互语义。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts apps/web/src/app/chat/components/chat-message-item.dom.test.tsx apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+- `pnpm -C apps/web exec eslint src/app/chat/lib/chat-api.ts src/app/chat/hooks/use-edit-message.ts src/app/chat/hooks/use-edit-message.dom.test.ts src/app/chat/hooks/use-chat-controller.ts src/app/chat/components/chat-message-item.tsx src/app/chat/components/chat-message-item.dom.test.tsx src/app/chat/components/chat-message-actions.tsx src/app/chat/components/chat-message-list.tsx src/app/chat/ChatClient.tsx 'src/app/api/chat/sessions/[sessionId]/restore/route.ts' 'src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts' src/lib/server/chat-session-repository.ts`
+
+### 下一步
+
+- 如果后续希望把“恢复原回复”能力跨刷新保留得更完整，可以再评估是否把编辑前版本显式建模为正式版本记录，而不是只保留当前页面内快照。
+
+## Iteration 5.12（2026-03-30）：收口编辑重生成的中止语义
+
+### 目标
+
+- 修复用户编辑消息后重新生成时，“停止生成”没有真正中止编辑流、以及中止后旧 assistant 回复被错误丢失的问题。
+- 让编辑场景的中止语义与产品预期对齐：
+  - assistant 尚未输出任何内容时，中止后可回到原会话
+  - assistant 已输出部分内容时，保留部分回复并标记为 `interrupted`
+
+### 主要改动
+
+- 调整前端编辑流请求：
+  - `apps/web/src/app/chat/lib/chat-api.ts`
+  - `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 编辑流现在会注册 `AbortController`，统一接入全局“停止生成”按钮
+  - 编辑流中止时会读取当前 optimistic assistant 内容：
+    - 若尚无输出，则恢复为提交前的原会话快照
+    - 若已有输出，则优先同步服务端中断态；若远端尚未来得及返回，再退回本地 interrupted 态
+- 调整服务端编辑流持久化语义：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - `apps/web/src/lib/server/chat-session-repository.ts`
+  - 编辑流不再在开始生成前就把远端会话截断写库
+  - 现在只在真正拿到成功回复或中断 partial 后，才用“替换编辑点之后的会话内容”方式持久化
+  - 因此“0 字中止”不会把旧 assistant 回复提前删掉；“有字中止”则会稳定落库为 interrupted
+- 调整测试：
+  - `apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts`
+  - 新增“0 字中止恢复原会话”和“partial 中止保留 interrupted 回复”两类回归断言
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整编辑重生成链路的中止处理与服务端持久化时机。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+- `pnpm -C apps/web exec eslint src/app/chat/lib/chat-api.ts src/app/chat/hooks/use-edit-message.ts src/app/chat/hooks/use-edit-message.dom.test.ts src/app/chat/hooks/use-chat-controller.ts 'src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts' src/lib/server/chat-session-repository.ts`
+- `pnpm exec prettier -c apps/web/src/app/chat/lib/chat-api.ts apps/web/src/app/chat/hooks/use-edit-message.ts apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts apps/web/src/app/chat/hooks/use-chat-controller.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts' apps/web/src/lib/server/chat-session-repository.ts`
+
+### 下一步
+
+- 如果后续还要继续细化编辑体验，可以再评估是否为“0 字中止后的编辑态”增加更明确的 UI 提示，例如“已取消本次重生成，原回复已恢复”。
+
+## Iteration 5.11（2026-03-30）：编辑消息时拦截空白提交与无效重生成
+
+### 目标
+
+- 修复聊天页编辑用户消息时，“空白内容”或“内容未变化”仍可能触发 AI 重新生成的问题。
+- 让编辑确认语义收口为“只有内容发生有效变化时才真正重新生成”。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/chat/hooks/use-chat-controller-actions.ts`
+  - 在 `submitEditingUserMessage()` 入口增加空白内容硬拦截
+  - 若编辑内容 `trim()` 后为空，直接提示“编辑内容不能为空”，不再继续提交
+- 调整 `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - 在真正发起编辑流式请求前，追加两类 no-op 判断：
+    - 空白内容：直接返回失败并提示，不发请求
+    - 与原消息内容等价：直接返回成功，交由上层退出编辑态，但不触发重新生成
+  - 这样无论是点击按钮还是未来新增其它提交入口，都不会把无效编辑送到服务端
+- 调整测试：
+  - `apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - 新增“空白不提交”“内容未变化不重生成”两类回归
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整前端编辑提交流程的拦截与 no-op 收口逻辑。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+- `pnpm -C apps/web exec eslint src/app/chat/hooks/use-edit-message.ts src/app/chat/hooks/use-edit-message.dom.test.ts src/app/chat/hooks/use-chat-controller-actions.ts src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+
+### 下一步
+
+- 如果后续要继续完善编辑体验，可以再评估是否在“内容未变化”时给出轻量提示，或直接把确认按钮文案在 no-op 场景下收口成“完成”。
+
+## Iteration 5.10（2026-03-30）：收口 fallback 流式回复被中止时的未处理 AbortError
+
+### 目标
+
+- 修复普通聊天与“编辑后重新生成”链路里，快捷 fallback 流式回复在请求被中止时抛出未处理 `AbortError` 的问题。
+- 让这类中止从“服务端未处理拒绝”收口为可预测的正常取消语义。
+
+### 主要改动
+
+- 调整 `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - `emitShortcutReplyAsStream()` 不再在中止时直接把 `AbortError` 抛给外层，而是返回 `{ aborted, content }`
+  - 若流式过程中被中止，会保留已经输出的部分内容，供上层路由决定是否持久化为 `interrupted`
+- 调整两条聊天流路由：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - fallback 流式回复若被中止：
+    - 已输出部分内容时，落库为中断消息
+    - 尚未输出内容时，回滚额度
+    - 不再让 abort 从 `catch` 分支里再次逃逸并形成 `unhandledRejection`
+- 调整测试：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - 新增“开始前已中止”和“流式中途被中止”两类回归断言
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；仅调整服务端 fallback 流式回复的异常收口方式。
+
+### 验证
+
+- `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+- `pnpm -C apps/web exec eslint 'src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts' 'src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts' 'src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts' 'src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts'`
+
+### 下一步
+
+- 如果后续还要继续强化“停止生成 / 编辑重生成”的一致性，可以把普通流式与 fallback 流式的中止持久化逻辑再进一步抽成共享 helper，减少双路由重复分支。
+
 ## Iteration 5.09（2026-03-28）：停止生成后的中断消息持久化与状态展示
 
 ### 目标

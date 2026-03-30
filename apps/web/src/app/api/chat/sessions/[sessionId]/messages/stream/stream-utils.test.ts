@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createStreamProvider,
+  emitShortcutReplyAsStream,
   enqueueSseEvent,
   finalizeSseStream,
   splitShortcutReplyIntoDeltas,
@@ -57,6 +58,45 @@ describe('createStreamProvider', () => {
 
     expect(provider.name).toBe('mock-stream-provider');
     expect(content).toBe('[web-e2e] 已按真实模型链路处理：可以帮我优化简历吗？');
+  });
+});
+
+describe('emitShortcutReplyAsStream', () => {
+  it('请求已中止时不会抛出未处理异常，而是返回 aborted 结果', async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+    const enqueue = vi.fn();
+
+    await expect(
+      emitShortcutReplyAsStream({
+        controller: { enqueue } as unknown as ReadableStreamDefaultController<Uint8Array>,
+        content: '你好，世界',
+        signal: abortController.signal,
+      }),
+    ).resolves.toEqual({
+      aborted: true,
+      content: '',
+    });
+
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('流式输出过程中被中止时会返回已输出的部分内容', async () => {
+    const abortController = new AbortController();
+    const enqueue = vi.fn(() => {
+      abortController.abort();
+    });
+
+    const result = await emitShortcutReplyAsStream({
+      controller: { enqueue } as unknown as ReadableStreamDefaultController<Uint8Array>,
+      content: '你好，世界。继续输出',
+      signal: abortController.signal,
+    });
+
+    expect(result.aborted).toBe(true);
+    expect(result.content.length).toBeGreaterThan(0);
+    expect('你好，世界。继续输出'.startsWith(result.content)).toBe(true);
+    expect(enqueue).toHaveBeenCalledTimes(1);
   });
 });
 

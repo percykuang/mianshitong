@@ -34,11 +34,18 @@ describe('chat-session-draft', () => {
   });
 
   it('编辑首条用户消息后会重建后续内容并同步标题', () => {
-    const session = appendUserAssistantMessages(createBaseSession(), {
-      userContent: '帮我准备一下面试',
-      assistantContent: '可以，我们先从自我介绍开始。',
-      now: '2026-03-09T12:00:00.000Z',
-    });
+    const session = appendUserAssistantMessages(
+      appendUserAssistantMessages(createBaseSession(), {
+        userContent: '帮我准备一下面试',
+        assistantContent: '可以，我们先从自我介绍开始。',
+        now: '2026-03-09T12:00:00.000Z',
+      }),
+      {
+        userContent: '第二轮问题',
+        assistantContent: '第二轮回答',
+        now: '2026-03-09T12:20:00.000Z',
+      },
+    );
     const userMessageId = session.messages.find((item) => item.role === 'user')?.id;
 
     const rebuilt = rebuildSessionAfterEdit(session, {
@@ -49,10 +56,12 @@ describe('chat-session-draft', () => {
     });
 
     expect(rebuilt?.title).toBe('帮我准备一下面试中的自我介绍');
-    expect(rebuilt?.messages).toHaveLength(2);
+    expect(rebuilt?.messages).toHaveLength(4);
     expect(rebuilt?.messages[0]?.content).toBe('帮我准备一下面试中的自我介绍');
     expect(rebuilt?.messages[1]?.content).toBe('好的，我先给你一个 1 分钟版本。');
     expect(rebuilt?.messages[1]?.completionStatus).toBe('completed');
+    expect(rebuilt?.messages[2]?.content).toBe('第二轮问题');
+    expect(rebuilt?.messages[3]?.content).toBe('第二轮回答');
   });
 
   it('构造流式上下文时会过滤 report 类型消息', () => {
