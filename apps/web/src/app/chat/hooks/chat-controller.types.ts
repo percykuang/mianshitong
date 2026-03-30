@@ -16,8 +16,6 @@ export interface ChatController {
   sidebarOpen: boolean;
   editingMessageId: string | null;
   editingValue: string;
-  canRestoreOriginalReply: boolean;
-  restoringOriginalReply: boolean;
   quickPrompts: string[];
   setInputValue: (value: string) => void;
   setSelectedModelId: (value: ModelId) => void;
@@ -29,11 +27,9 @@ export interface ChatController {
   handleQuickPrompt: (prompt: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   stopMessageGeneration: () => void;
-  editUserMessage: (messageId: string, content: string) => Promise<boolean>;
   startEditingUserMessage: (messageId: string, content: string) => void;
   cancelEditingUserMessage: () => void;
-  submitEditingUserMessage: () => Promise<boolean>;
-  restoreOriginalReply: () => Promise<void>;
+  submitEditingUserMessage: () => Promise<'submitted' | 'error'>;
   setEditingValue: (value: string) => void;
   handleCopy: (content: string) => Promise<void>;
   showNotice: (content: string) => void;

@@ -7,6 +7,173 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 5.25（2026-03-30）：清理聊天编辑与 follow 触发的冗余逻辑
+
+### 目标
+
+- 在不改变当前产品行为的前提下，降低聊天编辑和自动 follow 相关代码的重复度与维护成本。
+- 清理已经没有调用方的 controller API，并同步修正文档里的事实漂移。
+
+### 主要改动
+
+- 删除无调用的编辑 API：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - `apps/web/src/app/chat/hooks/chat-controller.types.ts`
+  - 移除了没有实际调用方的 `editUserMessage` 暴露接口，避免 controller surface 持续膨胀
+- 抽离共享编辑校验 helper：
+  - `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - 新增 `getEditableUserMessage / getEditableUserMessageError`
+  - 把“目标消息是否存在”和“是否仍是最后一条可编辑用户消息”的重复判断收口到共享 helper，避免 controller 与底层编辑 hook 各自维护一套分支
+- 收口 follow 触发入口：
+  - `apps/web/src/app/chat/ChatClient.tsx`
+  - 把发送消息、快捷提问、编辑后重生成三处重复的 `setFollowRequestKey + scrollToBottom` 合并成统一 `requestFollow()`，减少后续继续扩散的复制逻辑
+- 修正文档中的当前事实描述：
+  - `docs/ProjectContext.md`
+  - 把仍在描述“编辑局部错误态”的旧结论改为历史方案说明，避免与当前“确定即重生成”的实现冲突
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无运行时行为变更；这是一次纯粹的结构整理与文档收口。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts apps/web/src/app/chat/hooks/use-auto-scroll.dom.test.ts`
+- `pnpm -C apps/web typecheck`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续继续演进聊天交互，可优先沿着共享 helper 和统一 follow 入口扩展，而不要再回到 controller / UI / hook 多处各自维护相同分支。
+
+## Iteration 5.24（2026-03-30）：移除“恢复原回复”能力并清理废弃链路
+
+### 目标
+
+- 删除 Web 聊天里低频且增加心智负担的“恢复原回复”入口。
+- 让编辑语义彻底收口为“点确定就按当前用户消息重新生成”，不再维护额外的回复回退版本。
+
+### 主要改动
+
+- 删除前端恢复入口与状态：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - `apps/web/src/app/chat/hooks/chat-controller.types.ts`
+  - `apps/web/src/app/chat/ChatClient.tsx`
+  - `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 移除了 `restorableEditSnapshots / canRestoreOriginalReply / restoringOriginalReply / restoreOriginalReply`
+  - assistant 中断消息现在仅保留“已停止生成”状态标识，不再展示“恢复原回复”按钮
+- 删除无入口的恢复接口与请求 helper：
+  - `apps/web/src/app/chat/lib/chat-api.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/restore/route.ts`
+  - 同步清理 `apps/web/src/lib/server/chat-session-repository.ts` 中仅为该链路保留的废弃方法
+- 更新测试与当前文档：
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - `docs/ProjectContext.md`
+  - `docs/IterationLog.md`
+  - 补充“中断消息不再出现恢复原回复按钮”的断言，并把当前产品语义改为已移除该能力
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 前端交互上移除了“恢复原回复”入口；这是一次刻意的产品收口，不是回归。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/components/chat-message-item.dom.test.tsx apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续真的出现“多版本回复回退”需求，应直接设计“消息版本 / 分支会话”能力，而不是重新加回单点快照恢复按钮。
+
+## Iteration 5.23（2026-03-30）：将聊天编辑交互收口为“确定即重生成”
+
+### 目标
+
+- 把 Web 聊天的编辑交互从“前端校验并阻止提交”收口为更顺滑的“点击确定即重生成”。
+- 对齐既定产品基线：即使用户输入空白字符，或根本没改内容直接点确定，也应该继续触发 AI 重新生成。
+
+### 主要改动
+
+- 调整编辑提交语义：
+  - `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - 底层编辑链路不再因为空白内容或与原消息等价而直接返回
+  - 当前规则改为：
+    - 若编辑后内容 `trim()` 为空，沿用原消息内容发起重生成
+    - 若编辑后内容与原消息 `trim()` 后等价，也沿用原消息内容发起重生成
+    - 只有存在实质改动时，才提交新的编辑内容
+- 清理前端局部错误态：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - `apps/web/src/app/chat/ChatClient.tsx`
+  - 删除编辑态的 `editingError`、`invalid/no_change` 返回分支及就地错误展示
+  - 编辑输入框的“确定”按钮现在只在真正发送中禁用，不再因为空白内容禁用
+- 同步补齐回归测试：
+  - `apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - 新断言覆盖“空白编辑也会重生成”“等价编辑也会重生成”“编辑 UI 不再展示局部校验错误”
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；此次为前端交互策略与提交流程收口。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+- `pnpm -C apps/web typecheck`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续继续对齐竞品编辑体验，可在当前“确定即重生成”语义上继续评估是否补充“编辑中重新聚焦输入框”“滚动保留位置”等细节，而不要再回到多层拦截式校验。
+
+## Iteration 5.22（2026-03-30）：修复首条消息流式阶段的自动滚动抢焦点问题
+
+### 目标
+
+- 修复 Web 聊天在“第一条消息发送后、assistant 正在流式回复时”用户上滑仍会被自动拉回底部的问题。
+- 让聊天滚动策略与主流产品一致：只有当前仍贴底时才跟随流式输出，用户一旦主动离开底部就优先尊重用户滚动意图。
+
+### 主要改动
+
+- 重构自动滚动 hook：
+  - `apps/web/src/app/chat/hooks/use-auto-scroll.ts`
+  - 用户主动发送消息、触发快捷提问、编辑后重生成、恢复原回复时，会显式重新进入 follow，而不再只依赖一次即时滚底副作用
+  - 自动滚动不再在发送开始时无条件重置为 pinned
+  - assistant 流式输出期间只要检测到用户向上滚动，就会立即退出 follow 状态并取消所有待执行的补滚任务
+  - 会话切换补滚继续保留，但不会再和“首条消息发送中的本地草稿会话”混用
+  - 滚动监听从“运行时推断 window 或容器”收口为固定监听真实消息容器，避免首轮流式阶段监听目标漂移
+- 编辑态错误提示收口为就地反馈：
+  - `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 编辑内容为空时，不再走顶部全局 notice，而是在编辑输入框附近显示“编辑内容不能为空”
+  - 用户继续输入或取消编辑时，会自动清掉这条局部错误
+  - 编辑输入框现已补齐 `aria-invalid` 与 `aria-describedby`，并在错误态增加更明确的红色边框/浅红背景，便于视觉识别与辅助技术读取
+- 补充自动滚动回归测试：
+  - `apps/web/src/app/chat/hooks/use-auto-scroll.dom.test.ts`
+  - 新增“首条消息流式生成时用户上滑后不会再被自动拉回底部”用例
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；这是一次前端交互策略修复。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/hooks/use-auto-scroll.dom.test.ts`
+- `pnpm -C apps/web typecheck`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续继续增强聊天体验，可在当前 follow 状态基础上补“新消息提示 / 未读计数”，而不是再回到多处无条件强制滚底的实现。
+
 ## Iteration 5.21（2026-03-30）：让 CI 与本地统一使用 pnpm verify
 
 ### 目标

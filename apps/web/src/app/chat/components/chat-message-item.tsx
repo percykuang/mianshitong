@@ -18,13 +18,10 @@ interface ChatMessageItemProps {
   editingValue: string;
   sending: boolean;
   canEditUserMessage: boolean;
-  canRestoreOriginalReply: boolean;
-  restoringOriginalReply: boolean;
   onStartEditUserMessage: (messageId: string, content: string) => void;
   onEditingValueChange: (value: string) => void;
   onCancelEditUserMessage: () => void;
   onSubmitEditUserMessage: () => Promise<void>;
-  onRestoreOriginalReply: () => Promise<void>;
   onNotice: (content: string) => void;
 }
 
@@ -37,13 +34,10 @@ export function ChatMessageItem({
   editingValue,
   sending,
   canEditUserMessage,
-  canRestoreOriginalReply,
-  restoringOriginalReply,
   onStartEditUserMessage,
   onEditingValueChange,
   onCancelEditUserMessage,
   onSubmitEditUserMessage,
-  onRestoreOriginalReply,
   onNotice,
 }: ChatMessageItemProps) {
   const isUserMessage = message.role === 'user' && !isLoading;
@@ -108,7 +102,7 @@ export function ChatMessageItem({
                     type="button"
                     size="sm"
                     onClick={() => void onSubmitEditUserMessage()}
-                    disabled={sending || !editingValue.trim()}
+                    disabled={sending}
                   >
                     确定
                   </Button>
@@ -131,18 +125,6 @@ export function ChatMessageItem({
               >
                 已停止生成
               </Badge>
-              {canRestoreOriginalReply ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto px-2 py-1 text-[11px] font-medium text-muted-foreground"
-                  disabled={restoringOriginalReply}
-                  onClick={() => void onRestoreOriginalReply()}
-                >
-                  {restoringOriginalReply ? '恢复中...' : '恢复原回复'}
-                </Button>
-              ) : null}
             </div>
           ) : null}
 

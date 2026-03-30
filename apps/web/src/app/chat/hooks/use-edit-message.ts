@@ -14,17 +14,12 @@ import {
 import {
   buildOptimisticEditSession,
   finalizeInterruptedAssistantMessage,
-  getEditableUserMessageIndex,
-  isEditableUserMessage,
+  getEditableUserMessageError,
+  getEditableUserMessage,
 } from '../lib/chat-message-mutations';
 import { createStreamEventHandler } from './stream-event-handler';
 
-export type EditMessageResult =
-  | 'completed'
-  | 'no_change'
-  | 'aborted_without_output'
-  | 'interrupted'
-  | 'error';
+export type EditMessageResult = 'completed' | 'aborted_without_output' | 'interrupted' | 'error';
 
 interface EditMessageDeps {
   activeSession: ChatSession | null;
@@ -107,32 +102,19 @@ export function useEditMessage({
         return 'error';
       }
 
-      const targetIndex = getEditableUserMessageIndex(session.messages, messageId);
-      if (targetIndex < 0) {
-        setNotice('目标消息不存在或不可编辑');
+      const editableTarget = getEditableUserMessage(session.messages, messageId);
+      if (!editableTarget) {
+        setNotice(
+          getEditableUserMessageError(session.messages, messageId) ?? '目标消息不存在或不可编辑',
+        );
         return 'error';
       }
 
       const trimmed = content.trim();
-      if (!trimmed) {
-        setNotice('编辑内容不能为空');
-        return 'error';
-      }
+      const { message: targetMessage } = editableTarget;
 
-      const targetMessage = session.messages[targetIndex];
-      if (!targetMessage) {
-        setNotice('目标消息不存在或不可编辑');
-        return 'error';
-      }
-
-      if (!isEditableUserMessage(session.messages, messageId)) {
-        setNotice('当前仅支持编辑最后一条用户消息');
-        return 'error';
-      }
-
-      if (targetMessage.content.trim() === trimmed) {
-        return 'no_change';
-      }
+      const submittedContent =
+        trimmed && targetMessage.content.trim() !== trimmed ? trimmed : targetMessage.content;
 
       const abortController = new AbortController();
       let optimisticAssistantId: string | null = null;
@@ -146,7 +128,7 @@ export function useEditMessage({
         const optimisticSession = buildOptimisticEditSession({
           session,
           messageId,
-          userContent: trimmed,
+          userContent: submittedContent,
           optimisticAssistant,
           updatedAt: new Date().toISOString(),
         });
@@ -159,7 +141,7 @@ export function useEditMessage({
         const response = await openEditStreamRequest(
           session.id,
           messageId,
-          trimmed,
+          submittedContent,
           abortController.signal,
         );
         let syncedSession: ChatSession | null = null;
@@ -198,7 +180,7 @@ export function useEditMessage({
           const interruptedSession = finalizeInterruptedAssistantMessage({
             session: readActiveSession(),
             optimisticAssistantId,
-            submittedContent: trimmed,
+            submittedContent,
           });
           const interruptedAssistant = interruptedSession?.messages.find(
             (message) => message.id === optimisticAssistantId,

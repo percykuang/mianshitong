@@ -94,8 +94,29 @@ describe('useEditMessage', () => {
     });
   });
 
-  it('空白编辑内容不会触发重新生成', async () => {
+  it('空白编辑内容会沿用原消息内容重新生成', async () => {
     const userMessageId = activeSession?.messages[0]?.id;
+    const originalUserContent = activeSession?.messages[0]?.content ?? '';
+    const updatedSession = {
+      ...activeSession!,
+      updatedAt: '2026-03-30T01:20:01.000Z',
+      messages: [
+        {
+          ...activeSession!.messages[0]!,
+          content: originalUserContent,
+        },
+        {
+          ...activeSession!.messages[1]!,
+          id: 'assistant_2',
+          content: '重新生成后的解释',
+          completionStatus: 'completed' as const,
+        },
+      ],
+    };
+    chatApiMocks.openEditStreamRequest.mockResolvedValue(new Response(''));
+    chatApiMocks.readSseStream.mockImplementation(async (_response, onEvent) => {
+      onEvent('done', JSON.stringify({ session: updatedSession }));
+    });
     const { result } = renderHook(() =>
       useEditMessage({
         activeSession,
@@ -117,15 +138,42 @@ describe('useEditMessage', () => {
       editResult = await result.current(userMessageId ?? '', '   \n  ');
     });
 
-    expect(editResult).toBe('error');
-    expect(setNotice).toHaveBeenCalledWith('编辑内容不能为空');
-    expect(chatApiMocks.openEditStreamRequest).not.toHaveBeenCalled();
-    expect(setSending).not.toHaveBeenCalled();
-    expect(refreshChatUsage).not.toHaveBeenCalled();
+    expect(editResult).toBe('completed');
+    expect(chatApiMocks.openEditStreamRequest).toHaveBeenCalledWith(
+      'edit_1',
+      userMessageId,
+      originalUserContent,
+      expect.any(AbortSignal),
+    );
+    expect(activeSession).toEqual(updatedSession);
+    expect(setNotice).not.toHaveBeenCalledWith('编辑内容不能为空');
+    expect(setSending).toHaveBeenCalledWith(true);
+    expect(refreshChatUsage).toHaveBeenCalledTimes(1);
   });
 
-  it('编辑内容与原消息等价时不会触发重新生成', async () => {
+  it('编辑内容与原消息等价时会沿用原消息内容重新生成', async () => {
     const userMessageId = activeSession?.messages[0]?.id;
+    const originalUserContent = activeSession?.messages[0]?.content ?? '';
+    const updatedSession = {
+      ...activeSession!,
+      updatedAt: '2026-03-30T01:20:01.000Z',
+      messages: [
+        {
+          ...activeSession!.messages[0]!,
+          content: originalUserContent,
+        },
+        {
+          ...activeSession!.messages[1]!,
+          id: 'assistant_2',
+          content: '等价编辑后的新回复',
+          completionStatus: 'completed' as const,
+        },
+      ],
+    };
+    chatApiMocks.openEditStreamRequest.mockResolvedValue(new Response(''));
+    chatApiMocks.readSseStream.mockImplementation(async (_response, onEvent) => {
+      onEvent('done', JSON.stringify({ session: updatedSession }));
+    });
     const { result } = renderHook(() =>
       useEditMessage({
         activeSession,
@@ -147,11 +195,16 @@ describe('useEditMessage', () => {
       editResult = await result.current(userMessageId ?? '', '  请解释一下闭包  ');
     });
 
-    expect(editResult).toBe('no_change');
-    expect(chatApiMocks.openEditStreamRequest).not.toHaveBeenCalled();
-    expect(setSending).not.toHaveBeenCalled();
-    expect(setNotice).not.toHaveBeenCalled();
-    expect(refreshChatUsage).not.toHaveBeenCalled();
+    expect(editResult).toBe('completed');
+    expect(chatApiMocks.openEditStreamRequest).toHaveBeenCalledWith(
+      'edit_1',
+      userMessageId,
+      originalUserContent,
+      expect.any(AbortSignal),
+    );
+    expect(setSending).toHaveBeenCalledWith(true);
+    expect(setNotice).not.toHaveBeenCalledWith(expect.stringMatching(/\S/));
+    expect(refreshChatUsage).toHaveBeenCalledTimes(1);
   });
 
   it('编辑重生成在无任何 assistant 输出时中止，会恢复为原会话', async () => {

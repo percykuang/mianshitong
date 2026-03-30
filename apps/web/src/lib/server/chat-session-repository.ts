@@ -266,24 +266,6 @@ export async function replaceActorSessionAfterEdit(
   return saveActorSession(actorId, nextSession);
 }
 
-export async function truncateActorSessionForEdit(
-  actorId: string,
-  sessionId: string,
-  messageId: string,
-): Promise<ChatSession | null> {
-  const current = await getActorSession(actorId, sessionId);
-  if (!current) {
-    return null;
-  }
-
-  const truncated = truncateSessionForEdit(current, messageId);
-  if (!truncated) {
-    return null;
-  }
-
-  return saveActorSession(actorId, truncated);
-}
-
 export async function deleteActorSession(actorId: string, sessionId: string): Promise<boolean> {
   const result = await prisma.chatSessionRecord.deleteMany({
     where: { id: sessionId, actorId },

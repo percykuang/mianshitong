@@ -2,7 +2,7 @@
 
 import { ArrowDown } from '@/components/icons';
 import { usePathname } from 'next/navigation';
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChatComposer } from './components/chat-composer';
@@ -26,6 +26,7 @@ export function ChatClient() {
   const renameSession = useChatSessionRename(controller.showNotice);
   const pinSession = useChatSessionPin(controller.showNotice);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  const [followRequestKey, setFollowRequestKey] = useState(0);
   const latestMessages = controller.activeSession?.messages ?? [];
   const hasConversation = latestMessages.some((message) => message.role === 'user');
   const showConversationTransition =
@@ -33,18 +34,11 @@ export function ChatClient() {
     controller.activeSessionLoading &&
     controller.activeSession?.id !== routeSessionId;
   const lastMessageContent = latestMessages.at(-1)?.content;
-  const lastMessage = latestMessages.at(-1) ?? null;
   const activeEditingMessageId = latestMessages.some(
     (item) => item.id === controller.editingMessageId,
   )
     ? controller.editingMessageId
     : null;
-  const restorableInterruptedAssistantMessageId =
-    controller.canRestoreOriginalReply &&
-    lastMessage?.role === 'assistant' &&
-    lastMessage.completionStatus === 'interrupted'
-      ? lastMessage.id
-      : null;
   const toastMessage = controller.notice ?? controller.toast;
   const toastClassName = controller.notice ? 'bg-red-600 text-white' : 'bg-zinc-900 text-white';
 
@@ -60,25 +54,33 @@ export function ChatClient() {
     messageCount: latestMessages.length,
     lastMessageContent,
     sending: controller.sending,
+    followRequestKey,
   });
+
+  const requestFollow = useCallback(() => {
+    setFollowRequestKey((value) => value + 1);
+    scrollToBottom();
+  }, [scrollToBottom]);
 
   const handleSubmitMessage = async (content: string) => {
     if (!controller.sending && content.trim()) {
-      scrollToBottom();
+      requestFollow();
     }
     await controller.sendMessage(content);
   };
 
   const handleQuickPrompt = async (prompt: string) => {
-    scrollToBottom();
+    requestFollow();
     await controller.handleQuickPrompt(prompt);
   };
 
   const handleSubmitEditUserMessage = async () => {
-    const success = await controller.submitEditingUserMessage();
-    if (!success) {
+    const result = await controller.submitEditingUserMessage();
+    if (result === 'error') {
       return;
     }
+
+    requestFollow();
 
     requestAnimationFrame(() => {
       const input = composerInputRef.current;
@@ -128,14 +130,11 @@ export function ChatClient() {
                 sending={controller.sending}
                 editingMessageId={activeEditingMessageId}
                 editingValue={controller.editingValue}
-                restorableInterruptedAssistantMessageId={restorableInterruptedAssistantMessageId}
-                restoringOriginalReply={controller.restoringOriginalReply}
                 scrollContainerRef={scrollContainerRef}
                 onStartEditUserMessage={controller.startEditingUserMessage}
                 onEditingValueChange={controller.setEditingValue}
                 onCancelEditUserMessage={controller.cancelEditingUserMessage}
                 onSubmitEditUserMessage={handleSubmitEditUserMessage}
-                onRestoreOriginalReply={controller.restoreOriginalReply}
                 onNotice={controller.showNotice}
               />
             )}

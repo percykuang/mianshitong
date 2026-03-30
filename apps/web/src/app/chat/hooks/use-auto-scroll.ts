@@ -6,60 +6,27 @@ interface UseAutoScrollInput {
   messageCount: number;
   lastMessageContent: string | undefined;
   sending: boolean;
+  followRequestKey: number;
 }
 
 const BOTTOM_THRESHOLD_PX = 96;
 
-function isViewportScrollTarget(element: HTMLElement) {
-  return (
-    element === document.scrollingElement ||
-    element === document.documentElement ||
-    element === document.body
-  );
-}
-
-function resolveScrollElement(container: HTMLDivElement | null): HTMLElement | null {
-  if (container) {
-    const overflowY = window.getComputedStyle(container).overflowY;
-    const isContainerScrollable =
-      (overflowY === 'auto' || overflowY === 'scroll') &&
-      container.scrollHeight > container.clientHeight + 1;
-
-    if (isContainerScrollable) {
-      return container;
-    }
-  }
-
-  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
-}
-
-function getScrollTop(element: HTMLElement) {
-  return isViewportScrollTarget(element) ? window.scrollY : element.scrollTop;
-}
-
 function isNearBottom(element: HTMLElement): boolean {
-  const scrollTop = getScrollTop(element);
-  return element.scrollHeight - element.clientHeight - scrollTop <= BOTTOM_THRESHOLD_PX;
+  return element.scrollHeight - element.clientHeight - element.scrollTop <= BOTTOM_THRESHOLD_PX;
 }
 
 function scrollElementToBottom(element: HTMLElement) {
-  if (isViewportScrollTarget(element)) {
-    window.scrollTo({
-      top: element.scrollHeight,
-      behavior: 'auto',
-    });
-    return;
-  }
-
   element.scrollTo({ top: element.scrollHeight, behavior: 'auto' });
 }
 
 export function useAutoScroll(input: UseAutoScrollInput) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const previousSessionIdRef = useRef<string | null>(null);
+  const previousFollowRequestKeyRef = useRef(input.followRequestKey);
   const previousScrollTopRef = useRef(0);
   const previousSendingRef = useRef(input.sending);
   const pendingSessionScrollRef = useRef<string | null>(null);
+  const pendingFollowRequestFrameIdRef = useRef<number | null>(null);
   const scrollBurstFrameIdsRef = useRef<number[]>([]);
   const scrollBurstTimeoutIdsRef = useRef<number[]>([]);
   const pinnedToBottomRef = useRef(true);
@@ -71,6 +38,11 @@ export function useAutoScroll(input: UseAutoScrollInput) {
   }, []);
 
   const clearScheduledScrollBurst = useCallback(() => {
+    if (pendingFollowRequestFrameIdRef.current != null) {
+      window.cancelAnimationFrame(pendingFollowRequestFrameIdRef.current);
+      pendingFollowRequestFrameIdRef.current = null;
+    }
+
     for (const frameId of scrollBurstFrameIdsRef.current) {
       window.cancelAnimationFrame(frameId);
     }
@@ -82,14 +54,19 @@ export function useAutoScroll(input: UseAutoScrollInput) {
     scrollBurstTimeoutIdsRef.current = [];
   }, []);
 
+  const stopFollowing = useCallback(() => {
+    clearScheduledScrollBurst();
+    syncPinnedState(false);
+  }, [clearScheduledScrollBurst, syncPinnedState]);
+
   const performScrollToBottom = useCallback(() => {
-    const element = resolveScrollElement(scrollContainerRef.current);
+    const element = scrollContainerRef.current;
     if (!element) {
       return;
     }
 
     scrollElementToBottom(element);
-    previousScrollTopRef.current = getScrollTop(element);
+    previousScrollTopRef.current = element.scrollTop;
   }, []);
 
   const scheduleSessionScrollBurst = useCallback(() => {
@@ -121,9 +98,10 @@ export function useAutoScroll(input: UseAutoScrollInput) {
   }, [clearScheduledScrollBurst, performScrollToBottom, syncPinnedState]);
 
   const scrollToBottom = useCallback(() => {
+    clearScheduledScrollBurst();
     syncPinnedState(true);
     performScrollToBottom();
-  }, [performScrollToBottom, syncPinnedState]);
+  }, [clearScheduledScrollBurst, performScrollToBottom, syncPinnedState]);
 
   useEffect(() => {
     return () => {
@@ -131,37 +109,64 @@ export function useAutoScroll(input: UseAutoScrollInput) {
     };
   }, [clearScheduledScrollBurst]);
 
+  useLayoutEffect(() => {
+    const isNewFollowRequest = previousFollowRequestKeyRef.current !== input.followRequestKey;
+    previousFollowRequestKeyRef.current = input.followRequestKey;
+    if (!isNewFollowRequest) {
+      return;
+    }
+
+    clearScheduledScrollBurst();
+    pinnedToBottomRef.current = true;
+    const frameId = window.requestAnimationFrame(() => {
+      pendingFollowRequestFrameIdRef.current = null;
+      syncPinnedState(true);
+      performScrollToBottom();
+    });
+    pendingFollowRequestFrameIdRef.current = frameId;
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      if (pendingFollowRequestFrameIdRef.current === frameId) {
+        pendingFollowRequestFrameIdRef.current = null;
+      }
+    };
+  }, [clearScheduledScrollBurst, input.followRequestKey, performScrollToBottom, syncPinnedState]);
+
   useEffect(() => {
-    const element = resolveScrollElement(scrollContainerRef.current);
+    const element = scrollContainerRef.current;
     if (!element) {
       return;
     }
 
-    previousScrollTopRef.current = getScrollTop(element);
+    previousScrollTopRef.current = element.scrollTop;
     syncPinnedState(isNearBottom(element));
 
     const updatePinnedState = () => {
-      const currentScrollTop = getScrollTop(element);
+      const currentScrollTop = element.scrollTop;
       const isUserScrollingUp = currentScrollTop < previousScrollTopRef.current - 1;
       previousScrollTopRef.current = currentScrollTop;
 
       if (input.sending && isUserScrollingUp) {
-        syncPinnedState(false);
+        stopFollowing();
         return;
       }
 
       syncPinnedState(isNearBottom(element));
     };
 
-    const scrollEventTarget: HTMLElement | Window = isViewportScrollTarget(element)
-      ? window
-      : element;
-    scrollEventTarget.addEventListener('scroll', updatePinnedState, { passive: true });
+    element.addEventListener('scroll', updatePinnedState, { passive: true });
 
     return () => {
-      scrollEventTarget.removeEventListener('scroll', updatePinnedState);
+      element.removeEventListener('scroll', updatePinnedState);
     };
-  }, [input.activeSessionId, input.activeSessionLoading, input.sending, syncPinnedState]);
+  }, [
+    input.activeSessionId,
+    input.activeSessionLoading,
+    input.sending,
+    stopFollowing,
+    syncPinnedState,
+  ]);
 
   useLayoutEffect(() => {
     if (!input.activeSessionId) {
@@ -190,8 +195,11 @@ export function useAutoScroll(input: UseAutoScrollInput) {
       return;
     }
 
+    if (input.sending) {
+      return;
+    }
+
     pendingSessionScrollRef.current = null;
-    pinnedToBottomRef.current = true;
     const frameId = window.requestAnimationFrame(() => {
       scheduleSessionScrollBurst();
     });
@@ -199,7 +207,12 @@ export function useAutoScroll(input: UseAutoScrollInput) {
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [input.activeSessionId, input.activeSessionLoading, scheduleSessionScrollBurst]);
+  }, [
+    input.activeSessionId,
+    input.activeSessionLoading,
+    input.sending,
+    scheduleSessionScrollBurst,
+  ]);
 
   useEffect(() => {
     const wasSending = previousSendingRef.current;
@@ -209,11 +222,21 @@ export function useAutoScroll(input: UseAutoScrollInput) {
       return;
     }
 
-    if (input.sending && !wasSending) {
-      pinnedToBottomRef.current = true;
+    if (input.sending && pendingSessionScrollRef.current === input.activeSessionId) {
+      pendingSessionScrollRef.current = null;
+      clearScheduledScrollBurst();
+    }
+
+    if (input.sending && !wasSending && pinnedToBottomRef.current) {
       performScrollToBottom();
     }
-  }, [input.activeSessionLoading, input.sending, performScrollToBottom]);
+  }, [
+    clearScheduledScrollBurst,
+    input.activeSessionId,
+    input.activeSessionLoading,
+    input.sending,
+    performScrollToBottom,
+  ]);
 
   useEffect(() => {
     if (input.activeSessionLoading || !pinnedToBottomRef.current) {

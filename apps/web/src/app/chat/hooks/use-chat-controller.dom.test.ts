@@ -2,12 +2,14 @@
  * @jest-environment jsdom
  */
 import '../../../../vitest.setup';
+import { appendUserAssistantMessages, createDraftChatSession } from '../lib/chat-session-draft';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSession } from '@mianshitong/shared';
 
 const controllerState = vi.hoisted(() => ({
   sending: false,
+  activeSession: null as ChatSession | null,
 }));
 
 const sendMocks = vi.hoisted(() => ({
@@ -45,7 +47,7 @@ vi.mock('./use-chat-controller-store', () => ({
     sessions: [],
     sessionsLoading: false,
     activeSessionId: 'session_1',
-    activeSession: null,
+    activeSession: controllerState.activeSession,
     selectedModelId: 'deepseek-chat',
     sending: controllerState.sending,
     activeSessionLoading: false,
@@ -118,7 +120,16 @@ import { useChatController } from './use-chat-controller';
 describe('useChatController', () => {
   beforeEach(() => {
     controllerState.sending = false;
+    controllerState.activeSession = appendUserAssistantMessages(
+      createDraftChatSession('deepseek-chat', 'session_1'),
+      {
+        userContent: '原内容',
+        assistantContent: '旧回复',
+        now: '2026-03-30T00:00:00.000Z',
+      },
+    );
     sendMocks.remoteSendMessage.mockClear();
+    sendMocks.remoteEditMessage.mockClear();
     sendMocks.abortCurrentStream.mockClear();
     sendMocks.setSending.mockClear();
   });
@@ -154,5 +165,27 @@ describe('useChatController', () => {
 
     expect(sendMocks.abortCurrentStream).toHaveBeenCalled();
     expect(sendMocks.setSending).toHaveBeenCalledWith(false);
+  });
+
+  it('空白编辑内容点击确定后也会继续触发重生成', async () => {
+    const { result } = renderHook(() => useChatController());
+    const userMessageId = controllerState.activeSession?.messages[0]?.id ?? '';
+    const userMessageContent = controllerState.activeSession?.messages[0]?.content ?? '';
+
+    await act(async () => {
+      result.current.startEditingUserMessage(userMessageId, userMessageContent);
+    });
+
+    await act(async () => {
+      result.current.setEditingValue('   ');
+    });
+
+    let submitResult: Awaited<ReturnType<typeof result.current.submitEditingUserMessage>>;
+    await act(async () => {
+      submitResult = await result.current.submitEditingUserMessage();
+    });
+
+    expect(submitResult!).toBe('submitted');
+    expect(sendMocks.remoteEditMessage).toHaveBeenCalledWith(userMessageId, '   ');
   });
 });

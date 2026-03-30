@@ -178,6 +178,35 @@ export function getEditableUserMessageIndex(messages: ChatMessage[], messageId: 
   return messages.findIndex((item) => item.id === messageId && item.role === 'user');
 }
 
+export function getEditableUserMessage(
+  messages: ChatMessage[],
+  messageId: string,
+): { index: number; message: ChatMessage } | null {
+  const index = getEditableUserMessageIndex(messages, messageId);
+  const message = messages[index];
+  if (!message || !isEditableUserMessage(messages, messageId)) {
+    return null;
+  }
+
+  return { index, message };
+}
+
+export function getEditableUserMessageError(
+  messages: ChatMessage[],
+  messageId: string,
+): string | null {
+  const targetIndex = getEditableUserMessageIndex(messages, messageId);
+  if (targetIndex < 0) {
+    return '目标消息不存在或不可编辑';
+  }
+
+  if (!isEditableUserMessage(messages, messageId)) {
+    return '当前仅支持编辑最后一条用户消息';
+  }
+
+  return null;
+}
+
 export function getLastEditableUserMessageId(messages: ChatMessage[]): string | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];

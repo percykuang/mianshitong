@@ -2,9 +2,11 @@ import { type ChatSession, QUICK_PROMPTS, type SessionSummary } from '@mianshito
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createChatSessionId } from '@/lib/chat-session-id';
 import { createDraftChatSession } from '../lib/chat-session-draft';
-import { restoreSessionSnapshotRequest } from '../lib/chat-api';
-import { getEditableUserMessageIndex, isEditableUserMessage } from '../lib/chat-message-mutations';
-import { syncResolvedRemoteSession } from '../lib/chat-remote-session-sync';
+import {
+  getEditableUserMessage,
+  getEditableUserMessageError,
+  isEditableUserMessage,
+} from '../lib/chat-message-mutations';
 import { markRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 import {
   abortCurrentStream,
@@ -70,10 +72,6 @@ export function useChatController(): ChatController {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
-  const [restorableEditSnapshots, setRestorableEditSnapshots] = useState<
-    Record<string, ChatSession>
-  >({});
-  const [restoringOriginalReply, setRestoringOriginalReply] = useState(false);
   const quickPrompts = [...QUICK_PROMPTS];
 
   useEffect(() => {
@@ -170,20 +168,6 @@ export function useChatController(): ChatController {
     setActiveSessionId,
   });
 
-  const editUserMessage = useCallback(
-    async (messageId: string, content: string): Promise<boolean> => {
-      const session = readActiveSession();
-      if (!session || !isEditableUserMessage(session.messages, messageId)) {
-        setNotice('当前仅支持编辑最后一条用户消息');
-        return false;
-      }
-
-      const result = await remoteEditMessage(messageId, content);
-      return result !== 'error';
-    },
-    [readActiveSession, remoteEditMessage, setNotice],
-  );
-
   const startEditingUserMessage = useCallback(
     (messageId: string, content: string) => {
       const session = readActiveSession();
@@ -198,111 +182,32 @@ export function useChatController(): ChatController {
     [readActiveSession, setEditingMessageId, setEditingValue, setNotice],
   );
 
-  const submitEditingUserMessage = useCallback(async (): Promise<boolean> => {
+  const submitEditingUserMessage = useCallback(async (): Promise<'submitted' | 'error'> => {
     if (!editingMessageId) {
-      return false;
-    }
-
-    const trimmed = editingValue.trim();
-    if (!trimmed) {
-      setNotice('编辑内容不能为空');
-      return false;
+      return 'error';
     }
 
     const session = readActiveSession();
     if (!session) {
-      return false;
+      return 'error';
     }
 
-    const targetIndex = getEditableUserMessageIndex(session.messages, editingMessageId);
-    if (targetIndex < 0) {
-      setNotice('目标消息不存在或不可编辑');
-      return false;
-    }
-
-    const targetMessage = session.messages[targetIndex];
-    if (!targetMessage) {
-      setNotice('目标消息不存在或不可编辑');
-      return false;
-    }
-
-    if (!isEditableUserMessage(session.messages, editingMessageId)) {
-      setNotice('当前仅支持编辑最后一条用户消息');
+    const editableTarget = getEditableUserMessage(session.messages, editingMessageId);
+    if (!editableTarget) {
+      setNotice(
+        getEditableUserMessageError(session.messages, editingMessageId) ??
+          '目标消息不存在或不可编辑',
+      );
       setEditingMessageId(null);
       setEditingValue('');
-      return false;
+      return 'error';
     }
 
-    const hasMeaningfulChange = targetMessage.content.trim() !== trimmed;
     setEditingMessageId(null);
     setEditingValue('');
-
-    if (!hasMeaningfulChange) {
-      return true;
-    }
-
-    setRestorableEditSnapshots((previous) => ({
-      ...previous,
-      [session.id]: session,
-    }));
-
-    const result = await remoteEditMessage(editingMessageId, trimmed);
-    if (result !== 'interrupted') {
-      setRestorableEditSnapshots((previous) => {
-        const next = { ...previous };
-        delete next[session.id];
-        return next;
-      });
-    }
-
-    return result !== 'error';
+    const result = await remoteEditMessage(editingMessageId, editingValue);
+    return result === 'error' ? 'error' : 'submitted';
   }, [editingMessageId, editingValue, readActiveSession, remoteEditMessage, setNotice]);
-
-  const restoreOriginalReply = useCallback(async (): Promise<void> => {
-    const session = readActiveSession();
-    if (!session || restoringOriginalReply) {
-      return;
-    }
-
-    const snapshot = restorableEditSnapshots[session.id];
-    if (!snapshot) {
-      return;
-    }
-
-    setRestoringOriginalReply(true);
-    setNotice(null);
-    updateActiveSession(snapshot);
-
-    try {
-      const restoredSession = await restoreSessionSnapshotRequest(snapshot);
-      await syncResolvedRemoteSession({
-        session: restoredSession,
-        refreshSessions,
-        setActiveSession: updateActiveSession,
-        setActiveSessionId,
-        replaceSession,
-      });
-      setRestorableEditSnapshots((previous) => {
-        const next = { ...previous };
-        delete next[session.id];
-        return next;
-      });
-    } catch (error) {
-      updateActiveSession(session);
-      setNotice(error instanceof Error ? error.message : '恢复原回复失败，请稍后重试');
-    } finally {
-      setRestoringOriginalReply(false);
-    }
-  }, [
-    readActiveSession,
-    restoringOriginalReply,
-    restorableEditSnapshots,
-    setNotice,
-    updateActiveSession,
-    refreshSessions,
-    setActiveSessionId,
-    replaceSession,
-  ]);
 
   const cancelEditingUserMessage = useCallback(() => {
     setEditingMessageId(null);
@@ -369,13 +274,6 @@ export function useChatController(): ChatController {
     replaceNewChat,
   });
 
-  const lastMessage = activeSession?.messages.at(-1) ?? null;
-  const canRestoreOriginalReply =
-    !!activeSession &&
-    !!restorableEditSnapshots[activeSession.id] &&
-    lastMessage?.role === 'assistant' &&
-    lastMessage.completionStatus === 'interrupted';
-
   const handlePickSession = useCallback(
     async (sessionId: string) => {
       forceCreateNextSessionRef.current = false;
@@ -405,8 +303,6 @@ export function useChatController(): ChatController {
     sidebarOpen,
     editingMessageId,
     editingValue,
-    canRestoreOriginalReply,
-    restoringOriginalReply,
     quickPrompts,
     setInputValue,
     setSelectedModelId,
@@ -418,11 +314,9 @@ export function useChatController(): ChatController {
     handleQuickPrompt: actions.handleQuickPrompt,
     sendMessage,
     stopMessageGeneration,
-    editUserMessage,
     startEditingUserMessage,
     cancelEditingUserMessage,
     submitEditingUserMessage,
-    restoreOriginalReply,
     setEditingValue,
     handleCopy: actions.handleCopy,
     showNotice: actions.showNotice,
