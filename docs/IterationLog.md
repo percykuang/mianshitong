@@ -7,6 +7,107 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 5.21（2026-03-30）：让 CI 与本地统一使用 pnpm verify
+
+### 目标
+
+- 消除“本地执行的是一套检查，CI 跑的是另一套拆散命令”带来的认知偏差。
+- 让根级 `pnpm verify` 成为本地和 CI 共用的默认验证入口。
+
+### 主要改动
+
+- 调整 CI 的 `test` job：
+  - `.github/workflows/ci.yml`
+  - 由原来的多条离散命令：
+    - `pnpm db:generate`
+    - `pnpm format:check`
+    - `pnpm lint`
+    - `pnpm typecheck`
+    - `pnpm test`
+    - `pnpm spellcheck`
+  - 收口为单条：
+    - `pnpm verify`
+- 之所以可以收口，是因为：
+  - `pnpm verify` 已串联 `format:check / lint / typecheck / test / spellcheck`
+  - 其中 `pnpm typecheck` 自身已包含 `pnpm db:generate`
+
+### 迁移/破坏性变更
+
+- 无运行时行为变更。
+- 无接口或数据库变更；仅统一 CI 与本地的验证入口。
+
+### 验证
+
+- `pnpm verify`
+- 检查 `.github/workflows/ci.yml` 中 `test` job 已改为调用 `pnpm verify`
+
+### 下一步
+
+- 若后续继续扩展默认校验范围，应优先更新 `pnpm verify`，再让 CI 复用，而不是重新在 workflow 里拆散维护。
+
+## Iteration 5.20（2026-03-30）：补齐 ESLint 对 Next 测试产物的忽略
+
+### 目标
+
+- 避免 `pnpm verify` 和日常 `pnpm lint` 被 `.next-playwright` 生成产物污染。
+- 让统一验证入口在跑过 Playwright 后依然保持可用、可预期。
+
+### 主要改动
+
+- 调整 Next app 的 ESLint 忽略范围：
+  - `apps/web/eslint.config.mjs`
+  - `apps/admin/eslint.config.mjs`
+  - 在原有 `.next/**`、`out/**`、`build/**` 之外，补充忽略 `.next-playwright/**`
+- 这样 Playwright 使用自定义 `distDir` 生成的开发产物不会再被 ESLint 当成源码扫描
+
+### 迁移/破坏性变更
+
+- 无运行时行为变更。
+- 无接口或数据库变更；仅收口 lint 的扫描边界。
+
+### 验证
+
+- `pnpm verify`
+
+### 下一步
+
+- 若后续还有其他工具生成的临时产物进入源码扫描范围，继续优先在工具配置层收口忽略，而不是靠人工清理目录。
+
+## Iteration 5.19（2026-03-30）：统一提交前验证入口为 pnpm verify
+
+### 目标
+
+- 把提交前默认要跑的 5 条检查收敛为一个统一入口，减少人工和 AI 的遗漏概率。
+- 让仓库级 AI 协作规则从“建议执行”升级为“默认执行”。
+
+### 主要改动
+
+- 新增根脚本：
+  - `package.json`
+  - 增加 `pnpm verify`，顺序串联：
+    - `pnpm format:check`
+    - `pnpm lint`
+    - `pnpm typecheck`
+    - `pnpm test`
+    - `pnpm spellcheck`
+- 强化仓库协作约定：
+  - `AGENTS.md`
+  - 明确规定：对任何实际代码、配置、脚本、文档改动，默认在交付前主动执行上述 5 条检查
+  - 明确优先使用 `pnpm verify` 作为统一入口，避免漏跑单项
+
+### 迁移/破坏性变更
+
+- 无运行时行为变更。
+- 无接口或数据库变更；仅新增统一验证脚本并强化协作规范。
+
+### 验证
+
+- `pnpm verify`
+
+### 下一步
+
+- 如果后续希望把 `web/admin` 的 Playwright 也纳入提交前默认校验，可再评估是否新增 `pnpm verify:e2e`，避免当前入口过重。
+
 ## Iteration 5.18（2026-03-30）：将 Next 的 next-env.d.ts 收口为生成文件
 
 ### 目标
@@ -794,12 +895,12 @@
 
 ### 目标
 
-- 基于对 `zhitalk.chat/chat` 四个预置入口的真实重复采样，提炼更稳定的话术结构与版式骨架。
+- 基于对四个预置入口的真实重复采样，提炼更稳定的话术结构与版式骨架。
 - 把这些骨架映射到我方快捷入口提示词，减少“像固定模板”或“结构过散”的回复。
 
 ### 主要改动
 
-- 真实站点采样结论已转译为两层约束：
+- 前期采样结论已转译为两层约束：
   - `apps/web/src/lib/server/chat-general-policy-instruction.ts`
   - `apps/web/src/lib/server/chat-general-policy-examples.ts`
   - `apps/web/src/lib/server/chat-general-policy-fallback.ts`
