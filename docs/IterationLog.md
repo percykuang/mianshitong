@@ -7,8 +7,6 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
-## Iteration 5.25（2026-03-30）：清理聊天编辑与 follow 触发的冗余逻辑
-
 ## Iteration 5.26（2026-03-30）：收口用户消息手动复制时的额外空行
 
 ### 目标
@@ -42,6 +40,48 @@
 ### 下一步
 
 - 若后续继续增强消息交互，可优先维持“正文可选中、附属动作不可选中”的边界，避免再次因为 UI 装饰节点进入复制选区而引入文本噪音。
+
+## Iteration 5.27（2026-03-30）：提升普通技术问答的默认展开深度
+
+### 目标
+
+- 让 Web 端普通聊天里的技术问答默认回答得更充分，而不是只停留在“提纲式短答”。
+- 保持闲聊和高频入口仍然轻量，不把所有场景都拉成长回复。
+
+### 主要改动
+
+- 放宽技术问答基础策略的长度约束：
+  - `apps/web/src/lib/server/chat-general-policy.constants.ts`
+  - 明确技术问答在用户未要求简短时，默认按“中等偏详细”深度回答
+  - 结构重点从“结论、原理或差异、示例、常见误区或面试追问、总结”扩展到补充“适用场景”
+- 提升技术问答专属 system prompt 的展开要求：
+  - `apps/web/src/lib/server/chat-general-policy-instruction.ts`
+  - 要求首段结论后补充核心原因
+  - 要求主要小节尽量补“为什么 / 什么时候 / 边界条件 / 常见误用”
+  - 示例从“一个最小短示例”放宽为“1 到 2 个最小示例或业务场景”
+- 拉长技术问答 few-shot 和 fallback：
+  - `apps/web/src/lib/server/chat-general-policy-examples.ts`
+  - `apps/web/src/lib/server/chat-general-policy-fallback.ts`
+  - 对 comparison / mechanism / concept 三类问题都补入“为什么重要、什么时候没必要用、边界条件、常见误区”等更完整信号，降低模型继续模仿短答模板的概率
+- 同步补回归测试：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - 新断言覆盖“技术问答默认中等偏详细”“不要只给提纲式短答”和更完整的 comparison 示例
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；这是一次提示词策略与 few-shot 深度调整。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/chat-general-policy.test.ts`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续仍觉得技术问答偏短，下一步优先评估“扩大 technical_question 命中范围”，而不是继续无差别放大所有普通聊天场景的回复长度。
+
+## Iteration 5.25（2026-03-30）：清理聊天编辑与 follow 触发的冗余逻辑
 
 ### 目标
 

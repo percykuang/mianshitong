@@ -19,6 +19,7 @@ describe('prependChatReplyFormattingInstruction', () => {
     expect(messages[0]?.content).toContain('面试通，一个互联网大公司的资深程序员和面试官');
     expect(messages[0]?.content).toContain('如果用户请求优化简历');
     expect(messages[0]?.content).toContain('技术问答场景不要使用 H1');
+    expect(messages[0]?.content).toContain('默认按中等偏详细的深度回答');
     expect(messages[0]?.content).not.toContain('不要使用 Markdown 分割线');
     expect(messages[0]?.content).not.toContain('不要输出 mermaid 图');
   });
@@ -173,6 +174,7 @@ describe('prependGeneralChatIntentInstruction', () => {
     expect(messages[0]?.role).toBe('system');
     expect(messages[0]?.content).toContain('前端技术问答');
     expect(messages[0]?.content).toContain('优先使用 `##` 和 `###`');
+    expect(messages[0]?.content).toContain('不要只给提纲式短答');
     expect(messages[0]?.content).toContain('## 一句话区别');
     expect(messages[0]?.content).not.toContain('Markdown 分割线');
     expect(messages[0]?.content).not.toContain('mermaid 图');
@@ -183,6 +185,7 @@ describe('prependGeneralChatIntentInstruction', () => {
     expect(messages[2]?.role).toBe('assistant');
     expect(messages[2]?.content).toContain('## 一句话区别');
     expect(messages[2]?.content).toContain('## 什么时候用');
+    expect(messages[2]?.content).toContain('什么时候其实没必要用');
   });
 });
 
@@ -212,5 +215,6 @@ describe('buildGeneralChatFallbackReply', () => {
     expect(reply).toContain('## 一句话区别');
     expect(reply).toContain('## 建议按这个顺序回答');
     expect(reply).toContain('## 你可以继续这样追问');
+    expect(reply).toContain('什么时候其实没必要用');
   });
 });
