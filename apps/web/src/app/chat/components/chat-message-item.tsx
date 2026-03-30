@@ -109,9 +109,9 @@ export function ChatMessageItem({
                 </div>
               </div>
             ) : message.role === 'user' ? (
-              <p className="wrap-break-word whitespace-pre-wrap text-white dark:text-white">
+              <div className="wrap-break-word whitespace-pre-wrap text-white select-text dark:text-white">
                 {message.content}
-              </p>
+              </div>
             ) : (
               <ChatMarkdown content={message.content} className="text-foreground" />
             )}
@@ -131,7 +131,7 @@ export function ChatMessageItem({
           {shouldShowActions ? (
             <div
               className={cn(
-                'flex items-center gap-1 text-muted-foreground',
+                'flex items-center gap-1 text-muted-foreground select-none',
                 message.role === 'user' ? 'justify-end' : 'justify-start',
               )}
             >

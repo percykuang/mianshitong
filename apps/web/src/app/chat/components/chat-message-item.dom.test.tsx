@@ -105,7 +105,7 @@ describe('ChatMessageItem', () => {
     expect(screen.queryByRole('button', { name: '恢复原回复' })).not.toBeInTheDocument();
   });
 
-  it('user 长消息气泡应保持右对齐，但文本本身使用正常左对齐换行', () => {
+  it('user 长消息气泡应保持右对齐，但文本本身使用正常左对齐换行，并把动作区排除出文本选区', () => {
     const { container } = render(
       <ChatMessageItem
         sessionId="session-1"
@@ -124,17 +124,20 @@ describe('ChatMessageItem', () => {
       />,
     );
 
-    const paragraph = screen.getByText(USER_MESSAGE.content);
-    expect(paragraph.className).toContain('whitespace-pre-wrap');
-    expect(paragraph.className).toContain('wrap-break-word');
+    const contentNode = screen.getByText(USER_MESSAGE.content);
+    expect(contentNode.tagName).toBe('DIV');
+    expect(contentNode.className).toContain('whitespace-pre-wrap');
+    expect(contentNode.className).toContain('wrap-break-word');
+    expect(contentNode.className).toContain('select-text');
 
-    const bubble = paragraph.parentElement;
+    const bubble = contentNode.parentElement;
     expect(bubble?.className).toContain('self-end');
     expect(bubble?.className).toContain('text-left');
     expect(bubble?.className).not.toContain('text-right');
 
     const wrapper = bubble?.parentElement;
     expect(wrapper?.className).toContain('items-end');
+    expect(screen.getByLabelText('复制').closest('div[class*="select-none"]')).toBeTruthy();
     expect(container.querySelector('article')).toBeTruthy();
   });
 

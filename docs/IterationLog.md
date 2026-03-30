@@ -9,6 +9,40 @@
 
 ## Iteration 5.25（2026-03-30）：清理聊天编辑与 follow 触发的冗余逻辑
 
+## Iteration 5.26（2026-03-30）：收口用户消息手动复制时的额外空行
+
+### 目标
+
+- 修复 Web 聊天里用户手动框选消息文本再复制时，粘贴结果可能夹带多余空行的问题。
+- 在不改变视觉样式和消息动作能力的前提下，减少浏览器把动作区一并纳入选区造成的纯文本换行噪音。
+
+### 主要改动
+
+- 收紧用户消息的文本选区边界：
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 用户消息正文容器从段落标签收口为纯文本 `div`
+  - 显式为正文添加 `select-text`，保留原有 `whitespace-pre-wrap` 换行语义
+- 将消息动作区排除出文本选区：
+  - `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 为动作区容器补 `select-none`，避免用户手动复制正文时把“编辑 / 复制”等按钮区域一起卷入选区，导致浏览器在转纯文本时插入多余空行
+- 补充组件级回归测试：
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+  - 新增断言覆盖“正文节点可选中、动作区不可选中”的结构约束
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；这是一次前端 DOM 结构和选择行为修正。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续继续增强消息交互，可优先维持“正文可选中、附属动作不可选中”的边界，避免再次因为 UI 装饰节点进入复制选区而引入文本噪音。
+
 ### 目标
 
 - 在不改变当前产品行为的前提下，降低聊天编辑和自动 follow 相关代码的重复度与维护成本。
