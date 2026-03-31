@@ -139,9 +139,9 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     async (content: string) => {
       try {
         await copyToClipboard(content);
-        setToast('Copied to clipboard!');
+        setToast('已复制到剪贴板！');
       } catch {
-        setToast('Copy failed. Please copy manually.');
+        setToast('复制失败，请手动复制！');
       }
     },
     [setToast],

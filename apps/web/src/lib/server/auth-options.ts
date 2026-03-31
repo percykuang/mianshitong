@@ -34,10 +34,10 @@ export function getAuthOptions(): NextAuthOptions {
     },
     providers: [
       CredentialsProvider({
-        name: 'Credentials',
+        name: '邮箱密码登录',
         credentials: {
-          email: { label: 'Email', type: 'email' },
-          password: { label: 'Password', type: 'password' },
+          email: { label: '邮箱', type: 'email' },
+          password: { label: '密码', type: 'password' },
         },
         async authorize(credentials) {
           const parsed = credentialsSchema.safeParse(credentials);

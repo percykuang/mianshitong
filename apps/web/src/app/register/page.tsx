@@ -53,15 +53,19 @@ export default function RegisterPage() {
 
   return (
     <AuthCard
-      title="Sign Up"
-      description="Create an account with your email and password"
-      submitLabel="Sign Up"
+      title="注册"
+      description="使用邮箱和密码创建面试通账号"
+      submitLabel="注册"
+      emailLabel="邮箱"
+      emailPlaceholder="请输入邮箱地址"
+      passwordLabel="密码"
+      passwordPlaceholder="请设置登录密码"
       email={email}
       password={password}
       error={error}
       pending={pending}
-      footerText="Already have an account?"
-      footerLinkText="Sign in"
+      footerText="已经有账号？"
+      footerLinkText="立即登录"
       footerLinkHref="/login"
       onEmailChange={setEmail}
       onPasswordChange={setPassword}

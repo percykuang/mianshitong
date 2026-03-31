@@ -8,4 +8,5 @@ out
 .vercel
 coverage
 pnpm-lock.yaml
+.playwright-mcp
 **/next-env.d.ts

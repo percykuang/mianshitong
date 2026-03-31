@@ -41,15 +41,19 @@ export function LoginForm({ callbackUrl }: LoginFormProps) {
 
   return (
     <AuthCard
-      title="Sign In"
-      description="Use your email and password to sign in"
-      submitLabel="Sign in"
+      title="登录"
+      description="使用邮箱和密码登录面试通"
+      submitLabel="登录"
+      emailLabel="邮箱"
+      emailPlaceholder="请输入邮箱地址"
+      passwordLabel="密码"
+      passwordPlaceholder="请输入密码"
       email={email}
       password={password}
       error={error}
       pending={pending}
-      footerText="Don't have an account?"
-      footerLinkText="Sign up"
+      footerText="还没有账号？"
+      footerLinkText="立即注册"
       footerLinkHref="/register"
       onEmailChange={setEmail}
       onPasswordChange={setPassword}

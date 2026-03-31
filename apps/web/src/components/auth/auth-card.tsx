@@ -7,6 +7,10 @@ interface AuthCardProps {
   title: string;
   description: string;
   submitLabel: string;
+  emailLabel?: string;
+  emailPlaceholder?: string;
+  passwordLabel?: string;
+  passwordPlaceholder?: string;
   email: string;
   password: string;
   error: string | null;
@@ -23,6 +27,10 @@ export function AuthCard({
   title,
   description,
   submitLabel,
+  emailLabel = '邮箱',
+  emailPlaceholder = '请输入邮箱地址',
+  passwordLabel = '密码',
+  passwordPlaceholder = '请输入密码',
   email,
   password,
   error,
@@ -49,13 +57,13 @@ export function AuthCard({
         >
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="email">
-              Email Address
+              {emailLabel}
             </label>
             <Input
               id="email"
               type="email"
               autoComplete="email"
-              placeholder="user@acme.com"
+              placeholder={emailPlaceholder}
               value={email}
               onChange={(event) => onEmailChange(event.target.value)}
               disabled={pending}
@@ -65,13 +73,13 @@ export function AuthCard({
 
           <div className="space-y-2">
             <label className="text-sm font-medium" htmlFor="password">
-              Password
+              {passwordLabel}
             </label>
             <Input
               id="password"
               type="password"
               autoComplete="current-password"
-              placeholder="至少 8 位"
+              placeholder={passwordPlaceholder}
               value={password}
               onChange={(event) => onPasswordChange(event.target.value)}
               disabled={pending}

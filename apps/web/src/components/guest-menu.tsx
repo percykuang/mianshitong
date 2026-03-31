@@ -82,7 +82,7 @@ export function GuestMenu({
         disabled
       >
         <div className="size-6 animate-pulse rounded-full bg-zinc-500/30" />
-        <span className="animate-pulse rounded-md bg-zinc-500/30 text-transparent">Guest</span>
+        <span className="animate-pulse rounded-md bg-zinc-500/30 text-transparent">访客</span>
         <Loader className="ml-auto size-4 animate-spin text-zinc-500" />
       </button>
     );
@@ -104,13 +104,13 @@ export function GuestMenu({
       >
         <Image
           src={GUEST_AVATAR}
-          alt="User Avatar"
+          alt="用户头像"
           width={24}
           height={24}
           className="rounded-full dark:invert"
           unoptimized
         />
-        <span className="truncate">{isAuthenticated ? userEmail : 'Guest'}</span>
+        <span className="truncate">{isAuthenticated ? userEmail : '访客'}</span>
         <ChevronIcon className="ml-auto size-4" />
       </button>
 

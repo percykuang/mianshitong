@@ -135,7 +135,7 @@ describe('useChatControllerActions', () => {
     });
 
     expect(successClipboard.writeText).toHaveBeenCalledWith('hello');
-    expect(successDeps.setToast).toHaveBeenCalledWith('Copied to clipboard!');
+    expect(successDeps.setToast).toHaveBeenCalledWith('已复制到剪贴板');
 
     const failClipboard = {
       writeText: vi.fn(async () => {
@@ -154,7 +154,7 @@ describe('useChatControllerActions', () => {
       await failHook.result.current.handleCopy('fail');
     });
 
-    expect(failDeps.setToast).toHaveBeenCalledWith('Copy failed. Please copy manually.');
+    expect(failDeps.setToast).toHaveBeenCalledWith('复制失败，请手动复制。');
   });
 
   it('开始编辑、取消编辑和展示 notice 会更新对应状态', () => {

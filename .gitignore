@@ -49,3 +49,4 @@ build
 
 playwright-report
 test-results
+.playwright-mcp

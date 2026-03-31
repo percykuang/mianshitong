@@ -7,6 +7,83 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 5.49（2026-03-31）：补齐 Web 端 NextAuth CredentialsProvider 中文文案
+
+### 目标
+
+- 把 Web 端 NextAuth `CredentialsProvider` 里残留的英文标签同步改为中文，统一认证链路的代码与配置口径。
+
+### 主要改动
+
+- `apps/web/src/lib/server/auth-options.ts`
+  - `CredentialsProvider.name` 从 `Credentials` 改为 `邮箱密码登录`
+  - `credentials.email.label` 从 `Email` 改为 `邮箱`
+  - `credentials.password.label` 从 `Password` 改为 `密码`
+- `apps/web/src/components/guest-menu.tsx`
+  - 将访客菜单中的 `Guest` 改为 `访客`
+  - 头像 `alt` 从 `User Avatar` 改为 `用户头像`
+- `apps/web/src/components/auth/auth-card.tsx`
+  - 共享认证卡片的默认字段文案改为中文默认值，避免后续新增调用方时再次漏出英文
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.ts`
+  - 复制成功提示改为 `已复制到剪贴板`
+  - 复制失败提示改为 `复制失败，请手动复制。`
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - 同步更新复制提示断言
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.48（2026-03-31）：将 Web 登录/注册页文案改为中文
+
+### 目标
+
+- 消除 Web 登录/注册页面向用户暴露的英文文案，统一为中文界面表达。
+- 保持认证卡片组件的复用性，避免把共享字段文案直接写死成单一语言。
+
+### 主要改动
+
+- `apps/web/src/components/auth/auth-card.tsx`
+  - 为邮箱/密码字段标题与占位文案新增可选 props：
+    - `emailLabel`
+    - `emailPlaceholder`
+    - `passwordLabel`
+    - `passwordPlaceholder`
+  - 默认值保持原有行为，不影响其他调用方。
+- `apps/web/src/app/login/login-form.tsx`
+  - 登录页标题改为 `登录`
+  - 描述改为 `使用邮箱和密码登录面试通`
+  - 提交按钮改为 `登录`
+  - 字段文案改为 `邮箱 / 密码`
+  - 占位文案改为 `请输入邮箱地址 / 请输入密码`
+  - 底部跳转文案改为 `还没有账号？立即注册`
+- `apps/web/src/app/register/page.tsx`
+  - 注册页标题改为 `注册`
+  - 描述改为 `使用邮箱和密码创建面试通账号`
+  - 提交按钮改为 `注册`
+  - 字段文案改为 `邮箱 / 密码`
+  - 占位文案改为 `请输入邮箱地址 / 请设置登录密码`
+  - 底部跳转文案改为 `已经有账号？立即登录`
+- `.prettierignore`、`.gitignore`
+  - 新增 `.playwright-mcp` 忽略规则，避免手动 Playwright 验证产生的临时产物污染校验与工作区状态
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - Playwright 手动验证：打开 `http://127.0.0.1:3000/login`，确认页面显示 `登录 / 使用邮箱和密码登录面试通 / 邮箱 / 密码 / 立即注册`
+
 ## Iteration 5.47（2026-03-31）：增强知识检索 Trace 回填的时间窗口与报告能力
 
 ### 目标
