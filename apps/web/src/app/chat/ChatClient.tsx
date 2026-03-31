@@ -17,30 +17,38 @@ import { useChatController } from './hooks/use-chat-controller';
 import { useChatSessionDialog } from './hooks/use-chat-session-dialog';
 import { useChatSessionPin } from './hooks/use-chat-session-pin';
 import { useChatSessionRename } from './hooks/use-chat-session-rename';
+import {
+  requestFollowAndFocusComposer,
+  shouldRequestFollowBeforeSend,
+} from './lib/chat-client-action-helpers';
+import { getChatClientViewState } from './lib/chat-client-view-state';
 import { getRouteSessionIdFromPathname } from './lib/chat-route';
 
 export function ChatClient() {
   const pathname = usePathname();
   const routeSessionId = getRouteSessionIdFromPathname(pathname);
   const controller = useChatController();
-  const renameSession = useChatSessionRename(controller.showNotice);
-  const pinSession = useChatSessionPin(controller.showNotice);
+  const renameSession = useChatSessionRename(controller.showErrorFeedback);
+  const pinSession = useChatSessionPin(controller.showErrorFeedback);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const [followRequestKey, setFollowRequestKey] = useState(0);
   const latestMessages = controller.activeSession?.messages ?? [];
-  const hasConversation = latestMessages.some((message) => message.role === 'user');
-  const showConversationTransition =
-    Boolean(routeSessionId) &&
-    controller.activeSessionLoading &&
-    controller.activeSession?.id !== routeSessionId;
-  const lastMessageContent = latestMessages.at(-1)?.content;
-  const activeEditingMessageId = latestMessages.some(
-    (item) => item.id === controller.editingMessageId,
-  )
-    ? controller.editingMessageId
-    : null;
-  const toastMessage = controller.notice ?? controller.toast;
-  const toastClassName = controller.notice ? 'bg-red-600 text-white' : 'bg-zinc-900 text-white';
+  const {
+    hasUserMessages,
+    shouldShowConversationTransition,
+    latestMessageContent,
+    visibleEditingMessageId,
+    activeBannerFeedback,
+    bannerFeedbackToneClassName,
+    shouldShowScrollToBottomButton,
+  } = getChatClientViewState({
+    routeSessionId,
+    activeSessionId: controller.activeSession?.id ?? null,
+    activeSessionLoading: controller.activeSessionLoading,
+    messages: latestMessages,
+    editingMessageId: controller.editingMessageId,
+    bannerFeedback: controller.bannerFeedback,
+  });
 
   const dialog = useChatSessionDialog({
     onRenameSession: renameSession,
@@ -52,7 +60,7 @@ export function ChatClient() {
     activeSessionId: controller.activeSessionId,
     activeSessionLoading: controller.activeSessionLoading,
     messageCount: latestMessages.length,
-    lastMessageContent,
+    lastMessageContent: latestMessageContent,
     sending: controller.sending,
     followRequestKey,
   });
@@ -63,7 +71,7 @@ export function ChatClient() {
   }, [scrollToBottom]);
 
   const handleSubmitMessage = async (content: string) => {
-    if (!controller.sending && content.trim()) {
+    if (shouldRequestFollowBeforeSend(controller.sending, content)) {
       requestFollow();
     }
     await controller.sendMessage(content);
@@ -80,13 +88,9 @@ export function ChatClient() {
       return;
     }
 
-    requestFollow();
-
-    requestAnimationFrame(() => {
-      const input = composerInputRef.current;
-      if (input) {
-        input.focus();
-      }
+    requestFollowAndFocusComposer({
+      requestFollow,
+      composerInputRef,
     });
   };
 
@@ -119,26 +123,26 @@ export function ChatClient() {
           />
 
           <div className="relative flex min-h-0 flex-1 flex-col">
-            {showConversationTransition ? (
+            {shouldShowConversationTransition ? (
               <ChatConversationTransition />
             ) : (
               <ChatMessageList
                 sessionId={controller.activeSessionId}
                 messages={latestMessages}
-                hasConversation={hasConversation}
-                suppressEmptyState={showConversationTransition}
+                hasUserMessages={hasUserMessages}
+                hideEmptyState={shouldShowConversationTransition}
                 sending={controller.sending}
-                editingMessageId={activeEditingMessageId}
+                editingMessageId={visibleEditingMessageId}
                 editingValue={controller.editingValue}
                 scrollContainerRef={scrollContainerRef}
                 onStartEditUserMessage={controller.startEditingUserMessage}
                 onEditingValueChange={controller.setEditingValue}
                 onCancelEditUserMessage={controller.cancelEditingUserMessage}
                 onSubmitEditUserMessage={handleSubmitEditUserMessage}
-                onNotice={controller.showNotice}
+                onErrorFeedback={controller.showErrorFeedback}
               />
             )}
-            {hasConversation && !showConversationTransition ? (
+            {shouldShowScrollToBottomButton ? (
               <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-4">
                 <Button
                   type="button"
@@ -163,8 +167,8 @@ export function ChatClient() {
             className={`${CHAT_CONTENT_SHELL_CLASS} sticky bottom-0 z-10 bg-background pb-3 md:pb-4`}
           >
             <ChatComposer
-              hasConversation={hasConversation}
-              suppressQuickPrompts={showConversationTransition}
+              hasUserMessages={hasUserMessages}
+              hideQuickPrompts={shouldShowConversationTransition}
               quickPrompts={controller.quickPrompts}
               inputValue={controller.inputValue}
               selectedModelId={controller.selectedModelId}
@@ -185,19 +189,19 @@ export function ChatClient() {
 
       <ChatSessionDialog
         state={dialog.dialogState}
-        renameValue={dialog.renameValue}
+        renameDraftTitle={dialog.renameDraftTitle}
         submitting={dialog.dialogSubmitting}
-        onRenameValueChange={dialog.setRenameValue}
+        onRenameDraftTitleChange={dialog.setRenameDraftTitle}
         onClose={dialog.closeDialog}
         onConfirmRename={dialog.confirmRename}
         onConfirmDeleteSession={dialog.confirmDeleteSession}
         onConfirmDeleteAll={dialog.confirmDeleteAll}
       />
 
-      {toastMessage ? (
+      {activeBannerFeedback ? (
         <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-          <p className={cn('rounded-md px-3 py-2 text-xs shadow-sm', toastClassName)}>
-            {toastMessage}
+          <p className={cn('rounded-md px-3 py-2 text-xs shadow-sm', bannerFeedbackToneClassName)}>
+            {activeBannerFeedback.content}
           </p>
         </div>
       ) : null}

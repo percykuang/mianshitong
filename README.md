@@ -1,25 +1,39 @@
 # 面试通（mianshitong）
 
-你的专属 AI Agent 面试官（MVP：模拟面试闭环）。
+你的专属 AI Agent 面试官。当前仓库已覆盖 Web 端对话、Admin 管理后台、知识检索增强、题库与评测等能力。
 
-## Repo 结构（轻量 Monorepo）
+## 仓库结构
 
-- `apps/web`: 主站（Next.js，全栈：UI + API，作为后端入口）
-- `apps/admin`: 管理端（Next.js UI，通过调用 `apps/web` 的 API）
-- `packages/*`: 可复用能力（db/llm/interview-engine/shared/question-bank 等）
+- `apps/web`：主站，基于 Next.js App Router，承载用户页面与聊天/API 主链路
+- `apps/admin`：管理后台，基于 Next.js，直接读取 Prisma 数据并维护题库、文档、会话与检索分析
+- `packages/db`：Prisma Schema、数据库脚本与类型导出
+- `packages/llm`：模型 Provider 抽象
+- `packages/retrieval`：知识文档/题库检索与切块相关能力
+- `packages/interview-engine`：模拟面试引擎
+- `packages/shared`：共享类型、常量与通用工具
+- `packages/evals`：离线评测与回归样例
+- `docs`：项目上下文、迭代记录、架构与规范文档
 
 ## 本地开发
 
 ```bash
 pnpm install
+pnpm db:up
+pnpm db:migrate:deploy
 pnpm dev:web
 pnpm dev:admin
 ```
 
-默认端口：
+默认端口
 
 - web: 3000（绑定 127.0.0.1）
 - admin: 3001（绑定 127.0.0.1）
+
+首次进入仓库前，建议先阅读：
+
+- `docs/ProjectContext.md`
+- `docs/IterationLog.md`
+- `AGENTS.md`
 
 ## 数据库快捷命令（PostgreSQL）
 
@@ -48,7 +62,17 @@ pnpm db:reset
 pnpm db:users
 ```
 
-## Docker（生产形态）
+## 质量校验
+
+```bash
+pnpm verify
+pnpm test:e2e:web
+pnpm test:e2e:admin
+```
+
+其中 `pnpm verify` 会统一执行格式、Lint、类型、单测与拼写检查。
+
+## Docker（本地/部署）
 
 本仓库使用 Next.js `output: 'standalone'` 构建最小运行产物，并用 Docker Compose 编排多个容器（web/admin/db）。
 
@@ -58,12 +82,3 @@ docker compose up --build
 
 - web: `http://127.0.0.1:3000`
 - admin: `http://127.0.0.1:3001`
-
-## 规范工具
-
-```bash
-pnpm lint
-pnpm format
-pnpm spellcheck
-pnpm test
-```

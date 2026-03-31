@@ -7,6 +7,7 @@ import {
   getEditableUserMessageError,
   isEditableUserMessage,
 } from '../lib/chat-message-mutations';
+import { CHAT_ERROR_COPY, CHAT_FEEDBACK_COPY } from '../lib/chat-copy';
 import { markRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 import {
   abortCurrentStream,
@@ -19,7 +20,7 @@ import {
   readCachedSession,
   removeCachedSession,
 } from '../stores/chat-session-cache-store';
-import type { ChatController } from './chat-controller.types';
+import type { ChatBannerFeedback, ChatController } from './chat-controller.types';
 import { useChatControllerActions } from './use-chat-controller-actions';
 import { useChatControllerEffects } from './use-chat-controller-effects';
 import { useChatControllerStore } from './use-chat-controller-store';
@@ -67,8 +68,7 @@ export function useChatController(): ChatController {
   const inputValueRef = useRef(inputValue);
   const activeSessionRef = useRef(activeSession);
   const forceCreateNextSessionRef = useRef(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const [bannerFeedback, setBannerFeedback] = useState<ChatBannerFeedback | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -114,6 +114,14 @@ export function useChatController(): ChatController {
     return session;
   }, [selectedModelId, updateActiveSession, setActiveSessionId, replaceSession]);
 
+  const setErrorFeedback = useCallback((content: string | null) => {
+    setBannerFeedback(content ? { content, tone: 'error' } : null);
+  }, []);
+
+  const setInfoFeedback = useCallback((content: string | null) => {
+    setBannerFeedback(content ? { content, tone: 'info' } : null);
+  }, []);
+
   const remoteSendMessage = useSendMessage({
     sending,
     readActiveSession: () => (forceCreateNextSessionRef.current ? null : readActiveSession()),
@@ -121,7 +129,7 @@ export function useChatController(): ChatController {
     refreshSessions,
     refreshChatUsage,
     setSending,
-    setNotice,
+    setErrorFeedback,
     setInputValue,
     readInputValue: () => inputValueRef.current,
     registerAbortController: registerStreamAbortController,
@@ -135,14 +143,14 @@ export function useChatController(): ChatController {
     async (content: string) => {
       if (sending) {
         if (content.trim()) {
-          setToast('AI 回复生成中，请先停止当前回复');
+          setInfoFeedback(CHAT_FEEDBACK_COPY.replyInProgress);
         }
         return;
       }
 
       await remoteSendMessage(content);
     },
-    [sending, remoteSendMessage, setToast],
+    [sending, remoteSendMessage, setInfoFeedback],
   );
 
   const stopMessageGeneration = useCallback(() => {
@@ -150,9 +158,10 @@ export function useChatController(): ChatController {
     setSending(false);
   }, [setSending]);
 
-  const showToast = useCallback((content: string) => {
-    setToast(content);
-  }, []);
+  const resetEditingState = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingValue('');
+  }, [setEditingMessageId, setEditingValue]);
 
   const remoteEditMessage = useEditMessage({
     activeSession,
@@ -163,7 +172,7 @@ export function useChatController(): ChatController {
     registerAbortController: registerStreamAbortController,
     clearAbortController: clearStreamAbortController,
     setSending,
-    setNotice,
+    setErrorFeedback,
     setActiveSession: updateActiveSession,
     setActiveSessionId,
   });
@@ -172,14 +181,14 @@ export function useChatController(): ChatController {
     (messageId: string, content: string) => {
       const session = readActiveSession();
       if (!session || !isEditableUserMessage(session.messages, messageId)) {
-        setNotice('当前仅支持编辑最后一条用户消息');
+        setErrorFeedback(CHAT_ERROR_COPY.editOnlyLastUserMessage);
         return;
       }
 
       setEditingMessageId(messageId);
       setEditingValue(content);
     },
-    [readActiveSession, setEditingMessageId, setEditingValue, setNotice],
+    [readActiveSession, setEditingMessageId, setEditingValue, setErrorFeedback],
   );
 
   const submitEditingUserMessage = useCallback(async (): Promise<'submitted' | 'error'> => {
@@ -194,54 +203,57 @@ export function useChatController(): ChatController {
 
     const editableTarget = getEditableUserMessage(session.messages, editingMessageId);
     if (!editableTarget) {
-      setNotice(
+      setErrorFeedback(
         getEditableUserMessageError(session.messages, editingMessageId) ??
-          '目标消息不存在或不可编辑',
+          CHAT_ERROR_COPY.invalidEditableMessage,
       );
-      setEditingMessageId(null);
-      setEditingValue('');
+      resetEditingState();
       return 'error';
     }
 
-    setEditingMessageId(null);
-    setEditingValue('');
+    resetEditingState();
     const result = await remoteEditMessage(editingMessageId, editingValue);
     return result === 'error' ? 'error' : 'submitted';
-  }, [editingMessageId, editingValue, readActiveSession, remoteEditMessage, setNotice]);
+  }, [
+    editingMessageId,
+    editingValue,
+    readActiveSession,
+    remoteEditMessage,
+    resetEditingState,
+    setErrorFeedback,
+  ]);
 
   const cancelEditingUserMessage = useCallback(() => {
-    setEditingMessageId(null);
-    setEditingValue('');
-  }, [setEditingMessageId, setEditingValue]);
+    resetEditingState();
+  }, [resetEditingState]);
 
   useEffect(() => {
     if (usageError) {
       const timer = window.setTimeout(() => {
-        setNotice(usageError);
+        setErrorFeedback(usageError);
       }, 0);
 
       return () => {
         window.clearTimeout(timer);
       };
     }
-  }, [usageError, setNotice]);
+  }, [usageError, setErrorFeedback]);
 
   useChatControllerEffects({
     ready,
-    notice,
-    toast,
+    bannerFeedback,
     routeSessionId: currentRouteSessionId,
     refreshSessions,
     readActiveSession,
     readCachedSession,
     cacheSession,
     removeCachedSession,
-    setToast,
+    setBannerFeedback,
     setSidebarOpen,
     setActiveSession: updateActiveSession,
     setActiveSessionId,
     setSelectedModelId,
-    setNotice,
+    setErrorFeedback,
     setSessionsLoading,
     setActiveSessionLoading,
     fetchSessionById: fetchSessionDetail,
@@ -260,8 +272,7 @@ export function useChatController(): ChatController {
     activeSessionId,
     setInputValue,
     setSelectedModelId,
-    setNotice,
-    setToast,
+    setErrorFeedback,
     setSidebarOpen,
     setActiveSession: updateActiveSession,
     setActiveSessionId,
@@ -298,8 +309,7 @@ export function useChatController(): ChatController {
     activeSessionLoading,
     chatUsage,
     usageLoading,
-    notice,
-    toast,
+    bannerFeedback,
     sidebarOpen,
     editingMessageId,
     editingValue,
@@ -318,8 +328,6 @@ export function useChatController(): ChatController {
     cancelEditingUserMessage,
     submitEditingUserMessage,
     setEditingValue,
-    handleCopy: actions.handleCopy,
-    showNotice: actions.showNotice,
-    showToast,
+    showErrorFeedback: actions.showErrorFeedback,
   };
 }

@@ -9,8 +9,8 @@ import { ChatMessageItem } from './chat-message-item';
 
 vi.mock('../hooks/use-chat-message-feedback', () => ({
   useChatMessageFeedback: () => ({
-    pendingMessageId: null,
-    setMessageFeedback: vi.fn(),
+    pendingFeedbackTargetMessageId: null,
+    submitMessageFeedback: vi.fn(),
   }),
 }));
 
@@ -49,7 +49,7 @@ describe('ChatMessageItem', () => {
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
-        onNotice={() => {}}
+        onErrorFeedback={() => {}}
       />,
     );
 
@@ -73,7 +73,7 @@ describe('ChatMessageItem', () => {
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
-        onNotice={() => {}}
+        onErrorFeedback={() => {}}
       />,
     );
 
@@ -97,7 +97,7 @@ describe('ChatMessageItem', () => {
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
-        onNotice={() => {}}
+        onErrorFeedback={() => {}}
       />,
     );
 
@@ -120,7 +120,7 @@ describe('ChatMessageItem', () => {
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
-        onNotice={() => {}}
+        onErrorFeedback={() => {}}
       />,
     );
 
@@ -156,7 +156,7 @@ describe('ChatMessageItem', () => {
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
-        onNotice={() => {}}
+        onErrorFeedback={() => {}}
       />,
     );
 
@@ -179,7 +179,7 @@ describe('ChatMessageItem', () => {
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
-        onNotice={() => {}}
+        onErrorFeedback={() => {}}
       />,
     );
 
@@ -202,7 +202,7 @@ describe('ChatMessageItem', () => {
         onEditingValueChange={() => {}}
         onCancelEditUserMessage={() => {}}
         onSubmitEditUserMessage={async () => {}}
-        onNotice={() => {}}
+        onErrorFeedback={() => {}}
       />,
     );
 

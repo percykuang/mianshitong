@@ -21,13 +21,13 @@ describe('createStreamEventHandler', () => {
     const setActiveSession = vi.fn((value) => {
       currentSession = typeof value === 'function' ? value(currentSession) : value;
     });
-    const setNotice = vi.fn();
+    const setErrorFeedback = vi.fn();
     const setSyncedSession = vi.fn();
 
     const handler = createStreamEventHandler({
       optimisticAssistantId: 'assistant_tmp_1',
       setActiveSession,
-      setNotice,
+      setErrorFeedback,
       setSyncedSession,
     });
 
@@ -35,20 +35,20 @@ describe('createStreamEventHandler', () => {
     handler('delta', '{"delta":" world"}');
 
     expect(currentSession.messages.at(-1)?.content).toBe('hello world');
-    expect(setNotice).not.toHaveBeenCalled();
+    expect(setErrorFeedback).not.toHaveBeenCalled();
     expect(setSyncedSession).not.toHaveBeenCalled();
   });
 
-  it('收到 done 时会同步服务端 session，收到 error 时会提示 notice', () => {
+  it('收到 done 时会同步服务端 session，收到 error 时会写入错误反馈', () => {
     const setActiveSession = vi.fn();
-    const setNotice = vi.fn();
+    const setErrorFeedback = vi.fn();
     const setSyncedSession = vi.fn();
     const syncedSession = createDraftChatSession('deepseek-chat', 'stream_session_2');
 
     const handler = createStreamEventHandler({
       optimisticAssistantId: 'assistant_tmp_1',
       setActiveSession,
-      setNotice,
+      setErrorFeedback,
       setSyncedSession,
     });
 
@@ -56,6 +56,6 @@ describe('createStreamEventHandler', () => {
     handler('error', JSON.stringify({ message: '模型繁忙，请稍后再试' }));
 
     expect(setSyncedSession).toHaveBeenCalledWith(syncedSession);
-    expect(setNotice).toHaveBeenCalledWith('模型繁忙，请稍后再试');
+    expect(setErrorFeedback).toHaveBeenCalledWith('模型繁忙，请稍后再试');
   });
 });

@@ -3,8 +3,8 @@ import { ChevronLeft, Plus, Trash } from '@/components/icons';
 import Link from 'next/link';
 import { GuestMenu } from '@/components/guest-menu';
 import { Button } from '@/components/ui/button';
-import { HoverTooltip } from '@/components/ui/hover-tooltip';
 import { cn } from '@/lib/utils';
+import { CHAT_SIDEBAR_COPY } from '../lib/chat-copy';
 import { ChatSidebarSessionItem } from './chat-sidebar-session-item';
 
 interface ChatSidebarProps {
@@ -48,7 +48,7 @@ export function ChatSidebar({
         <button
           type="button"
           className="fixed inset-0 z-30 cursor-pointer bg-black/20 md:hidden"
-          aria-label="关闭侧栏"
+          aria-label={CHAT_SIDEBAR_COPY.closeSidebar}
           onClick={onCloseSidebar}
         />
       ) : null}
@@ -70,32 +70,22 @@ export function ChatSidebar({
               </span>
             </Link>
             <div className="flex flex-row gap-1">
-              <HoverTooltip
-                content="删除所有会话记录"
-                contentClassName="min-w-[116px] rounded-lg px-3.5 py-1.5 text-[13px] font-medium shadow-md"
+              <Button
+                variant="ghost"
+                className="h-8 p-1 text-foreground/62 transition-colors hover:text-destructive md:h-fit md:p-2 dark:hover:text-red-500"
+                aria-label={CHAT_SIDEBAR_COPY.deleteAllSessions}
+                onClick={onRequestDeleteAllSessions}
               >
-                <Button
-                  variant="ghost"
-                  className="h-8 p-1 text-foreground/62 transition-colors hover:text-destructive md:h-fit md:p-2 dark:hover:text-red-500"
-                  aria-label="删除所有会话记录"
-                  onClick={onRequestDeleteAllSessions}
-                >
-                  <Trash className="size-4" />
-                </Button>
-              </HoverTooltip>
-              <HoverTooltip
-                content="新建会话"
-                contentClassName="min-w-[88px] rounded-lg px-3.5 py-1.5 text-[13px] font-medium shadow-md"
+                <Trash className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                className="mr-1.25 h-8 p-1 text-foreground/62 transition-colors hover:text-foreground md:h-fit md:p-2"
+                aria-label={CHAT_SIDEBAR_COPY.newChat}
+                onClick={() => void onNewChat()}
               >
-                <Button
-                  variant="ghost"
-                  className="mr-1.25 h-8 p-1 text-foreground/62 transition-colors hover:text-foreground md:h-fit md:p-2"
-                  aria-label="新建会话"
-                  onClick={() => void onNewChat()}
-                >
-                  <Plus className="size-4" />
-                </Button>
-              </HoverTooltip>
+                <Plus className="size-4" />
+              </Button>
               <Button
                 variant="ghost"
                 className="h-8 p-1 text-foreground/62 transition-colors hover:text-foreground md:hidden"
@@ -113,7 +103,7 @@ export function ChatSidebar({
 
             {!sessionsLoading && sessions.length === 0 ? (
               <p className="rounded-xl border border-dashed border-sidebar-border px-3 py-4 text-xs leading-6 text-sidebar-foreground/55">
-                新建一个会话后，你的聊天记录会展示在这里。
+                {CHAT_SIDEBAR_COPY.emptyState}
               </p>
             ) : null}
 

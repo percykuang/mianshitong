@@ -10,31 +10,35 @@ interface UseChatSessionDialogInput {
 
 export function useChatSessionDialog(input: UseChatSessionDialogInput) {
   const [dialogState, setDialogState] = useState<ChatSessionDialogState>({ type: 'closed' });
-  const [renameValue, setRenameValue] = useState('');
+  const [renameDraftTitle, setRenameDraftTitle] = useState('');
   const [dialogSubmitting, setDialogSubmitting] = useState(false);
+
+  const resetDialog = useCallback(() => {
+    setDialogState({ type: 'closed' });
+    setRenameDraftTitle('');
+  }, []);
 
   const closeDialog = useCallback(() => {
     if (dialogSubmitting) {
       return;
     }
 
-    setDialogState({ type: 'closed' });
-    setRenameValue('');
-  }, [dialogSubmitting]);
+    resetDialog();
+  }, [dialogSubmitting, resetDialog]);
 
   const openRenameDialog = useCallback((session: SessionSummary) => {
     setDialogState({ type: 'rename', sessionId: session.id, title: session.title });
-    setRenameValue(session.title);
+    setRenameDraftTitle(session.title);
   }, []);
 
   const openDeleteSessionDialog = useCallback((session: SessionSummary) => {
     setDialogState({ type: 'delete-session', sessionId: session.id, title: session.title });
-    setRenameValue('');
+    setRenameDraftTitle('');
   }, []);
 
   const openDeleteAllDialog = useCallback(() => {
     setDialogState({ type: 'delete-all' });
-    setRenameValue('');
+    setRenameDraftTitle('');
   }, []);
 
   const confirmRename = useCallback(async () => {
@@ -44,15 +48,14 @@ export function useChatSessionDialog(input: UseChatSessionDialogInput) {
 
     setDialogSubmitting(true);
     try {
-      await input.onRenameSession(dialogState.sessionId, renameValue);
-      setDialogState({ type: 'closed' });
-      setRenameValue('');
+      await input.onRenameSession(dialogState.sessionId, renameDraftTitle);
+      resetDialog();
     } catch {
       return;
     } finally {
       setDialogSubmitting(false);
     }
-  }, [dialogState, input, renameValue]);
+  }, [dialogState, input, renameDraftTitle, resetDialog]);
 
   const confirmDeleteSession = useCallback(async () => {
     if (dialogState.type !== 'delete-session') {
@@ -62,11 +65,11 @@ export function useChatSessionDialog(input: UseChatSessionDialogInput) {
     setDialogSubmitting(true);
     try {
       await input.onDeleteSession(dialogState.sessionId);
-      setDialogState({ type: 'closed' });
+      resetDialog();
     } finally {
       setDialogSubmitting(false);
     }
-  }, [dialogState, input]);
+  }, [dialogState, input, resetDialog]);
 
   const confirmDeleteAll = useCallback(async () => {
     if (dialogState.type !== 'delete-all') {
@@ -76,17 +79,17 @@ export function useChatSessionDialog(input: UseChatSessionDialogInput) {
     setDialogSubmitting(true);
     try {
       await input.onDeleteAllSessions();
-      setDialogState({ type: 'closed' });
+      resetDialog();
     } finally {
       setDialogSubmitting(false);
     }
-  }, [dialogState, input]);
+  }, [dialogState, input, resetDialog]);
 
   return {
     dialogState,
-    renameValue,
+    renameDraftTitle,
     dialogSubmitting,
-    setRenameValue,
+    setRenameDraftTitle,
     closeDialog,
     openRenameDialog,
     openDeleteSessionDialog,

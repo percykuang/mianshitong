@@ -29,8 +29,7 @@ function createDeps(overrides: Partial<Parameters<typeof useChatControllerAction
     activeSessionId: null,
     setInputValue: vi.fn(),
     setSelectedModelId: vi.fn(),
-    setNotice: vi.fn(),
-    setToast: vi.fn(),
+    setErrorFeedback: vi.fn(),
     setSidebarOpen: vi.fn(),
     setActiveSession: vi.fn(),
     setActiveSessionId: vi.fn(),
@@ -100,6 +99,8 @@ describe('useChatControllerActions', () => {
     expect(deps.setActiveSessionId).toHaveBeenCalledWith(null);
     expect(deps.setActiveSessionLoading).toHaveBeenCalledWith(false);
     expect(deps.setInputValue).toHaveBeenCalledWith('');
+    expect(deps.setEditingMessageId).toHaveBeenCalledWith(null);
+    expect(deps.setEditingValue).toHaveBeenCalledWith('');
     expect(deps.pushNewChat).toHaveBeenCalled();
     expect(deps.setSidebarOpen).toHaveBeenCalledWith(false);
   });
@@ -115,58 +116,16 @@ describe('useChatControllerActions', () => {
     expect(deps.sendMessage).toHaveBeenCalledWith('可以帮我优化简历吗？');
   });
 
-  it('复制成功和失败时会分别设置不同 toast', async () => {
-    Object.defineProperty(window, 'isSecureContext', {
-      configurable: true,
-      value: true,
-    });
-
-    const successClipboard = { writeText: vi.fn(async () => undefined) };
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: successClipboard,
-    });
-
-    const successDeps = createDeps();
-    const successHook = renderHook(() => useChatControllerActions(successDeps));
-
-    await act(async () => {
-      await successHook.result.current.handleCopy('hello');
-    });
-
-    expect(successClipboard.writeText).toHaveBeenCalledWith('hello');
-    expect(successDeps.setToast).toHaveBeenCalledWith('已复制到剪贴板');
-
-    const failClipboard = {
-      writeText: vi.fn(async () => {
-        throw new Error('copy failed');
-      }),
-    };
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: failClipboard,
-    });
-
-    const failDeps = createDeps();
-    const failHook = renderHook(() => useChatControllerActions(failDeps));
-
-    await act(async () => {
-      await failHook.result.current.handleCopy('fail');
-    });
-
-    expect(failDeps.setToast).toHaveBeenCalledWith('复制失败，请手动复制。');
-  });
-
-  it('开始编辑、取消编辑和展示 notice 会更新对应状态', () => {
+  it('开始编辑、取消编辑和展示错误反馈会更新对应状态', () => {
     const deps = createDeps();
     const { result } = renderHook(() => useChatControllerActions(deps));
 
     act(() => {
-      result.current.showNotice('提示文案');
+      result.current.showErrorFeedback('提示文案');
       result.current.cancelEditingUserMessage();
     });
 
-    expect(deps.setNotice).toHaveBeenCalledWith('提示文案');
+    expect(deps.setErrorFeedback).toHaveBeenCalledWith('提示文案');
     expect(deps.setEditingMessageId).toHaveBeenLastCalledWith(null);
     expect(deps.setEditingValue).toHaveBeenLastCalledWith('');
   });

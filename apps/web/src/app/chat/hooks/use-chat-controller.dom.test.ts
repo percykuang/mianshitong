@@ -6,6 +6,7 @@ import { appendUserAssistantMessages, createDraftChatSession } from '../lib/chat
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSession } from '@mianshitong/shared';
+import { CHAT_FEEDBACK_COPY } from '../lib/chat-copy';
 
 const controllerState = vi.hoisted(() => ({
   sending: false,
@@ -37,8 +38,7 @@ const noopActions = vi.hoisted(() => ({
   handleDeleteSession: vi.fn(async () => undefined),
   handleDeleteAllSessions: vi.fn(async () => undefined),
   handleQuickPrompt: vi.fn(async () => undefined),
-  handleCopy: vi.fn(async () => undefined),
-  showNotice: vi.fn(),
+  showErrorFeedback: vi.fn(),
   cancelEditingUserMessage: vi.fn(),
 }));
 
@@ -144,7 +144,7 @@ describe('useChatController', () => {
     expect(sendMocks.remoteSendMessage).toHaveBeenCalledWith('你好');
   });
 
-  it('发送中再次发送非空内容时会阻止发送并提示 toast', async () => {
+  it('发送中再次发送非空内容时会阻止发送并写入信息反馈', async () => {
     controllerState.sending = true;
     const { result } = renderHook(() => useChatController());
 
@@ -153,7 +153,10 @@ describe('useChatController', () => {
     });
 
     expect(sendMocks.remoteSendMessage).not.toHaveBeenCalled();
-    expect(result.current.toast).toBe('AI 回复生成中，请先停止当前回复');
+    expect(result.current.bannerFeedback).toEqual({
+      content: CHAT_FEEDBACK_COPY.replyInProgress,
+      tone: 'info',
+    });
   });
 
   it('停止生成时会中止流并清除 sending 状态', () => {

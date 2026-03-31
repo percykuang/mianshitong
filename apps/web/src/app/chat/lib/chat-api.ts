@@ -6,6 +6,7 @@ import type {
   ModelId,
   SessionSummary,
 } from '@mianshitong/shared';
+import { CHAT_ERROR_COPY } from './chat-copy';
 
 export type SseEventHandler = (eventName: string, payload: string) => void;
 
@@ -20,7 +21,7 @@ async function readErrorMessage(response: Response): Promise<string> {
   }
 
   const message = await response.text();
-  return message || '请求失败';
+  return message || CHAT_ERROR_COPY.requestFailed;
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -83,7 +84,7 @@ export async function deleteSessionRequest(sessionId: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error((await readErrorMessage(response)) || '删除会话失败');
+    throw new Error((await readErrorMessage(response)) || CHAT_ERROR_COPY.deleteSessionFailed);
   }
 }
 
@@ -93,7 +94,7 @@ export async function deleteAllSessionsRequest(): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error((await readErrorMessage(response)) || '删除所有会话失败');
+    throw new Error((await readErrorMessage(response)) || CHAT_ERROR_COPY.deleteAllSessionsFailed);
   }
 }
 
@@ -111,7 +112,7 @@ export async function openStreamRequest(
   });
 
   if (!response.ok) {
-    throw new Error((await readErrorMessage(response)) || '发送失败，请稍后重试');
+    throw new Error((await readErrorMessage(response)) || CHAT_ERROR_COPY.sendFailed);
   }
 
   return response;
@@ -134,7 +135,7 @@ export async function openEditStreamRequest(
   );
 
   if (!response.ok) {
-    throw new Error((await readErrorMessage(response)) || '编辑失败，请稍后重试');
+    throw new Error((await readErrorMessage(response)) || CHAT_ERROR_COPY.editFailed);
   }
 
   return response;
@@ -187,7 +188,7 @@ function emitSseEvent(rawEvent: string, onEvent: SseEventHandler): void {
 
 export async function readSseStream(response: Response, onEvent: SseEventHandler): Promise<void> {
   if (!response.body) {
-    throw new Error('流式响应为空');
+    throw new Error(CHAT_ERROR_COPY.emptyStream);
   }
 
   const reader = response.body.getReader();

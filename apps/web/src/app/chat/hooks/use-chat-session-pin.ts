@@ -1,35 +1,30 @@
 import { useCallback } from 'react';
-import { cacheSession } from '../stores/chat-session-cache-store';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
+import { getChatErrorMessage } from '../lib/chat-error-message';
+import { syncChatSessionUpdate } from '../lib/chat-session-sync-helpers';
 import { useChatControllerStore } from './use-chat-controller-store';
 import { useChatStorage } from './use-chat-storage';
 
-export function useChatSessionPin(onError: (message: string) => void) {
+export function useChatSessionPin(onErrorFeedback: (message: string) => void) {
   const { fetchSessionList, setSessionPinnedState } = useChatStorage();
-  const { activeSessionId, setActiveSession, setSessions } = useChatControllerStore();
+  const { setActiveSession, setSessions } = useChatControllerStore();
 
   return useCallback(
     async (sessionId: string, pinned: boolean) => {
       try {
         const updatedSession = await setSessionPinnedState(sessionId, pinned);
-        cacheSession(updatedSession);
-        setSessions(await fetchSessionList());
-
-        if (activeSessionId === sessionId) {
-          setActiveSession((current) => (current?.id === sessionId ? updatedSession : current));
-        }
+        await syncChatSessionUpdate({
+          session: updatedSession,
+          setActiveSession,
+          fetchSessionList,
+          setSessions,
+        });
       } catch (error) {
-        const message = error instanceof Error ? error.message : '置顶会话失败';
-        onError(message);
+        const message = getChatErrorMessage(error, CHAT_ERROR_COPY.pinSessionFailed);
+        onErrorFeedback(message);
         throw error;
       }
     },
-    [
-      activeSessionId,
-      fetchSessionList,
-      onError,
-      setActiveSession,
-      setSessionPinnedState,
-      setSessions,
-    ],
+    [fetchSessionList, onErrorFeedback, setActiveSession, setSessionPinnedState, setSessions],
   );
 }

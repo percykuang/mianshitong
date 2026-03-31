@@ -1,24 +1,26 @@
 import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
+import { getChatErrorMessage } from '../lib/chat-error-message';
 import { getRouteSessionHydrationPlan } from '../lib/chat-route-hydration';
 import { hasRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
+import type { ChatBannerFeedback } from './chat-controller.types';
 
 interface UseChatControllerEffectsInput {
   ready: boolean;
-  notice: string | null;
-  toast: string | null;
+  bannerFeedback: ChatBannerFeedback | null;
   routeSessionId: string | null;
   refreshSessions: () => Promise<SessionSummary[]>;
   readActiveSession: () => ChatSession | null;
   readCachedSession: (sessionId: string) => ChatSession | null;
   cacheSession: (session: ChatSession) => void;
   removeCachedSession: (sessionId: string) => void;
-  setToast: (value: string | null) => void;
+  setBannerFeedback: (value: ChatBannerFeedback | null) => void;
   setSidebarOpen: (value: boolean) => void;
   setActiveSession: (value: ChatSession | null) => void;
   setActiveSessionId: (value: string | null) => void;
   setSelectedModelId: (value: ModelId) => void;
-  setNotice: (value: string | null) => void;
+  setErrorFeedback: (value: string | null) => void;
   setSessionsLoading: (value: boolean) => void;
   setActiveSessionLoading: (value: boolean) => void;
   fetchSessionById: (sessionId: string) => Promise<ChatSession>;
@@ -28,53 +30,52 @@ interface UseChatControllerEffectsInput {
 export function useChatControllerEffects(input: UseChatControllerEffectsInput): void {
   const {
     ready,
-    notice,
-    toast,
+    bannerFeedback,
     routeSessionId,
     refreshSessions,
     readActiveSession,
     readCachedSession,
     cacheSession,
     removeCachedSession,
-    setToast,
+    setBannerFeedback,
     setSidebarOpen,
     setActiveSession,
     setActiveSessionId,
     setSelectedModelId,
-    setNotice,
+    setErrorFeedback,
     setSessionsLoading,
     setActiveSessionLoading,
     fetchSessionById,
     replaceNewChat,
   } = input;
 
+  const applyActiveSessionSelection = useCallback(
+    (session: ChatSession) => {
+      setActiveSession(session);
+      setActiveSessionId(session.id);
+      setSelectedModelId(session.modelId);
+    },
+    [setActiveSession, setActiveSessionId, setSelectedModelId],
+  );
+
+  const clearActiveSessionSelection = useCallback(() => {
+    setActiveSession(null);
+    setActiveSessionId(null);
+  }, [setActiveSession, setActiveSessionId]);
+
   useEffect(() => {
-    if (!toast) {
+    if (!bannerFeedback) {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      setToast(null);
+      setBannerFeedback(null);
     }, 1800);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [toast, setToast]);
-
-  useEffect(() => {
-    if (!notice) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setNotice(null);
-    }, 1800);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [notice, setNotice]);
+  }, [bannerFeedback, setBannerFeedback]);
 
   useEffect(() => {
     if (window.innerWidth < 768) {
@@ -97,7 +98,7 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
         await refreshSessions();
       } catch (error) {
         if (!cancelled) {
-          setNotice(error instanceof Error ? error.message : '初始化失败');
+          setErrorFeedback(getChatErrorMessage(error, CHAT_ERROR_COPY.initFailed));
         }
       } finally {
         if (!cancelled) {
@@ -111,7 +112,7 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
     return () => {
       cancelled = true;
     };
-  }, [ready, refreshSessions, setNotice, setSessionsLoading]);
+  }, [ready, refreshSessions, setErrorFeedback, setSessionsLoading]);
 
   useEffect(() => {
     const activeSession = readActiveSession();
@@ -127,15 +128,12 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
     setActiveSessionLoading(plan.shouldSetLoading);
 
     if (plan.shouldResetSession) {
-      setActiveSession(null);
-      setActiveSessionId(null);
+      clearActiveSessionSelection();
       return;
     }
 
     if (cachedSession && plan.shouldApplyCachedSession) {
-      setActiveSession(cachedSession);
-      setActiveSessionId(cachedSession.id);
-      setSelectedModelId(cachedSession.modelId);
+      applyActiveSessionSelection(cachedSession);
     }
 
     if (!routeSessionId || !plan.shouldLoadRemote) {
@@ -152,19 +150,16 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
         }
 
         cacheSession(session);
-        setActiveSession(session);
-        setActiveSessionId(session.id);
-        setSelectedModelId(session.modelId);
+        applyActiveSessionSelection(session);
       } catch (error) {
         if (cancelled) {
           return;
         }
 
         removeCachedSession(routeSessionId);
-        setActiveSession(null);
-        setActiveSessionId(null);
+        clearActiveSessionSelection();
         replaceNewChat();
-        setNotice(error instanceof Error ? error.message : '初始化失败');
+        setErrorFeedback(getChatErrorMessage(error, CHAT_ERROR_COPY.initFailed));
       } finally {
         if (!cancelled) {
           setActiveSessionLoading(false);
@@ -183,13 +178,12 @@ export function useChatControllerEffects(input: UseChatControllerEffectsInput): 
     readActiveSession,
     readCachedSession,
     cacheSession,
+    clearActiveSessionSelection,
     removeCachedSession,
     fetchSessionById,
     replaceNewChat,
-    setActiveSession,
-    setActiveSessionId,
+    applyActiveSessionSelection,
+    setErrorFeedback,
     setActiveSessionLoading,
-    setNotice,
-    setSelectedModelId,
   ]);
 }

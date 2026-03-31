@@ -5,7 +5,14 @@ import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 const GUEST_AVATAR =
@@ -29,8 +36,6 @@ export function GuestMenu({
   const { data: session, status } = useSession();
   const router = useRouter();
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const currentTheme = (resolvedTheme ?? theme) === 'dark' ? 'dark' : 'light';
   const toggleTarget = currentTheme === 'dark' ? 'light' : 'dark';
@@ -48,19 +53,6 @@ export function GuestMenu({
     });
   }, [status, isAuthenticated, router]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
   const sharedButtonClassName =
     'flex items-center gap-2 rounded-md bg-background text-sm transition-colors hover:bg-sidebar-accent';
 
@@ -68,11 +60,6 @@ export function GuestMenu({
     menuPlacement === 'up'
       ? 'h-10 w-full p-2 text-left'
       : 'h-8 border border-border px-3 text-left hover:bg-accent';
-
-  const defaultMenuClassName =
-    menuPlacement === 'up'
-      ? 'right-0 bottom-12 w-full'
-      : 'right-0 top-[calc(100%+0.25rem)] min-w-52';
 
   if (status === 'loading') {
     return (
@@ -89,64 +76,63 @@ export function GuestMenu({
   }
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
-      <button
-        type="button"
-        className={cn(
-          sharedButtonClassName,
-          defaultButtonClassName,
-          'cursor-pointer',
-          buttonClassName,
-        )}
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        data-testid="user-nav-button"
-      >
-        <Image
-          src={GUEST_AVATAR}
-          alt="用户头像"
-          width={24}
-          height={24}
-          className="rounded-full dark:invert"
-          unoptimized
-        />
-        <span className="truncate">{isAuthenticated ? userEmail : '访客'}</span>
-        <ChevronIcon className="ml-auto size-4" />
-      </button>
+    <div className={cn('relative', className)}>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              sharedButtonClassName,
+              defaultButtonClassName,
+              'cursor-pointer',
+              buttonClassName,
+            )}
+            data-testid="user-nav-button"
+            aria-label={`${isAuthenticated ? userEmail : '访客'} 用户菜单`}
+          >
+            <Image
+              src={GUEST_AVATAR}
+              alt="用户头像"
+              width={24}
+              height={24}
+              className="rounded-full dark:invert"
+              unoptimized
+            />
+            <span className="truncate">{isAuthenticated ? userEmail : '访客'}</span>
+            <ChevronIcon className="ml-auto size-4" />
+          </button>
+        </DropdownMenuTrigger>
 
-      {open ? (
-        <div
+        <DropdownMenuContent
+          side={menuPlacement === 'up' ? 'top' : 'bottom'}
+          align="end"
           className={cn(
-            'absolute z-50 rounded-md border border-border bg-popover p-1 shadow-md',
-            defaultMenuClassName,
+            menuPlacement === 'up' ? 'w-[var(--radix-dropdown-menu-trigger-width)]' : 'min-w-52',
             menuClassName,
           )}
           data-testid="user-nav-menu"
         >
-          <button
-            type="button"
-            className="flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+          <DropdownMenuItem
+            className="cursor-pointer"
             data-testid="user-nav-item-theme"
-            onClick={() => {
+            onSelect={() => {
               setTheme(toggleTarget);
-              setOpen(false);
             }}
           >
             {toggleTarget === 'dark' ? '切换深色主题' : '切换浅色主题'}
-          </button>
+          </DropdownMenuItem>
 
-          <div className="my-1 h-px bg-border" />
+          <DropdownMenuSeparator />
 
-          <button
-            type="button"
-            className="w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+          <DropdownMenuItem
+            className="cursor-pointer"
             data-testid="user-nav-item-auth"
-            onClick={async () => {
-              setOpen(false);
+            onSelect={() => {
               if (isAuthenticated) {
-                await signOut({ redirect: false });
-                router.push('/');
-                router.refresh();
+                void signOut({ redirect: false }).then(() => {
+                  router.push('/');
+                  router.refresh();
+                });
                 return;
               }
 
@@ -154,9 +140,9 @@ export function GuestMenu({
             }}
           >
             {isAuthenticated ? '退出登录' : '登录账户'}
-          </button>
-        </div>
-      ) : null}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

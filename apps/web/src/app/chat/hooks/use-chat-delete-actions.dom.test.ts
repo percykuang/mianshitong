@@ -22,7 +22,7 @@ function createDeps(overrides: Partial<Parameters<typeof useChatDeleteActions>[0
     clearCachedSessions: vi.fn(),
     setInputValue: vi.fn(),
     setSelectedModelId: vi.fn(),
-    setNotice: vi.fn(),
+    setErrorFeedback: vi.fn(),
     setActiveSession: vi.fn(),
     setActiveSessionId: vi.fn(),
     setEditingMessageId: vi.fn(),

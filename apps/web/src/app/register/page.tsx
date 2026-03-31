@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { AuthCard } from '@/components/auth/auth-card';
+import { AUTH_FIELD_COPY, REGISTER_PAGE_COPY } from '@/components/auth/auth-copy';
 
 interface RegisterResponse {
   error?: string;
@@ -53,20 +54,20 @@ export default function RegisterPage() {
 
   return (
     <AuthCard
-      title="注册"
-      description="使用邮箱和密码创建面试通账号"
-      submitLabel="注册"
-      emailLabel="邮箱"
-      emailPlaceholder="请输入邮箱地址"
-      passwordLabel="密码"
-      passwordPlaceholder="请设置登录密码"
+      title={REGISTER_PAGE_COPY.title}
+      description={REGISTER_PAGE_COPY.description}
+      submitLabel={REGISTER_PAGE_COPY.submitLabel}
+      emailLabel={AUTH_FIELD_COPY.emailLabel}
+      emailPlaceholder={AUTH_FIELD_COPY.emailPlaceholder}
+      passwordLabel={AUTH_FIELD_COPY.passwordLabel}
+      passwordPlaceholder={REGISTER_PAGE_COPY.passwordPlaceholder}
       email={email}
       password={password}
       error={error}
       pending={pending}
-      footerText="已经有账号？"
-      footerLinkText="立即登录"
-      footerLinkHref="/login"
+      footerText={REGISTER_PAGE_COPY.footerText}
+      footerLinkText={REGISTER_PAGE_COPY.footerLinkText}
+      footerLinkHref={REGISTER_PAGE_COPY.footerLinkHref}
       onEmailChange={setEmail}
       onPasswordChange={setPassword}
       onSubmit={handleSubmit}

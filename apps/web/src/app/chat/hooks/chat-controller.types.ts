@@ -1,5 +1,12 @@
 import type { ChatSession, ChatUsageSummary, ModelId, SessionSummary } from '@mianshitong/shared';
 
+export type ChatBannerFeedbackTone = 'error' | 'info';
+
+export interface ChatBannerFeedback {
+  content: string;
+  tone: ChatBannerFeedbackTone;
+}
+
 export interface ChatController {
   sessions: SessionSummary[];
   sessionsLoading: boolean;
@@ -11,8 +18,7 @@ export interface ChatController {
   activeSessionLoading: boolean;
   chatUsage: ChatUsageSummary | null;
   usageLoading: boolean;
-  notice: string | null;
-  toast: string | null;
+  bannerFeedback: ChatBannerFeedback | null;
   sidebarOpen: boolean;
   editingMessageId: string | null;
   editingValue: string;
@@ -31,7 +37,5 @@ export interface ChatController {
   cancelEditingUserMessage: () => void;
   submitEditingUserMessage: () => Promise<'submitted' | 'error'>;
   setEditingValue: (value: string) => void;
-  handleCopy: (content: string) => Promise<void>;
-  showNotice: (content: string) => void;
-  showToast: (content: string) => void;
+  showErrorFeedback: (content: string) => void;
 }

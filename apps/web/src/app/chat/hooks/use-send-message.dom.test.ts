@@ -5,6 +5,7 @@ import '../../../../vitest.setup';
 import type { ChatSession } from '@mianshitong/shared';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
 import { appendUserAssistantMessages, createDraftChatSession } from '../lib/chat-session-draft';
 
 const chatApiMocks = vi.hoisted(() => ({
@@ -43,7 +44,7 @@ describe('useSendMessage', () => {
     remaining: 10,
   }));
   const setSending = vi.fn();
-  const setNotice = vi.fn();
+  const setErrorFeedback = vi.fn();
   const setActiveSessionId = vi.fn();
   const replaceSession = vi.fn();
   const registerAbortController = vi.fn();
@@ -65,7 +66,7 @@ describe('useSendMessage', () => {
     refreshSessions.mockClear();
     refreshChatUsage.mockClear();
     setSending.mockClear();
-    setNotice.mockClear();
+    setErrorFeedback.mockClear();
     setActiveSessionId.mockClear();
     replaceSession.mockClear();
     registerAbortController.mockClear();
@@ -108,7 +109,7 @@ describe('useSendMessage', () => {
         refreshSessions,
         refreshChatUsage,
         setSending,
-        setNotice,
+        setErrorFeedback,
         setInputValue,
         readInputValue: () => inputValue,
         registerAbortController,
@@ -135,7 +136,7 @@ describe('useSendMessage', () => {
         expectedMessageCount: 0,
       }),
     );
-    expect(setNotice).not.toHaveBeenCalledWith('发送失败，请稍后重试');
+    expect(setErrorFeedback).not.toHaveBeenCalledWith(CHAT_ERROR_COPY.sendFailed);
   });
 
   it('已有远端会话时中止生成，不应被远端旧会话覆盖掉本轮用户消息', async () => {
@@ -176,7 +177,7 @@ describe('useSendMessage', () => {
         refreshSessions,
         refreshChatUsage,
         setSending,
-        setNotice,
+        setErrorFeedback,
         setInputValue,
         readInputValue: () => inputValue,
         registerAbortController,
@@ -249,7 +250,7 @@ describe('useSendMessage', () => {
         refreshSessions,
         refreshChatUsage,
         setSending,
-        setNotice,
+        setErrorFeedback,
         setInputValue,
         readInputValue: () => inputValue,
         registerAbortController,
@@ -307,7 +308,7 @@ describe('useSendMessage', () => {
         refreshSessions,
         refreshChatUsage,
         setSending,
-        setNotice,
+        setErrorFeedback,
         setInputValue,
         readInputValue: () => inputValue,
         registerAbortController,

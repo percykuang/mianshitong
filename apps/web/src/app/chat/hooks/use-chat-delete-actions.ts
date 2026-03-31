@@ -1,5 +1,7 @@
 import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
 import { useCallback } from 'react';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
+import { getChatErrorMessage } from '../lib/chat-error-message';
 import { getDeleteSessionTransitionPlan } from '../lib/chat-delete-transition';
 
 interface UseChatDeleteActionsInput {
@@ -13,7 +15,7 @@ interface UseChatDeleteActionsInput {
   clearCachedSessions: () => void;
   setInputValue: (value: string) => void;
   setSelectedModelId: (value: ModelId) => void;
-  setNotice: (value: string | null) => void;
+  setErrorFeedback: (value: string | null) => void;
   setActiveSession: (value: ChatSession | null) => void;
   setActiveSessionId: (value: string | null) => void;
   setEditingMessageId: (value: string | null) => void;
@@ -35,7 +37,7 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
     clearCachedSessions,
     setInputValue,
     setSelectedModelId,
-    setNotice,
+    setErrorFeedback,
     setActiveSession,
     setActiveSessionId,
     setEditingMessageId,
@@ -49,6 +51,20 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
     setEditingMessageId(null);
     setEditingValue('');
   }, [setEditingMessageId, setEditingValue]);
+
+  const applyActiveSessionSelection = useCallback(
+    (session: ChatSession) => {
+      setActiveSession(session);
+      setActiveSessionId(session.id);
+      setSelectedModelId(session.modelId);
+    },
+    [setActiveSession, setActiveSessionId, setSelectedModelId],
+  );
+
+  const clearActiveSessionSelection = useCallback(() => {
+    setActiveSession(null);
+    setActiveSessionId(null);
+  }, [setActiveSession, setActiveSessionId]);
 
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {
@@ -70,17 +86,14 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
         }
 
         if (transition.kind === 'reset') {
-          setActiveSession(null);
-          setActiveSessionId(null);
+          clearActiveSessionSelection();
           resetEditorState();
           replaceNewChat();
           return;
         }
 
         if (transition.kind === 'use-cached' && cachedNextSession) {
-          setActiveSession(cachedNextSession);
-          setActiveSessionId(cachedNextSession.id);
-          setSelectedModelId(cachedNextSession.modelId);
+          applyActiveSessionSelection(cachedNextSession);
           resetEditorState();
           setActiveSessionLoading(false);
           replaceSession(cachedNextSession.id);
@@ -89,19 +102,19 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
 
         setActiveSessionLoading(true);
         const nextSession = await fetchSessionById(transition.sessionId);
-        setActiveSession(nextSession);
-        setActiveSessionId(nextSession.id);
-        setSelectedModelId(nextSession.modelId);
+        applyActiveSessionSelection(nextSession);
         resetEditorState();
         replaceSession(nextSession.id);
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : '删除会话失败');
+        setErrorFeedback(getChatErrorMessage(error, CHAT_ERROR_COPY.deleteSessionFailed));
       } finally {
         setActiveSessionLoading(false);
       }
     },
     [
       activeSessionId,
+      applyActiveSessionSelection,
+      clearActiveSessionSelection,
       deleteSessionById,
       fetchSessionById,
       readCachedSession,
@@ -110,11 +123,8 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
       replaceNewChat,
       replaceSession,
       resetEditorState,
-      setActiveSession,
-      setActiveSessionId,
       setActiveSessionLoading,
-      setNotice,
-      setSelectedModelId,
+      setErrorFeedback,
     ],
   );
 
@@ -123,26 +133,24 @@ export function useChatDeleteActions(input: UseChatDeleteActionsInput) {
       await deleteAllSessions();
       clearCachedSessions();
       await refreshSessions();
-      setActiveSession(null);
-      setActiveSessionId(null);
+      clearActiveSessionSelection();
       setInputValue('');
       resetEditorState();
       replaceNewChat();
       setActiveSessionLoading(false);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '删除所有会话失败');
+      setErrorFeedback(getChatErrorMessage(error, CHAT_ERROR_COPY.deleteAllSessionsFailed));
     }
   }, [
     clearCachedSessions,
+    clearActiveSessionSelection,
     deleteAllSessions,
     refreshSessions,
     replaceNewChat,
     resetEditorState,
-    setActiveSession,
-    setActiveSessionId,
     setActiveSessionLoading,
     setInputValue,
-    setNotice,
+    setErrorFeedback,
   ]);
 
   return { handleDeleteSession, handleDeleteAllSessions };

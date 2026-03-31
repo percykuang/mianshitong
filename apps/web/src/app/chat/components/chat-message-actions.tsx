@@ -10,41 +10,50 @@ import {
 } from '@/components/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { HoverTooltip } from '@/components/ui/hover-tooltip';
 import { cn } from '@/lib/utils';
 import { copyToClipboard } from '../hooks/chat-controller-helpers';
+import { CHAT_FEEDBACK_COPY, CHAT_MESSAGE_ACTIONS_COPY } from '../lib/chat-copy';
 
 interface ChatMessageActionsProps {
   isUserMessage: boolean;
   canEditUserMessage?: boolean;
   content: string;
   messageId: string;
-  activeFeedback: ChatMessageFeedback | null;
-  feedbackPending: boolean;
-  onNotice: (content: string) => void;
+  activeMessageFeedback: ChatMessageFeedback | null;
+  messageFeedbackPending: boolean;
+  onErrorFeedback: (content: string) => void;
   onStartEditUserMessage: (messageId: string, content: string) => void;
-  onSetMessageFeedback: (messageId: string, feedback: ChatMessageFeedback | null) => Promise<void>;
+  onSubmitMessageFeedback: (
+    messageId: string,
+    feedback: ChatMessageFeedback | null,
+  ) => Promise<void>;
 }
 
 interface CopyMessageButtonProps {
   content: string;
   defaultLabel: string;
   testId: string;
-  onNotice: (content: string) => void;
+  onErrorFeedback: (content: string) => void;
 }
 
-const resolveNextFeedback = (
-  currentFeedback: ChatMessageFeedback | null,
-  targetFeedback: ChatMessageFeedback,
-): ChatMessageFeedback | null => (currentFeedback === targetFeedback ? null : targetFeedback);
+const resolveNextMessageFeedback = (
+  currentMessageFeedback: ChatMessageFeedback | null,
+  targetMessageFeedback: ChatMessageFeedback,
+): ChatMessageFeedback | null =>
+  currentMessageFeedback === targetMessageFeedback ? null : targetMessageFeedback;
 
-const feedbackButtonClass = (active: boolean) =>
+const messageFeedbackButtonClass = (active: boolean) =>
   cn(
     'transition-transform duration-150 ease-out hover:scale-[1.06] active:scale-95',
     active && 'text-foreground hover:text-foreground disabled:opacity-100',
   );
 
-function CopyMessageButton({ content, defaultLabel, testId, onNotice }: CopyMessageButtonProps) {
+function CopyMessageButton({
+  content,
+  defaultLabel,
+  testId,
+  onErrorFeedback,
+}: CopyMessageButtonProps) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<number | null>(null);
 
@@ -68,24 +77,22 @@ function CopyMessageButton({ content, defaultLabel, testId, onNotice }: CopyMess
         timeoutRef.current = null;
       }, 1500);
     } catch {
-      onNotice('复制失败，请手动复制。');
+      onErrorFeedback(CHAT_FEEDBACK_COPY.clipboardFailure);
     }
-  }, [content, onNotice]);
+  }, [content, onErrorFeedback]);
 
   return (
-    <HoverTooltip content={copied ? '已复制' : defaultLabel} side="top" disabled>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        data-testid={testId}
-        data-copy-state={copied ? 'copied' : 'idle'}
-        aria-label={copied ? '已复制' : defaultLabel}
-        onClick={() => void handleCopy()}
-      >
-        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-      </Button>
-    </HoverTooltip>
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      data-testid={testId}
+      data-copy-state={copied ? 'copied' : 'idle'}
+      aria-label={defaultLabel}
+      onClick={() => void handleCopy()}
+    >
+      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+    </Button>
   );
 }
 
@@ -94,11 +101,11 @@ export function ChatMessageActions({
   canEditUserMessage = true,
   content,
   messageId,
-  activeFeedback,
-  feedbackPending,
-  onNotice,
+  activeMessageFeedback,
+  messageFeedbackPending,
+  onErrorFeedback,
   onStartEditUserMessage,
-  onSetMessageFeedback,
+  onSubmitMessageFeedback,
 }: ChatMessageActionsProps) {
   if (isUserMessage) {
     return (
@@ -108,7 +115,7 @@ export function ChatMessageActions({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="编辑消息"
+            aria-label={CHAT_MESSAGE_ACTIONS_COPY.editMessage}
             onClick={() => onStartEditUserMessage(messageId, content)}
           >
             <Pencil className="size-3.5" />
@@ -116,9 +123,9 @@ export function ChatMessageActions({
         ) : null}
         <CopyMessageButton
           content={content}
-          defaultLabel="复制"
+          defaultLabel={CHAT_MESSAGE_ACTIONS_COPY.copy}
           testId="user-message-copy"
-          onNotice={onNotice}
+          onErrorFeedback={onErrorFeedback}
         />
       </>
     );
@@ -128,66 +135,68 @@ export function ChatMessageActions({
     <>
       <CopyMessageButton
         content={content}
-        defaultLabel="复制"
+        defaultLabel={CHAT_MESSAGE_ACTIONS_COPY.copy}
         testId="assistant-message-copy"
-        onNotice={onNotice}
+        onErrorFeedback={onErrorFeedback}
       />
-      <HoverTooltip content="喜欢" side="top" disabled>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          data-testid="message-upvote"
-          aria-label="赞同回复"
-          aria-pressed={activeFeedback === 'like'}
-          data-icon-variant={activeFeedback === 'like' ? 'fill' : 'line'}
-          disabled={feedbackPending}
-          className={feedbackButtonClass(activeFeedback === 'like')}
-          onClick={() =>
-            void onSetMessageFeedback(messageId, resolveNextFeedback(activeFeedback, 'like'))
-          }
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        data-testid="message-upvote"
+        aria-label={CHAT_MESSAGE_ACTIONS_COPY.upvoteReply}
+        aria-pressed={activeMessageFeedback === 'like'}
+        data-icon-variant={activeMessageFeedback === 'like' ? 'fill' : 'line'}
+        disabled={messageFeedbackPending}
+        className={messageFeedbackButtonClass(activeMessageFeedback === 'like')}
+        onClick={() =>
+          void onSubmitMessageFeedback(
+            messageId,
+            resolveNextMessageFeedback(activeMessageFeedback, 'like'),
+          )
+        }
+      >
+        <span
+          key={activeMessageFeedback === 'like' ? 'upvote-fill' : 'upvote-line'}
+          data-testid="message-upvote-icon"
+          className="inline-flex animate-in items-center justify-center duration-150 ease-out zoom-in-75"
         >
-          <span
-            key={activeFeedback === 'like' ? 'upvote-fill' : 'upvote-line'}
-            data-testid="message-upvote-icon"
-            className="inline-flex animate-in items-center justify-center duration-150 ease-out zoom-in-75"
-          >
-            {activeFeedback === 'like' ? (
-              <ThumbsUpFill className="size-3.5" />
-            ) : (
-              <ThumbsUp className="size-3.5" />
-            )}
-          </span>
-        </Button>
-      </HoverTooltip>
-      <HoverTooltip content="不喜欢" side="top" disabled>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          data-testid="message-downvote"
-          aria-label="不赞同回复"
-          aria-pressed={activeFeedback === 'dislike'}
-          data-icon-variant={activeFeedback === 'dislike' ? 'fill' : 'line'}
-          disabled={feedbackPending}
-          className={feedbackButtonClass(activeFeedback === 'dislike')}
-          onClick={() =>
-            void onSetMessageFeedback(messageId, resolveNextFeedback(activeFeedback, 'dislike'))
-          }
+          {activeMessageFeedback === 'like' ? (
+            <ThumbsUpFill className="size-3.5" />
+          ) : (
+            <ThumbsUp className="size-3.5" />
+          )}
+        </span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        data-testid="message-downvote"
+        aria-label={CHAT_MESSAGE_ACTIONS_COPY.downvoteReply}
+        aria-pressed={activeMessageFeedback === 'dislike'}
+        data-icon-variant={activeMessageFeedback === 'dislike' ? 'fill' : 'line'}
+        disabled={messageFeedbackPending}
+        className={messageFeedbackButtonClass(activeMessageFeedback === 'dislike')}
+        onClick={() =>
+          void onSubmitMessageFeedback(
+            messageId,
+            resolveNextMessageFeedback(activeMessageFeedback, 'dislike'),
+          )
+        }
+      >
+        <span
+          key={activeMessageFeedback === 'dislike' ? 'downvote-fill' : 'downvote-line'}
+          data-testid="message-downvote-icon"
+          className="inline-flex animate-in items-center justify-center duration-150 ease-out zoom-in-75"
         >
-          <span
-            key={activeFeedback === 'dislike' ? 'downvote-fill' : 'downvote-line'}
-            data-testid="message-downvote-icon"
-            className="inline-flex animate-in items-center justify-center duration-150 ease-out zoom-in-75"
-          >
-            {activeFeedback === 'dislike' ? (
-              <ThumbsDownFill className="size-3.5" />
-            ) : (
-              <ThumbsDown className="size-3.5" />
-            )}
-          </span>
-        </Button>
-      </HoverTooltip>
+          {activeMessageFeedback === 'dislike' ? (
+            <ThumbsDownFill className="size-3.5" />
+          ) : (
+            <ThumbsDown className="size-3.5" />
+          )}
+        </span>
+      </Button>
     </>
   );
 }

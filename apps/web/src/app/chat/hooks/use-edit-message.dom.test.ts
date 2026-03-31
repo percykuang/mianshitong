@@ -52,7 +52,7 @@ describe('useEditMessage', () => {
   const registerAbortController = vi.fn();
   const clearAbortController = vi.fn();
   const setSending = vi.fn();
-  const setNotice = vi.fn();
+  const setErrorFeedback = vi.fn();
   const setActiveSessionId = vi.fn();
   const setActiveSession = vi.fn(
     (value: ChatSession | null | ((prev: ChatSession | null) => ChatSession | null)) => {
@@ -72,7 +72,7 @@ describe('useEditMessage', () => {
     registerAbortController.mockClear();
     clearAbortController.mockClear();
     setSending.mockClear();
-    setNotice.mockClear();
+    setErrorFeedback.mockClear();
     setActiveSessionId.mockClear();
     setActiveSession.mockClear();
     chatApiMocks.fetchSessionById.mockReset();
@@ -127,7 +127,7 @@ describe('useEditMessage', () => {
         registerAbortController,
         clearAbortController,
         setSending,
-        setNotice,
+        setErrorFeedback,
         setActiveSession,
         setActiveSessionId,
       }),
@@ -146,7 +146,7 @@ describe('useEditMessage', () => {
       expect.any(AbortSignal),
     );
     expect(activeSession).toEqual(updatedSession);
-    expect(setNotice).not.toHaveBeenCalledWith('编辑内容不能为空');
+    expect(setErrorFeedback).not.toHaveBeenCalledWith('编辑内容不能为空');
     expect(setSending).toHaveBeenCalledWith(true);
     expect(refreshChatUsage).toHaveBeenCalledTimes(1);
   });
@@ -184,7 +184,7 @@ describe('useEditMessage', () => {
         registerAbortController,
         clearAbortController,
         setSending,
-        setNotice,
+        setErrorFeedback,
         setActiveSession,
         setActiveSessionId,
       }),
@@ -203,7 +203,7 @@ describe('useEditMessage', () => {
       expect.any(AbortSignal),
     );
     expect(setSending).toHaveBeenCalledWith(true);
-    expect(setNotice).not.toHaveBeenCalledWith(expect.stringMatching(/\S/));
+    expect(setErrorFeedback).not.toHaveBeenCalledWith(expect.stringMatching(/\S/));
     expect(refreshChatUsage).toHaveBeenCalledTimes(1);
   });
 
@@ -223,7 +223,7 @@ describe('useEditMessage', () => {
         registerAbortController,
         clearAbortController,
         setSending,
-        setNotice,
+        setErrorFeedback,
         setActiveSession,
         setActiveSessionId,
       }),
@@ -236,7 +236,7 @@ describe('useEditMessage', () => {
 
     expect(editResult).toBe('aborted_without_output');
     expect(activeSession).toEqual(originalSession);
-    expect(setNotice).not.toHaveBeenCalledWith(expect.any(String));
+    expect(setErrorFeedback).not.toHaveBeenCalledWith(expect.any(String));
     expect(registerAbortController).toHaveBeenCalledTimes(1);
     expect(clearAbortController).toHaveBeenCalledTimes(1);
     expect(refreshChatUsage).toHaveBeenCalledTimes(1);
@@ -284,7 +284,7 @@ describe('useEditMessage', () => {
         registerAbortController,
         clearAbortController,
         setSending,
-        setNotice,
+        setErrorFeedback,
         setActiveSession,
         setActiveSessionId,
       }),
@@ -300,6 +300,6 @@ describe('useEditMessage', () => {
     expect(activeSession?.messages[1]?.completionStatus).toBe('interrupted');
     expect(chatApiMocks.fetchSessionById).toHaveBeenCalledWith('edit_1');
     expect(remoteSyncMocks.syncResolvedRemoteSession).toHaveBeenCalled();
-    expect(setNotice).not.toHaveBeenCalledWith(expect.any(String));
+    expect(setErrorFeedback).not.toHaveBeenCalledWith(expect.any(String));
   });
 });

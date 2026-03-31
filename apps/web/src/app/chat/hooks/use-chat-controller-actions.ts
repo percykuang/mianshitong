@@ -1,6 +1,6 @@
 import type { ChatSession, ModelId, SessionSummary } from '@mianshitong/shared';
 import { useCallback } from 'react';
-import { closeSidebarOnMobile, copyToClipboard } from './chat-controller-helpers';
+import { closeSidebarOnMobile } from './chat-controller-helpers';
 import { useChatDeleteActions } from './use-chat-delete-actions';
 
 interface UseChatControllerActionsInput {
@@ -15,8 +15,7 @@ interface UseChatControllerActionsInput {
   activeSessionId: string | null;
   setInputValue: (value: string) => void;
   setSelectedModelId: (value: ModelId) => void;
-  setNotice: (value: string | null) => void;
-  setToast: (value: string | null) => void;
+  setErrorFeedback: (value: string | null) => void;
   setSidebarOpen: (value: boolean | ((previous: boolean) => boolean)) => void;
   setActiveSession: (value: ChatSession | null) => void;
   setActiveSessionId: (value: string | null) => void;
@@ -42,8 +41,7 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     activeSessionId,
     setInputValue,
     setSelectedModelId,
-    setNotice,
-    setToast,
+    setErrorFeedback,
     setSidebarOpen,
     setActiveSession,
     setActiveSessionId,
@@ -67,7 +65,7 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     clearCachedSessions,
     setInputValue,
     setSelectedModelId,
-    setNotice,
+    setErrorFeedback,
     setActiveSession,
     setActiveSessionId,
     setEditingMessageId,
@@ -77,12 +75,16 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     replaceNewChat,
   });
 
+  const resetEditingState = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingValue('');
+  }, [setEditingMessageId, setEditingValue]);
+
   const handlePickSession = useCallback(
     async (sessionId: string) => {
       const cachedSession = readCachedSession(sessionId);
       setActiveSessionId(sessionId);
-      setEditingMessageId(null);
-      setEditingValue('');
+      resetEditingState();
 
       if (cachedSession) {
         setActiveSession(cachedSession);
@@ -97,11 +99,10 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     },
     [
       readCachedSession,
+      resetEditingState,
       setActiveSession,
       setActiveSessionId,
       setActiveSessionLoading,
-      setEditingMessageId,
-      setEditingValue,
       setSelectedModelId,
       pushSession,
       setSidebarOpen,
@@ -113,17 +114,15 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     setActiveSessionId(null);
     setActiveSessionLoading(false);
     setInputValue('');
-    setEditingMessageId(null);
-    setEditingValue('');
+    resetEditingState();
     pushNewChat();
     closeSidebarOnMobile((open) => setSidebarOpen(open));
   }, [
+    resetEditingState,
     setActiveSession,
     setActiveSessionId,
     setActiveSessionLoading,
     setInputValue,
-    setEditingMessageId,
-    setEditingValue,
     pushNewChat,
     setSidebarOpen,
   ]);
@@ -135,29 +134,16 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     [sendMessage],
   );
 
-  const handleCopy = useCallback(
-    async (content: string) => {
-      try {
-        await copyToClipboard(content);
-        setToast('已复制到剪贴板！');
-      } catch {
-        setToast('复制失败，请手动复制！');
-      }
-    },
-    [setToast],
-  );
-
-  const showNotice = useCallback(
+  const showErrorFeedback = useCallback(
     (content: string) => {
-      setNotice(content);
+      setErrorFeedback(content);
     },
-    [setNotice],
+    [setErrorFeedback],
   );
 
   const cancelEditingUserMessage = useCallback(() => {
-    setEditingMessageId(null);
-    setEditingValue('');
-  }, [setEditingMessageId, setEditingValue]);
+    resetEditingState();
+  }, [resetEditingState]);
 
   return {
     handlePickSession,
@@ -165,8 +151,7 @@ export function useChatControllerActions(input: UseChatControllerActionsInput) {
     handleDeleteSession: deleteActions.handleDeleteSession,
     handleDeleteAllSessions: deleteActions.handleDeleteAllSessions,
     handleQuickPrompt,
-    handleCopy,
-    showNotice,
+    showErrorFeedback,
     cancelEditingUserMessage,
   };
 }

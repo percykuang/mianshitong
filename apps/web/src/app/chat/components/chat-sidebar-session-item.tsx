@@ -4,8 +4,14 @@ import type { SessionSummary } from '@mianshitong/shared';
 import { MoreHorizontal, Pencil, Pin, Trash } from '@/components/icons';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { CHAT_SESSION_ITEM_COPY } from '../lib/chat-copy';
 
 interface ChatSidebarSessionItemProps {
   session: SessionSummary;
@@ -54,12 +60,12 @@ export function ChatSidebarSessionItem({
             : 'ml-0 w-0 opacity-0 group-hover/session:ml-1 group-hover/session:w-8 group-hover/session:opacity-100',
         )}
       >
-        <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-          <PopoverTrigger asChild>
+        <DropdownMenu modal={false} open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger asChild>
             <Button
               type="button"
               variant="ghost"
-              aria-label="更多会话操作"
+              aria-label={CHAT_SESSION_ITEM_COPY.moreActions}
               onClick={(event) => event.stopPropagation()}
               className={cn(
                 'h-7 w-7 cursor-pointer rounded-xl p-0 text-sidebar-foreground/56 transition-colors hover:bg-black/5 hover:text-sidebar-foreground dark:hover:bg-white/7',
@@ -70,49 +76,43 @@ export function ChatSidebarSessionItem({
             >
               <MoreHorizontal className="size-3.5" />
             </Button>
-          </PopoverTrigger>
-          <PopoverContent
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
             side="bottom"
             align="start"
             sideOffset={6}
-            alignOffset={0}
             className="w-28 rounded-lg p-1 shadow-md"
+            data-testid="session-actions-menu"
           >
-            <button
-              type="button"
+            <DropdownMenuItem
               className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-muted"
-              onClick={() => {
-                setMenuOpen(false);
+              onSelect={() => {
                 void onTogglePin(session, !pinned);
               }}
             >
               <Pin className="size-3.5" />
-              <span>{pinned ? '取消置顶' : '置顶'}</span>
-            </button>
-            <button
-              type="button"
+              <span>{pinned ? CHAT_SESSION_ITEM_COPY.unpin : CHAT_SESSION_ITEM_COPY.pin}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
               className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-muted"
-              onClick={() => {
-                setMenuOpen(false);
+              onSelect={() => {
                 onRequestRename(session);
               }}
             >
               <Pencil className="size-3.5" />
-              <span>重命名</span>
-            </button>
-            <button
-              type="button"
+              <span>{CHAT_SESSION_ITEM_COPY.rename}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
               className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-destructive transition-colors hover:bg-destructive/10 dark:text-red-500 dark:hover:bg-red-500/10 dark:hover:text-red-500"
-              onClick={() => {
-                setMenuOpen(false);
+              onSelect={() => {
                 onRequestDelete(session);
               }}
             >
               <Trash className="size-3.5" />
-              <span>删除</span>
-            </button>
-          </PopoverContent>
-        </Popover>
+              <span>{CHAT_SESSION_ITEM_COPY.delete}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

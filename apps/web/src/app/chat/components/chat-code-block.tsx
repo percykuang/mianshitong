@@ -3,8 +3,8 @@
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 import { Check, Copy, Download } from '@/components/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HoverTooltip } from '@/components/ui/hover-tooltip';
 import { cn } from '@/lib/utils';
+import { CHAT_MESSAGE_ACTIONS_COPY } from '../lib/chat-copy';
 import { highlightCodeBlock } from './chat-shiki';
 
 type CodeProps = ComponentPropsWithoutRef<'code'> & {
@@ -74,16 +74,14 @@ export function renderInlineCode({ className, children, ...rest }: CodeProps) {
 
 function CodeActionButton({ label, icon, onClick }: CodeActionButtonProps) {
   return (
-    <HoverTooltip content={label} side="top" disabled>
-      <button
-        type="button"
-        aria-label={label}
-        className="cursor-pointer p-1 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
-        onClick={onClick}
-      >
-        {icon}
-      </button>
-    </HoverTooltip>
+    <button
+      type="button"
+      aria-label={label}
+      className="cursor-pointer p-1 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+      onClick={onClick}
+    >
+      {icon}
+    </button>
   );
 }
 
@@ -165,12 +163,12 @@ export function ChatCodeBlock({ className, children, ...rest }: CodeProps) {
         <span className="ml-1 font-mono lowercase">{language}</span>
         <div className="flex items-center gap-2">
           <CodeActionButton
-            label={downloaded ? '已下载' : '下载代码'}
+            label={CHAT_MESSAGE_ACTIONS_COPY.downloadCode}
             icon={downloaded ? <Check className="size-3.5" /> : <Download className="size-3.5" />}
             onClick={handleDownload}
           />
           <CodeActionButton
-            label={copied ? '已复制' : '复制代码'}
+            label={CHAT_MESSAGE_ACTIONS_COPY.copyCode}
             icon={copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             onClick={() => void handleCopy()}
           />

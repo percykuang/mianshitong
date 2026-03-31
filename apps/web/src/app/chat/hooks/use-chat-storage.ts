@@ -1,6 +1,8 @@
 import type { ChatSession, ChatUsageSummary, SessionSummary } from '@mianshitong/shared';
 import { useSession } from 'next-auth/react';
 import { useCallback, useEffect, useState } from 'react';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
+import { getChatErrorMessage } from '../lib/chat-error-message';
 import {
   deleteAllSessionsRequest,
   deleteSessionRequest,
@@ -34,6 +36,16 @@ export function useChatStorage(): UseChatStorageResult {
   const [usageBootstrapped, setUsageBootstrapped] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
 
+  const markUsageBootstrapPending = useCallback(() => {
+    setUsageLoading(true);
+    setUsageBootstrapped(false);
+  }, []);
+
+  const markUsageBootstrapSettled = useCallback(() => {
+    setUsageLoading(false);
+    setUsageBootstrapped(true);
+  }, []);
+
   const refreshChatUsage = useCallback(async () => {
     const nextUsage = await fetchChatUsageSummary();
     setChatUsage(nextUsage);
@@ -52,8 +64,7 @@ export function useChatStorage(): UseChatStorageResult {
         return;
       }
 
-      setUsageLoading(true);
-      setUsageBootstrapped(false);
+      markUsageBootstrapPending();
       void fetchChatUsageSummary()
         .then((nextUsage) => {
           if (cancelled) {
@@ -69,15 +80,14 @@ export function useChatStorage(): UseChatStorageResult {
           }
 
           setChatUsage(null);
-          setUsageError(error instanceof Error ? error.message : '额度初始化失败');
+          setUsageError(getChatErrorMessage(error, CHAT_ERROR_COPY.usageInitFailed));
         })
         .finally(() => {
           if (cancelled) {
             return;
           }
 
-          setUsageLoading(false);
-          setUsageBootstrapped(true);
+          markUsageBootstrapSettled();
         });
     }, 0);
 
@@ -85,7 +95,7 @@ export function useChatStorage(): UseChatStorageResult {
       cancelled = true;
       window.clearTimeout(requestTimer);
     };
-  }, [status]);
+  }, [markUsageBootstrapPending, markUsageBootstrapSettled, status]);
 
   return {
     ready: status !== 'loading' && usageBootstrapped,

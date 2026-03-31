@@ -1,5 +1,6 @@
 import { ChevronLeft, Menu } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { CHAT_HEADER_COPY } from '../lib/chat-copy';
 
 interface ChatHeaderProps {
   sidebarOpen: boolean;
@@ -13,7 +14,7 @@ export function ChatHeader({ sidebarOpen, onToggleSidebar }: ChatHeaderProps) {
         variant="outline"
         className="h-8 px-2 text-foreground/62 transition-colors hover:text-foreground md:h-fit md:px-2"
         data-testid="sidebar-toggle-button"
-        aria-label={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
+        aria-label={sidebarOpen ? CHAT_HEADER_COPY.collapseSidebar : CHAT_HEADER_COPY.expandSidebar}
         onClick={onToggleSidebar}
       >
         {sidebarOpen ? <ChevronLeft className="size-4" /> : <Menu className="size-4" />}

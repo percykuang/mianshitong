@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { CHAT_SESSION_DIALOG_COPY, CHAT_SESSION_ITEM_COPY } from '../lib/chat-copy';
 
 export type ChatSessionDialogState =
   | { type: 'closed' }
@@ -19,9 +20,9 @@ export type ChatSessionDialogState =
 
 interface ChatSessionDialogProps {
   state: ChatSessionDialogState;
-  renameValue: string;
+  renameDraftTitle: string;
   submitting: boolean;
-  onRenameValueChange: (value: string) => void;
+  onRenameDraftTitleChange: (value: string) => void;
   onClose: () => void;
   onConfirmRename: () => Promise<void>;
   onConfirmDeleteSession: () => Promise<void>;
@@ -30,9 +31,9 @@ interface ChatSessionDialogProps {
 
 export function ChatSessionDialog({
   state,
-  renameValue,
+  renameDraftTitle,
   submitting,
-  onRenameValueChange,
+  onRenameDraftTitleChange,
   onClose,
   onConfirmRename,
   onConfirmDeleteSession,
@@ -51,24 +52,24 @@ export function ChatSessionDialog({
             }}
           >
             <DialogHeader>
-              <DialogTitle>重命名会话</DialogTitle>
-              <DialogDescription>修改后的名称会同步更新到侧边栏和当前会话标题。</DialogDescription>
+              <DialogTitle>{CHAT_SESSION_DIALOG_COPY.renameTitle}</DialogTitle>
+              <DialogDescription>{CHAT_SESSION_DIALOG_COPY.renameDescription}</DialogDescription>
             </DialogHeader>
             <div className="mt-4">
               <Input
                 autoFocus
-                value={renameValue}
+                value={renameDraftTitle}
                 maxLength={60}
-                placeholder="请输入新的会话名称"
-                onChange={(event) => onRenameValueChange(event.target.value)}
+                placeholder={CHAT_SESSION_DIALOG_COPY.renamePlaceholder}
+                onChange={(event) => onRenameDraftTitleChange(event.target.value)}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-                取消
+                {CHAT_SESSION_DIALOG_COPY.cancel}
               </Button>
-              <Button type="submit" disabled={submitting || !renameValue.trim()}>
-                确定
+              <Button type="submit" disabled={submitting || !renameDraftTitle.trim()}>
+                {CHAT_SESSION_DIALOG_COPY.confirm}
               </Button>
             </DialogFooter>
           </form>
@@ -78,14 +79,14 @@ export function ChatSessionDialog({
       {state.type === 'delete-session' ? (
         <DialogContent className="sm:max-w-md" showClose={!submitting}>
           <DialogHeader>
-            <DialogTitle>删除当前会话？</DialogTitle>
+            <DialogTitle>{CHAT_SESSION_DIALOG_COPY.deleteSessionTitle}</DialogTitle>
             <DialogDescription>
-              会话“{state.title}”删除后将无法恢复，请确认是否继续。
+              {CHAT_SESSION_DIALOG_COPY.deleteSessionDescription(state.title)}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-              取消
+              {CHAT_SESSION_DIALOG_COPY.cancel}
             </Button>
             <Button
               type="button"
@@ -94,7 +95,7 @@ export function ChatSessionDialog({
               disabled={submitting}
               onClick={() => void onConfirmDeleteSession()}
             >
-              删除
+              {CHAT_SESSION_ITEM_COPY.delete}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -103,14 +104,12 @@ export function ChatSessionDialog({
       {state.type === 'delete-all' ? (
         <DialogContent className="sm:max-w-md" showClose={!submitting}>
           <DialogHeader>
-            <DialogTitle>删除所有会话记录？</DialogTitle>
-            <DialogDescription>
-              这会清空当前账号或当前浏览器下的全部会话记录，且无法恢复。
-            </DialogDescription>
+            <DialogTitle>{CHAT_SESSION_DIALOG_COPY.deleteAllTitle}</DialogTitle>
+            <DialogDescription>{CHAT_SESSION_DIALOG_COPY.deleteAllDescription}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-              取消
+              {CHAT_SESSION_DIALOG_COPY.cancel}
             </Button>
             <Button
               type="button"
@@ -118,7 +117,7 @@ export function ChatSessionDialog({
               disabled={submitting}
               onClick={() => void onConfirmDeleteAll()}
             >
-              全部删除
+              {CHAT_SESSION_DIALOG_COPY.deleteAllConfirm}
             </Button>
           </DialogFooter>
         </DialogContent>

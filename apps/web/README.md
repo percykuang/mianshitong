@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Web App
 
-## Getting Started
+面试通主站。基于 Next.js App Router，负责用户侧页面、认证、聊天主链路与相关 API。
 
-First, run the development server:
+## 主要能力
+
+- 登录/注册与游客身份
+- 普通聊天与模拟面试
+- 知识检索增强
+- 聊天会话管理、消息编辑、反馈与额度展示
+
+## 本地启动
+
+在仓库根目录执行：
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm db:up
+pnpm db:migrate:deploy
+pnpm dev:web
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认地址：`http://127.0.0.1:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 关键目录
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/app`：路由与页面
+- `src/app/api`：服务端路由
+- `src/app/chat`：聊天页客户端逻辑、组件与 hooks
+- `src/components`：跨页面共享组件
+- `src/lib/server`：服务端策略、仓库层与检索/鉴权逻辑
 
-## Learn More
+## 常用命令
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm -C apps/web dev
+pnpm -C apps/web build
+pnpm -C apps/web lint
+pnpm -C apps/web typecheck
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+E2E 请在仓库根目录执行：
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm test:e2e:web
+```

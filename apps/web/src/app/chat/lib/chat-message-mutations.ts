@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatSession } from '@mianshitong/shared';
+import { CHAT_ERROR_COPY } from './chat-copy';
 
 export function toSessionTitle(content: string): string {
   const normalized = content.replace(/\s+/g, ' ').trim();
@@ -197,11 +198,11 @@ export function getEditableUserMessageError(
 ): string | null {
   const targetIndex = getEditableUserMessageIndex(messages, messageId);
   if (targetIndex < 0) {
-    return '目标消息不存在或不可编辑';
+    return CHAT_ERROR_COPY.invalidEditableMessage;
   }
 
   if (!isEditableUserMessage(messages, messageId)) {
-    return '当前仅支持编辑最后一条用户消息';
+    return CHAT_ERROR_COPY.editOnlyLastUserMessage;
   }
 
   return null;

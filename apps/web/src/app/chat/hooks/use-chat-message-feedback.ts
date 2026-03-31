@@ -1,43 +1,51 @@
 import type { ChatMessageFeedback } from '@mianshitong/shared';
 import { useCallback, useState } from 'react';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
+import { getChatErrorMessage } from '../lib/chat-error-message';
 import { setMessageFeedbackRequest } from '../lib/chat-message-feedback-api';
-import { cacheSession } from '../stores/chat-session-cache-store';
+import { syncChatSessionUpdate } from '../lib/chat-session-sync-helpers';
 import { useChatControllerStore } from './use-chat-controller-store';
 
 interface UseChatMessageFeedbackInput {
   sessionId: string | null;
-  onError: (message: string) => void;
+  onErrorFeedback: (message: string) => void;
 }
 
-export function useChatMessageFeedback({ sessionId, onError }: UseChatMessageFeedbackInput) {
+export function useChatMessageFeedback({
+  sessionId,
+  onErrorFeedback,
+}: UseChatMessageFeedbackInput) {
   const { setActiveSession } = useChatControllerStore();
-  const [pendingMessageId, setPendingMessageId] = useState<string | null>(null);
+  const [pendingFeedbackTargetMessageId, setPendingFeedbackTargetMessageId] = useState<
+    string | null
+  >(null);
 
-  const setMessageFeedback = useCallback(
-    async (messageId: string, feedback: ChatMessageFeedback | null) => {
-      if (!sessionId || pendingMessageId) {
+  const submitMessageFeedback = useCallback(
+    async (messageId: string, nextMessageFeedback: ChatMessageFeedback | null) => {
+      if (!sessionId || pendingFeedbackTargetMessageId) {
         return;
       }
 
-      setPendingMessageId(messageId);
+      setPendingFeedbackTargetMessageId(messageId);
 
       try {
-        const session = await setMessageFeedbackRequest(sessionId, messageId, feedback);
-
-        cacheSession(session);
-        setActiveSession((current) => (current?.id === session.id ? session : current));
+        const session = await setMessageFeedbackRequest(sessionId, messageId, nextMessageFeedback);
+        await syncChatSessionUpdate({
+          session,
+          setActiveSession,
+        });
       } catch (error) {
-        const message = error instanceof Error ? error.message : '记录反馈失败';
-        onError(message);
+        const message = getChatErrorMessage(error, CHAT_ERROR_COPY.feedbackFailed);
+        onErrorFeedback(message);
       } finally {
-        setPendingMessageId(null);
+        setPendingFeedbackTargetMessageId(null);
       }
     },
-    [onError, pendingMessageId, sessionId, setActiveSession],
+    [onErrorFeedback, pendingFeedbackTargetMessageId, sessionId, setActiveSession],
   );
 
   return {
-    pendingMessageId,
-    setMessageFeedback,
+    pendingFeedbackTargetMessageId,
+    submitMessageFeedback,
   };
 }

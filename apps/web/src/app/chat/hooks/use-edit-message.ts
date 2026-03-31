@@ -17,6 +17,8 @@ import {
   getEditableUserMessageError,
   getEditableUserMessage,
 } from '../lib/chat-message-mutations';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
+import { getChatErrorMessage } from '../lib/chat-error-message';
 import { createStreamEventHandler } from './stream-event-handler';
 
 export type EditMessageResult = 'completed' | 'aborted_without_output' | 'interrupted' | 'error';
@@ -30,7 +32,7 @@ interface EditMessageDeps {
   registerAbortController: (controller: AbortController) => void;
   clearAbortController: (controller: AbortController) => void;
   setSending: (value: boolean) => void;
-  setNotice: (value: string | null) => void;
+  setErrorFeedback: (value: string | null) => void;
   setActiveSession: (
     value: ChatSession | null | ((prev: ChatSession | null) => ChatSession | null),
   ) => void;
@@ -90,7 +92,7 @@ export function useEditMessage({
   registerAbortController,
   clearAbortController,
   setSending,
-  setNotice,
+  setErrorFeedback,
   setActiveSession,
   setActiveSessionId,
 }: EditMessageDeps) {
@@ -104,8 +106,9 @@ export function useEditMessage({
 
       const editableTarget = getEditableUserMessage(session.messages, messageId);
       if (!editableTarget) {
-        setNotice(
-          getEditableUserMessageError(session.messages, messageId) ?? '目标消息不存在或不可编辑',
+        setErrorFeedback(
+          getEditableUserMessageError(session.messages, messageId) ??
+            CHAT_ERROR_COPY.invalidEditableMessage,
         );
         return 'error';
       }
@@ -120,7 +123,7 @@ export function useEditMessage({
       let optimisticAssistantId: string | null = null;
       registerAbortController(abortController);
       setSending(true);
-      setNotice(null);
+      setErrorFeedback(null);
 
       try {
         const optimisticAssistant = createTemporaryMessage({ role: 'assistant', content: '' });
@@ -133,7 +136,7 @@ export function useEditMessage({
           updatedAt: new Date().toISOString(),
         });
         if (!optimisticSession) {
-          throw new Error('目标消息不存在或不可编辑');
+          throw new Error(CHAT_ERROR_COPY.invalidEditableMessage);
         }
 
         setActiveSession(optimisticSession);
@@ -151,7 +154,7 @@ export function useEditMessage({
           createStreamEventHandler({
             optimisticAssistantId: optimisticAssistant.id,
             setActiveSession,
-            setNotice,
+            setErrorFeedback,
             setSyncedSession: (nextSession) => {
               syncedSession = nextSession;
             },
@@ -210,7 +213,7 @@ export function useEditMessage({
         }
 
         setActiveSession(session);
-        setNotice(error instanceof Error ? error.message : '编辑失败，请稍后重试');
+        setErrorFeedback(getChatErrorMessage(error, CHAT_ERROR_COPY.editFailed));
         return 'error';
       } finally {
         await refreshChatUsage().catch(() => undefined);
@@ -227,7 +230,7 @@ export function useEditMessage({
       registerAbortController,
       clearAbortController,
       setSending,
-      setNotice,
+      setErrorFeedback,
       setActiveSession,
       setActiveSessionId,
     ],

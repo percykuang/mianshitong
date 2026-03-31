@@ -7,6 +7,954 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 5.77（2026-04-01）：统一会话更新后的缓存与激活态同步 helper
+
+### 目标
+
+- 继续收口聊天 hooks 中“会话更新成功后同步缓存、可选刷新列表、同步当前激活会话”这组重复流程，避免 `pin / rename / message feedback` 各自维护一份几乎相同的收尾逻辑。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-session-sync-helpers.ts`
+  - 新增 `syncChatSessionUpdate`，统一处理：
+    - 写入会话缓存
+    - 按需刷新会话列表
+    - 仅当当前激活会话匹配时替换 active session
+- `apps/web/src/app/chat/lib/chat-session-sync-helpers.test.ts`
+  - 新增纯单测，覆盖：
+    - 提供列表刷新能力时会缓存并同步最新列表
+    - 仅在当前激活会话匹配时替换 active session
+- 以下 hooks 改为复用同一 helper：
+  - `apps/web/src/app/chat/hooks/use-chat-session-pin.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-session-rename.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-message-feedback.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅统一会话更新后的同步逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.76（2026-04-01）：收口额度初始化状态切换 helper
+
+### 目标
+
+- 继续沿着聊天 hooks 的低风险整理推进，把 `use-chat-storage` 中额度初始化时的 loading / bootstrapped 状态切换收口成局部 helper，减少 effect 内部重复的状态更新语句。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-chat-storage.ts`
+  - 新增 `markUsageBootstrapPending`，统一处理额度初始化开始时的：
+    - `usageLoading = true`
+    - `usageBootstrapped = false`
+  - 新增 `markUsageBootstrapSettled`，统一处理额度初始化结束时的：
+    - `usageLoading = false`
+    - `usageBootstrapped = true`
+  - `useEffect` 中只保留异步流程与成功/失败分支，不再重复拼接同一组状态切换。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续整理聊天存储 hook 内部状态切换逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.75（2026-04-01）：统一聊天 hooks 的错误消息 fallback helper
+
+### 目标
+
+- 继续做聊天页内部的低风险收口，把多个 hooks 里重复出现的 `error instanceof Error ? error.message : fallback` 统一到纯 helper，减少错误兜底规则散落在各处的重复代码。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-error-message.ts`
+  - 新增 `getChatErrorMessage`，统一把未知错误转换为“优先取 `Error.message`，否则回退到指定文案”的规则。
+- `apps/web/src/app/chat/lib/chat-error-message.test.ts`
+  - 新增纯单测，覆盖：
+    - `Error` 实例时返回原始错误消息
+    - 非 `Error` 输入时返回 fallback 文案
+- 以下 hooks 改为复用同一 helper：
+  - `apps/web/src/app/chat/hooks/use-chat-controller-effects.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-delete-actions.ts`
+  - `apps/web/src/app/chat/hooks/use-send-message.ts`
+  - `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-storage.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-message-feedback.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-session-pin.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-session-rename.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅统一聊天 hooks 内部错误兜底逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.74（2026-04-01）：收口删除链路中的会话选择重复逻辑
+
+### 目标
+
+- 延续聊天控制器内部的小范围收口，把 `use-chat-delete-actions` 中删除会话后的“应用当前会话选择”和“清空当前会话选择”步骤统一到局部 helper，减少删除转场分支里的重复 setter 调用。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-chat-delete-actions.ts`
+  - 新增 `applyActiveSessionSelection`，统一处理：
+    - 删除当前会话后直接切换到已缓存的下一会话
+    - 删除当前会话后拉取远端下一会话并同步当前选择状态
+  - 新增 `clearActiveSessionSelection`，统一处理：
+    - 删除当前会话且没有剩余会话时清空当前选择状态
+    - 删除全部会话后的当前选择清理
+  - 删除转场逻辑本身保持不变，仅减少重复状态同步代码。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续整理聊天删除链路内部逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.73（2026-04-01）：收口聊天控制器 effect 中的会话选择重复逻辑
+
+### 目标
+
+- 继续沿着聊天页控制器低风险收口，把 `use-chat-controller-effects` 里重复出现的“应用当前会话选择”和“清空当前会话选择”步骤统一到局部 helper，减少 effect 分支里的重复 setter 调用。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-chat-controller-effects.ts`
+  - 新增 `applyActiveSessionSelection`，统一处理：
+    - 应用缓存会话到当前选择状态
+    - 远端加载成功后同步当前选择状态
+  - 新增 `clearActiveSessionSelection`，统一处理：
+    - 无路由会话时重置当前选择状态
+    - 远端加载失败后的当前选择清理
+  - effect 主体只保留 hydration 计划判断与异步加载流程，不再重复拼接相同的会话同步步骤。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续整理聊天控制器内部 effect 逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.72（2026-04-01）：收口聊天控制器编辑态重置逻辑
+
+### 目标
+
+- 在前几轮完成聊天页命名与视图/helper 收口后，继续清理 `use-chat-controller*` 中重复的编辑态清理步骤，把 `setEditingMessageId(null)` 与 `setEditingValue('')` 统一收口为局部 helper，降低后续维护时的遗漏风险。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 新增局部 `resetEditingState`，统一用于：
+    - 编辑目标失效后的清理
+    - 提交编辑前的清理
+    - 手动取消编辑
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.ts`
+  - 新增同名局部 helper，统一用于：
+    - 切换会话时清理编辑态
+    - 新建会话时清理编辑态
+    - 取消编辑时清理编辑态
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - 补充断言，覆盖“新建会话时会同步清理编辑态”。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续收口聊天控制器内部重复逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.71（2026-04-01）：抽离 ChatClient 事件处理 helper
+
+### 目标
+
+- 在完成聊天页视图派生逻辑下沉后，继续收口 `ChatClient` 里重复的事件处理步骤，把“发送前是否请求 follow”和“编辑成功后 requestFollow + 聚焦输入框”这类重复动作抽成 helper，进一步减轻主组件事件函数里的重复语句。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-client-action-helpers.ts`
+  - 新增 `shouldRequestFollowBeforeSend`，集中判断发送前是否需要请求 follow。
+  - 新增 `requestFollowAndFocusComposer`，集中处理“requestFollow + 下一帧聚焦输入框”。
+- `apps/web/src/app/chat/lib/chat-client-action-helpers.test.ts`
+  - 新增轻量单测，覆盖：
+    - 仅在未发送且内容非空时请求 follow
+    - 编辑成功后先 requestFollow，再聚焦输入框
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - `handleSubmitMessage` 改为使用 `shouldRequestFollowBeforeSend`。
+  - `handleSubmitEditUserMessage` 改为使用 `requestFollowAndFocusComposer`。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续整理 `ChatClient` 的事件处理重复逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.70（2026-04-01）：抽离消息项视图派生 helper
+
+### 目标
+
+- 继续把聊天页里的纯视图判断从组件内部剥离出去，让 `ChatMessageItem` 不再同时承担“消息气泡渲染”和“动作区/中断态/反馈 pending 判定”两类职责，进一步降低组件阅读负担。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-message-item-view-state.ts`
+  - 新增 `getChatMessageItemViewState`，集中派生：
+    - `isUserMessage`
+    - `shouldShowActions`
+    - `isInterruptedAssistantMessage`
+    - `messageFeedbackPending`
+    - `canShowEditAction`
+- `apps/web/src/app/chat/lib/chat-message-item-view-state.test.ts`
+  - 新增纯单测，覆盖：
+    - 普通用户消息显示动作区且允许编辑按钮
+    - 流式中的 assistant 消息不显示动作区
+    - 中断 assistant 消息的中断态与反馈 pending 判定
+- `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 改为消费新的 view-state helper，组件本身只保留消息项布局与内容渲染。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续整理消息项组件的内部视图派生逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.69（2026-04-01）：抽离消息列表项视图派生 helper
+
+### 目标
+
+- 继续把聊天页里的纯视图判断从组件 JSX 中下沉出去，让 `ChatMessageList` 不再直接拼接 `isLoading / isStreaming / isEditing / canEditUserMessage` 这组消息项派生逻辑，进一步收敛为“数据准备 + 渲染”的清晰分层。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-message-list-view-state.ts`
+  - 新增 `getChatMessageListViewState`，集中派生：
+    - 过滤后的 `visibleMessages`
+    - 每条消息的 `isLoading`
+    - 每条消息的 `isStreaming`
+    - 每条消息的 `isEditing`
+    - 每条消息的 `canEditUserMessage`
+- `apps/web/src/app/chat/lib/chat-message-list-view-state.test.ts`
+  - 新增纯单测，覆盖：
+    - 过滤系统消息
+    - 仅最后一条用户消息可编辑
+    - 最后一条空 assistant 消息在发送中同时进入 loading 和 streaming
+    - 最后一条非空 assistant 消息在发送中只保持 streaming
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 改为消费新的 view-state helper，组件本身只保留空态和消息项渲染逻辑。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续整理消息列表的内部视图派生逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.68（2026-04-01）：抽离 ChatClient 视图派生状态 helper
+
+### 目标
+
+- 继续减少 `ChatClient` 主组件里的本地派生状态和条件拼装，把“是否展示过渡态 / 是否保留编辑态 / 是否显示回到底部按钮 / 顶部反馈条样式”等纯视图判断抽成单一 helper，降低主组件阅读负担并让分支逻辑可单测。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-client-view-state.ts`
+  - 新增 `getChatClientViewState`，集中派生：
+    - `hasUserMessages`
+    - `shouldShowConversationTransition`
+    - `latestMessageContent`
+    - `visibleEditingMessageId`
+    - `activeBannerFeedback`
+    - `bannerFeedbackToneClassName`
+    - `shouldShowScrollToBottomButton`
+- `apps/web/src/app/chat/lib/chat-client-view-state.test.ts`
+  - 新增纯单测，覆盖：
+    - 普通可见会话时的派生结果
+    - 路由切换加载中的过渡态判断
+    - 编辑目标消息已不在当前消息列表时应清空可见编辑态
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 改为消费新的 view-state helper，主组件只保留事件处理和组件拼装。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续整理 `ChatClient` 的内部视图派生逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.67（2026-04-01）：继续收正 ChatClient 本地派生状态命名
+
+### 目标
+
+- 在上一轮完成聊天页跨组件透传命名收口后，继续把 `ChatClient` 内部剩余的派生状态名收正为更直接的职责语义，减少 render 分支里的阅读负担。
+
+### 主要改动
+
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 将 `showConversationTransition` 收正为 `shouldShowConversationTransition`。
+  - 将 `activeEditingMessageId` 收正为 `visibleEditingMessageId`。
+  - 将 `lastMessageContent` 收正为 `latestMessageContent`。
+  - 将顶部反馈条局部派生从 `bannerFeedbackContent / bannerFeedbackClassName` 收正为 `activeBannerFeedback / bannerFeedbackToneClassName`。
+  - 将“回到底部按钮是否显示”显式收敛为 `shouldShowScrollToBottomButton`，避免 JSX 内继续拼接多条件判断。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续收正 `ChatClient` 本地派生状态命名。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.66（2026-04-01）：收正聊天页“已开始会话”派生状态命名
+
+### 目标
+
+- 继续清理聊天页里“变量名比真实判断更宽泛”的语义偏差，把当前实际含义为“已经存在用户消息”的 `hasConversation` 收正为更精确的命名，避免后续阅读时误以为“只要存在任意消息就算开始会话”。
+
+### 主要改动
+
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 将聊天页派生状态从 `hasConversation` 收正为 `hasUserMessages`。
+  - 对应地，回到底部按钮和输入区快捷提示的显示条件改为消费更准确的命名。
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 空态显示判断 props 从 `hasConversation` 收正为 `hasUserMessages`。
+  - 否定式 props 从 `suppressEmptyState` 收正为更直接的 `hideEmptyState`。
+- `apps/web/src/app/chat/components/chat-composer.tsx`
+  - 快捷提示显示判断 props 从 `hasConversation` 收正为 `hasUserMessages`。
+  - 否定式 props 从 `suppressQuickPrompts` 收正为更直接的 `hideQuickPrompts`。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续收正聊天页派生状态命名。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.65（2026-04-01）：收正顶部统一反馈条状态命名
+
+### 目标
+
+- 继续清理聊天页里“`feedback` 同时指代顶部反馈条和消息反馈”的语义冲突，把控制器层和展示层中顶部统一反馈条的状态明确收正为 `bannerFeedback`，避免后续阅读时再和消息点赞/点踩反馈混淆。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/chat-controller.types.ts`
+  - 将顶部反馈条类型从 `ChatFeedback / ChatFeedbackTone` 收正为 `ChatBannerFeedback / ChatBannerFeedbackTone`。
+  - 控制器对外状态从 `feedback` 收正为 `bannerFeedback`。
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 顶部反馈条本地状态从 `feedback` 收正为 `bannerFeedback`。
+  - 信息/错误反馈 helper 继续保留原有职责，仅改为驱动新的顶部反馈条状态命名。
+- `apps/web/src/app/chat/hooks/use-chat-controller-effects.ts`
+  - 顶部反馈条自动清理 effect 同步改为消费 `bannerFeedback / setBannerFeedback`。
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 顶部反馈条展示层同步改为使用 `bannerFeedbackContent / bannerFeedbackClassName`。
+- `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+  - 同步更新控制器单测断言，改为校验 `bannerFeedback`。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续收正顶部统一反馈条的内部状态命名。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.64（2026-04-01）：统一会话弹窗草稿状态与关闭逻辑
+
+### 目标
+
+- 继续收口聊天页会话弹窗这组实现，把关闭弹窗、提交成功后关闭、重置重命名输入草稿的重复逻辑统一到单一出口，同时把重命名输入态命名改得更清晰，降低后续维护时的理解成本。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-chat-session-dialog.ts`
+  - 将重命名输入态从 `renameValue` 收正为 `renameDraftTitle`。
+  - 新增统一 `resetDialog`，把“关闭弹窗 + 清空重命名草稿”逻辑集中管理。
+  - 重命名、删除单个会话、删除全部会话提交成功后统一走同一套关闭/重置逻辑。
+- `apps/web/src/app/chat/components/chat-session-dialog.tsx`
+  - 组件 props 同步改为 `renameDraftTitle / onRenameDraftTitleChange`，与当前职责保持一致。
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 同步更新会话弹窗相关透传命名。
+- `apps/web/src/app/chat/hooks/use-chat-session-dialog.dom.test.ts`
+  - 新增 hook 测试，覆盖：
+    - 打开重命名弹窗时写入当前标题
+    - 关闭时清空草稿
+    - 提交成功后关闭并清空草稿
+    - 提交中禁止提前关闭
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见功能变化，仅统一会话弹窗内部状态命名与关闭逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.63（2026-04-01）：统一侧边栏会话项菜单实现
+
+### 目标
+
+- 继续收口聊天侧边栏里残留的交互实现分叉，把会话项“更多操作”从手工 `Popover` 菜单统一到仓库已有的标准 `DropdownMenu`，与访客菜单保持一致的菜单语义和实现方式。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-sidebar-session-item.tsx`
+  - 将会话项“更多操作”从 `Popover` 收口为 `DropdownMenu`。
+  - 菜单项改为标准 `DropdownMenuItem`，保留置顶、重命名、删除三项原有行为。
+  - 保留 `menuOpen` 状态，仅继续用于侧边栏悬浮操作按钮的显隐控制，不改视觉交互。
+- `apps/web/src/app/chat/components/chat-sidebar-session-item.dom.test.tsx`
+  - 新增 DOM 测试，覆盖“更多操作”打开后应展示标准菜单项。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见功能变化，仅统一侧边栏会话菜单的实现与语义。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '删除当前会话后应回到空聊天页'`
+
+## Iteration 5.62（2026-04-01）：移除侧边栏顶部按钮残留的 HoverTooltip
+
+### 目标
+
+- 继续对齐聊天页当前“不展示 hover tooltip”的交互口径，把侧边栏顶部“删除所有会话记录 / 新建会话”按钮上残留的 `HoverTooltip` 一并清掉，避免同一页面不同区域仍混用两套交互约定。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-sidebar.tsx`
+  - 删除“删除所有会话记录”和“新建会话”按钮外层残留的 `HoverTooltip` 包装。
+  - 保留按钮本身的 `aria-label`，不影响可访问性语义和点击功能。
+- `apps/web/src/app/chat/components/chat-sidebar.dom.test.tsx`
+  - 新增 DOM 测试，覆盖侧边栏顶部操作按钮 hover 时不再出现 tooltip 的当前行为。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 用户可见变化仅为：侧边栏顶部按钮 hover 时不再显示 tooltip，点击行为不变。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '侧边栏顶部按钮 hover 时不再显示 tooltip'`
+
+## Iteration 5.61（2026-04-01）：拆分消息反馈与顶部反馈条的局部命名
+
+### 目标
+
+- 继续清理聊天页内部“`feedback` 一词同时指代两类不同概念”的阅读负担，让消息点赞/点踩反馈与顶部统一反馈条在局部变量和组件透传层面彻底区分开，降低后续维护时的误判概率。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-chat-message-feedback.ts`
+  - 将局部状态从 `pendingMessageId` 收正为 `pendingFeedbackTargetMessageId`。
+  - 将提交函数从 `setMessageFeedback` 收正为 `submitMessageFeedback`。
+- `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 同步改为使用 `messageFeedbackPending`、`activeMessageFeedback`、`onSubmitMessageFeedback` 等更明确的透传命名。
+- `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 将 `activeFeedback / feedbackPending / onSetMessageFeedback` 收正为更明确的消息反馈语义命名。
+  - 将局部 helper 从 `resolveNextFeedback / feedbackButtonClass` 收正为消息反馈语义命名，避免与顶部反馈条状态混淆。
+- 测试同步更新：
+  - `apps/web/src/app/chat/components/chat-message-actions.dom.test.tsx`
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续收正消息反馈相关的局部命名。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.60（2026-04-01）：收正聊天页统一反馈文案命名
+
+### 目标
+
+- 继续消除聊天页里“历史实现名词”和“当前职责语义”之间的偏差，让统一反馈文案配置的命名也与当前模型保持一致，避免状态已经收口为 `feedback`，但文案常量仍停留在 `toast` 语义。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-copy.ts`
+  - 将 `CHAT_TOAST_COPY` 收正为 `CHAT_FEEDBACK_COPY`。
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 发送中重复提交时的信息反馈改为使用 `CHAT_FEEDBACK_COPY.replyInProgress`。
+- `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 复制失败提示改为使用 `CHAT_FEEDBACK_COPY.clipboardFailure`。
+- `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+  - 同步改为断言新的统一反馈文案常量。
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 复制按钮回归用例标题同步改为“顶部反馈条”口径，避免测试名继续沿用旧 `toast` 语义。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅统一共享文案命名与测试口径。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '消息复制应仅更新局部 copied 状态，不切换基础文案也不触发顶部反馈条'`
+
+## Iteration 5.59（2026-04-01）：继续收正聊天页底层错误反馈命名
+
+### 目标
+
+- 在上一轮对外接口命名收正的基础上，继续把聊天页底层 hook 和事件处理里的错误反馈入口统一到 `error feedback` 语义，避免内外命名不一致导致的维护成本。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-send-message.ts`
+  - 发送链路依赖项从 `setNotice` 收正为 `setErrorFeedback`。
+- `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - 编辑链路依赖项从 `setNotice` 收正为 `setErrorFeedback`。
+- `apps/web/src/app/chat/hooks/use-chat-delete-actions.ts`
+  - 删除链路依赖项从 `setNotice` 收正为 `setErrorFeedback`。
+- `apps/web/src/app/chat/hooks/stream-event-handler.ts`
+  - SSE 错误回调从 `setNotice` 收正为 `setErrorFeedback`。
+- `apps/web/src/app/chat/hooks/use-chat-message-feedback.ts`
+  - 消息反馈错误回调从 `onError` 收正为 `onErrorFeedback`。
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 控制器对接发送、编辑、删除链路时同步使用 `setErrorFeedback`。
+- `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 消息反馈 hook 的错误回调同步改为 `onErrorFeedback`。
+- 测试同步更新：
+  - `apps/web/src/app/chat/hooks/use-send-message.dom.test.ts`
+  - `apps/web/src/app/chat/hooks/use-edit-message.dom.test.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-delete-actions.dom.test.ts`
+  - `apps/web/src/app/chat/hooks/stream-event-handler.test.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续统一底层错误反馈命名。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.58（2026-04-01）：收正聊天页错误反馈相关对外命名
+
+### 目标
+
+- 继续清理聊天页接口里残留的历史语义命名，让控制器和组件对外暴露的错误反馈入口与当前真实职责保持一致，减少阅读和维护时的误导。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/chat-controller.types.ts`
+  - `ChatController` 对外接口从 `showNotice` 收正为 `showErrorFeedback`。
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 同步把控制器返回值改为 `showErrorFeedback`。
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.ts`
+  - actions 层对应入口从 `showNotice` 收正为 `showErrorFeedback`。
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 会话重命名、置顶以及消息列表透传统一改为使用 `showErrorFeedback`。
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 组件透传 prop 从 `onNotice` 收正为 `onErrorFeedback`。
+- `apps/web/src/app/chat/components/chat-message-item.tsx`
+  - 组件透传 prop 从 `onNotice` 收正为 `onErrorFeedback`。
+  - 消息反馈错误回调同步对齐新命名。
+- `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 复制失败回调 prop 从 `onNotice` 收正为 `onErrorFeedback`。
+- `apps/web/src/app/chat/hooks/use-chat-session-pin.ts`
+  - 对外错误回调命名改为 `onErrorFeedback`。
+- `apps/web/src/app/chat/hooks/use-chat-session-rename.ts`
+  - 对外错误回调命名改为 `onErrorFeedback`。
+- 测试同步更新：
+  - `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+  - `apps/web/src/app/chat/components/chat-message-actions.dom.test.tsx`
+  - `apps/web/src/app/chat/components/chat-message-item.dom.test.tsx`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见行为变化，仅继续清理对外命名语义。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.57（2026-03-31）：统一聊天页反馈状态并同步回归口径
+
+### 目标
+
+- 继续清理聊天控制器里的历史状态包袱，把原先分散的两套顶部反馈状态收口为一套统一反馈模型，减少重复 effect、重复清理逻辑与展示层分支判断。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/chat-controller.types.ts`
+  - 新增统一反馈类型 `ChatFeedback` 与 `ChatFeedbackTone`。
+  - `ChatController` 从暴露两套分离反馈状态改为暴露单一 `feedback`。
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 用单一 `feedback` 状态替代原有双反馈状态。
+  - 新增内部 `setErrorFeedback / setInfoFeedback`，分别承接错误反馈与普通提示反馈。
+  - 保留 `showNotice` 作为现有错误反馈入口，避免外围调用方一起改散。
+- `apps/web/src/app/chat/hooks/use-chat-controller-effects.ts`
+  - 将原本两套重复的 1.8 秒自动清理 effect 合并为统一的 `feedback` 自动清理逻辑。
+  - 会话加载失败、初始化失败等错误场景改为走统一错误反馈入口。
+- `apps/web/src/app/chat/ChatClient.tsx`
+  - 顶部反馈条改为直接消费 `controller.feedback`，不再通过旧状态组合和双色分支拼装展示。
+- `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+  - 同步改为断言统一反馈对象。
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 同步更新复制按钮回归用例，明确当前产品口径为：
+    - 复制后仅更新局部 `copied` 状态
+    - 不再把按钮基础文案切换为成功提示文案
+    - 不触发顶部反馈条
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 用户可见交互语义不变，仅统一内部反馈状态模型并同步测试口径。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '删除当前会话后应回到空聊天页|消息复制应仅更新局部 copied 状态，不切换基础文案也不触发顶部反馈条'`
+
+## Iteration 5.56（2026-03-31）：继续清理聊天控制器与共享文案残留接口
+
+### 目标
+
+- 在不改变聊天页任何用户可见行为的前提下，继续收口已经没有调用方的控制器接口与共享文案残留，减少后续维护时的误导成本。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/chat-controller.types.ts`
+  - 删除已无调用方的 `showToast` 控制器接口定义。
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 删除 `showToast` 的本地实现与返回值暴露，保持内部 `toast` 状态仅服务当前实际使用场景。
+- `apps/web/src/app/chat/lib/chat-copy.ts`
+  - 删除在 tooltip 方案下线后已无人使用的 `like / dislike` 文案常量。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见交互变化，仅继续清理死接口与无用常量。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+
+## Iteration 5.55（2026-03-31）：清理聊天按钮残留的空壳 HoverTooltip 包装
+
+### 目标
+
+- 对齐当前聊天页“不展示 hover tooltip”的交互口径，移除消息动作区与代码块操作按钮上已经被禁用的 `HoverTooltip` 空壳包装，减少误导性的实现残留与无意义包裹层。
+
+### 主要改动
+
+- `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 删除复制、赞同、不赞同按钮外层已禁用的 `HoverTooltip` 包装。
+  - 保留按钮自身 `aria-label`，不影响可访问性语义。
+- `apps/web/src/app/chat/components/chat-code-block.tsx`
+  - 删除代码块复制、下载按钮外层已禁用的 `HoverTooltip` 包装。
+  - 保留按钮自身 `aria-label` 与图标状态切换逻辑。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 用户可见功能不变，仅清理不会实际渲染 tooltip 的包装层。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '删除当前会话后应回到空聊天页'`
+
+## Iteration 5.54（2026-03-31）：移除聊天页残留的成功提示文案
+
+### 目标
+
+- 对齐当前聊天页交互口径，移除复制成功、下载成功这类不再需要的成功提示文案，仅保留失败提示与必要的图标状态反馈，避免和既有产品决策冲突。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.ts`
+  - 删除未被生产链路使用的复制成功 `toast` 残留逻辑。
+- `apps/web/src/app/chat/hooks/chat-controller.types.ts`
+  - 移除控制器对外暴露但已无调用方的 `handleCopy` 接口，减少死代码。
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 同步清理已删除的复制动作透传。
+- `apps/web/src/app/chat/lib/chat-copy.ts`
+  - 删除 `clipboardSuccess` 与消息动作区 `copied` 成功文案。
+  - 为代码块操作补齐稳定的基础按钮文案常量。
+- `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 复制后不再把按钮文案切换为“已复制”，仅保留图标态变化。
+  - 复制失败时继续通过 `notice/toast` 链路提示用户。
+- `apps/web/src/app/chat/components/chat-code-block.tsx`
+  - 下载/复制代码按钮不再切换为“已下载 / 已复制”文案，仅保留图标态变化。
+- `apps/web/src/app/chat/components/chat-message-actions.dom.test.tsx`
+  - 新增断言，确保复制后按钮文案仍保持为基础文案，不回退为成功提示文案。
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - 删除与已移除复制成功 `toast` 残留逻辑对应的测试。
+- `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+  - 同步清理控制器 mock 中已删除的复制动作接口。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 用户可见交互仅减少成功提示文案，不影响复制、下载等功能本身。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '删除当前会话后应回到空聊天页'`
+
+## Iteration 5.53（2026-03-31）：集中管理聊天页默认错误与提示文案
+
+### 目标
+
+- 在不改变聊天业务流程的前提下，把聊天页分散在 hooks、API 工具层和消息动作区里的默认错误提示、toast 文案与基础动作文案继续集中管理，降低后续中文化调整与回归修改成本。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-copy.ts`
+  - 扩展聊天页共享文案配置，新增并集中维护：
+    - 默认错误文案
+    - 默认 toast 文案
+    - 消息动作区基础文案
+- `apps/web/src/app/chat/lib/chat-api.ts`
+  - 请求失败、删除会话失败、发送失败、编辑失败、空流响应等默认错误改为使用共享文案。
+- `apps/web/src/app/chat/lib/chat-message-feedback-api.ts`
+  - 反馈接口请求失败默认错误改为使用共享文案。
+- `apps/web/src/app/chat/lib/chat-session-settings-api.ts`
+  - 会话设置接口请求失败默认错误改为使用共享文案。
+- `apps/web/src/app/chat/lib/chat-message-mutations.ts`
+  - 可编辑消息校验相关默认提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/stream-event-handler.ts`
+  - 流式错误兜底文案改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-send-message.ts`
+  - 发送失败默认提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-edit-message.ts`
+  - 编辑失败与不可编辑消息提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-chat-message-feedback.ts`
+  - 反馈失败默认提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-chat-session-pin.ts`
+  - 置顶失败默认提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-chat-session-rename.ts`
+  - 重命名失败默认提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-chat-delete-actions.ts`
+  - 删除当前会话 / 删除全部会话失败提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-chat-controller-effects.ts`
+  - 初始化失败默认提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-chat-controller.ts`
+  - 生成中提示与编辑限制提示改为使用共享文案。
+- `apps/web/src/app/chat/hooks/use-chat-storage.ts`
+  - 使用额度初始化失败提示改为使用共享文案。
+- `apps/web/src/app/chat/components/chat-message-actions.tsx`
+  - 复制失败提示、复制/已复制、编辑消息、赞同/不赞同等动作区文案改为使用共享文案。
+- `apps/web/src/app/chat/components/chat-message-actions.dom.test.tsx`
+  - 新增共享动作文案断言，避免后续回退到组件内联字符串。
+- `apps/web/src/app/chat/hooks/use-chat-controller.dom.test.ts`
+  - 同步改为断言共享 toast 文案。
+- `apps/web/src/app/chat/hooks/use-send-message.dom.test.ts`
+  - 同步改为断言共享错误文案。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 用户可见功能不变，仅统一默认提示文案维护位置。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '删除当前会话后应回到空聊天页|访客菜单应展示中文入口项'`
+
+## Iteration 5.52（2026-03-31）：集中管理聊天页框架层文案
+
+### 目标
+
+- 把聊天页框架层的用户可见文案从组件内联字符串中抽离，减少后续统一语气、文案调整与中文化回归时的分散修改成本。
+
+### 主要改动
+
+- `apps/web/src/app/chat/lib/chat-copy.ts`
+  - 新增聊天页框架层共享文案配置，集中维护：
+    - 顶部侧栏按钮文案
+    - 侧边栏操作文案
+    - 会话菜单文案
+    - 会话弹窗文案
+    - 复制 toast 文案
+- `apps/web/src/app/chat/components/chat-header.tsx`
+  - 改为使用共享文案配置。
+- `apps/web/src/app/chat/components/chat-sidebar.tsx`
+  - 改为使用共享文案配置。
+- `apps/web/src/app/chat/components/chat-sidebar-session-item.tsx`
+  - 改为使用共享文案配置。
+- `apps/web/src/app/chat/components/chat-session-dialog.tsx`
+  - 改为使用共享文案配置。
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.ts`
+  - 复制成功/失败提示改为使用共享文案配置。
+- `apps/web/src/app/chat/hooks/use-chat-controller-actions.dom.test.ts`
+  - 同步改为断言共享文案常量。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 用户可见功能不变，仅收口文案维护位置。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '删除当前会话后应回到空聊天页|访客菜单应展示中文入口项'`
+
+## Iteration 5.50（2026-03-31）：收口认证文案维护与补齐基础开发文档
+
+### 目标
+
+- 在不改变业务功能的前提下，降低认证页文案维护成本与回归风险。
+- 把仓库 README 从脚手架默认内容收口到当前真实工程结构，减少协作误解。
+
+### 主要改动
+
+- `apps/web/src/components/auth/auth-copy.ts`
+  - 新增认证页共享文案配置，集中维护登录/注册页面文案。
+- `apps/web/src/app/login/login-form.tsx`
+  - 改为消费共享认证文案配置，减少页面内联文案。
+- `apps/web/src/app/register/page.tsx`
+  - 改为消费共享认证文案配置，减少页面内联文案。
+- `README.md`
+  - 重写根文档，补齐真实仓库结构、启动顺序与质量校验入口。
+- `apps/web/README.md`
+  - 替换默认 Next.js 模板说明，改为 Web 端的真实职责与常用命令。
+- `apps/admin/README.md`
+  - 替换默认 Next.js 模板说明，改为 Admin 端的真实职责与常用命令。
+- `apps/web/e2e/auth-smoke.spec.ts`
+  - 新增认证页 smoke E2E，覆盖：
+    - 登录页中文文案
+    - 登录页到注册页跳转
+    - 注册页中文文案
+    - 注册页到登录页跳转
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 无用户可见业务流程变更，仅降低维护成本并补齐基础回归。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '登录页应展示中文文案并可跳转到注册页|注册页应展示中文文案并可跳转到登录页'`
+
+## Iteration 5.51（2026-03-31）：将访客菜单收口为标准下拉菜单组件
+
+### 目标
+
+- 在不改变访客/登录菜单功能的前提下，移除手写外部点击关闭逻辑，改用标准下拉菜单 primitive，提升可访问性与交互稳态。
+
+### 主要改动
+
+- `apps/web/src/components/ui/dropdown-menu.tsx`
+  - 新增 Web 端共享下拉菜单封装，基于 Radix Dropdown Menu primitive。
+- `apps/web/src/components/guest-menu.tsx`
+  - 访客菜单从手写 `open state + click outside` 切换为标准下拉菜单组件。
+  - 保持现有菜单项、文案与登录/退出逻辑不变。
+  - `up/down` 两种菜单朝向继续保留。
+- `apps/web/e2e/guest-menu.spec.ts`
+  - 新增访客菜单 smoke E2E，覆盖：
+    - 访客按钮显示
+    - 菜单可打开
+    - 主题切换入口可见
+    - 登录入口可见
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 用户可见功能不变，仅实现方式调整。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '访客菜单应展示中文入口项'`
+
 ## Iteration 5.49（2026-03-31）：补齐 Web 端 NextAuth CredentialsProvider 中文文案
 
 ### 目标

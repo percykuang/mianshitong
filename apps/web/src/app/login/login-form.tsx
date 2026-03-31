@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { AuthCard } from '@/components/auth/auth-card';
+import { AUTH_FIELD_COPY, LOGIN_PAGE_COPY } from '@/components/auth/auth-copy';
 import { toSafeCallbackPath } from '@/lib/auth-redirect';
 
 interface LoginFormProps {
@@ -41,20 +42,20 @@ export function LoginForm({ callbackUrl }: LoginFormProps) {
 
   return (
     <AuthCard
-      title="登录"
-      description="使用邮箱和密码登录面试通"
-      submitLabel="登录"
-      emailLabel="邮箱"
-      emailPlaceholder="请输入邮箱地址"
-      passwordLabel="密码"
-      passwordPlaceholder="请输入密码"
+      title={LOGIN_PAGE_COPY.title}
+      description={LOGIN_PAGE_COPY.description}
+      submitLabel={LOGIN_PAGE_COPY.submitLabel}
+      emailLabel={AUTH_FIELD_COPY.emailLabel}
+      emailPlaceholder={AUTH_FIELD_COPY.emailPlaceholder}
+      passwordLabel={AUTH_FIELD_COPY.passwordLabel}
+      passwordPlaceholder={LOGIN_PAGE_COPY.passwordPlaceholder}
       email={email}
       password={password}
       error={error}
       pending={pending}
-      footerText="还没有账号？"
-      footerLinkText="立即注册"
-      footerLinkHref="/register"
+      footerText={LOGIN_PAGE_COPY.footerText}
+      footerLinkText={LOGIN_PAGE_COPY.footerLinkText}
+      footerLinkHref={LOGIN_PAGE_COPY.footerLinkHref}
       onEmailChange={setEmail}
       onPasswordChange={setPassword}
       onSubmit={handleSubmit}

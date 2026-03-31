@@ -18,6 +18,8 @@ import {
   finalizeInterruptedAssistantMessage,
   removeOptimisticMessages,
 } from '../lib/chat-message-mutations';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
+import { getChatErrorMessage } from '../lib/chat-error-message';
 import { clearRouteBootstrapBypass } from '../lib/chat-route-bootstrap-bypass';
 import { createStreamEventHandler } from './stream-event-handler';
 
@@ -28,7 +30,7 @@ interface SendMessageDeps {
   refreshSessions: () => Promise<unknown>;
   refreshChatUsage: () => Promise<unknown>;
   setSending: (value: boolean) => void;
-  setNotice: (value: string | null) => void;
+  setErrorFeedback: (value: string | null) => void;
   setInputValue: (value: string) => void;
   readInputValue: () => string;
   registerAbortController: (controller: AbortController) => void;
@@ -62,7 +64,7 @@ export function useSendMessage({
   refreshSessions,
   refreshChatUsage,
   setSending,
-  setNotice,
+  setErrorFeedback,
   setInputValue,
   readInputValue,
   registerAbortController,
@@ -82,7 +84,7 @@ export function useSendMessage({
       registerAbortController(abortController);
       setInputValue('');
       setSending(true);
-      setNotice(null);
+      setErrorFeedback(null);
 
       let session = readActiveSession();
       let optimisticUserId: string | null = null;
@@ -123,7 +125,7 @@ export function useSendMessage({
           createStreamEventHandler({
             optimisticAssistantId: optimisticAssistant.id,
             setActiveSession,
-            setNotice,
+            setErrorFeedback,
             setSyncedSession: (nextSession) => {
               syncedSession = nextSession;
             },
@@ -221,7 +223,7 @@ export function useSendMessage({
             removeOptimisticMessages(previous, [optimisticUserId, optimisticAssistantId]),
           );
         }
-        setNotice(error instanceof Error ? error.message : '发送失败，请稍后重试');
+        setErrorFeedback(getChatErrorMessage(error, CHAT_ERROR_COPY.sendFailed));
       } finally {
         await refreshChatUsage().catch(() => undefined);
         if (sessionIdToClear) {
@@ -238,7 +240,7 @@ export function useSendMessage({
       refreshSessions,
       refreshChatUsage,
       setSending,
-      setNotice,
+      setErrorFeedback,
       setInputValue,
       readInputValue,
       registerAbortController,

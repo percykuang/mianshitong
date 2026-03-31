@@ -15,8 +15,8 @@ import { ChatComposerQuickPrompts } from './chat-composer-quick-prompts';
 import { ChatComposerUsage } from './chat-composer-usage';
 
 interface ChatComposerProps {
-  hasConversation: boolean;
-  suppressQuickPrompts: boolean;
+  hasUserMessages: boolean;
+  hideQuickPrompts: boolean;
   quickPrompts: string[];
   inputValue: string;
   selectedModelId: ModelId;
@@ -33,8 +33,8 @@ interface ChatComposerProps {
 }
 
 export function ChatComposer({
-  hasConversation,
-  suppressQuickPrompts,
+  hasUserMessages,
+  hideQuickPrompts,
   quickPrompts,
   inputValue,
   selectedModelId,
@@ -55,7 +55,7 @@ export function ChatComposer({
     () => true,
     () => false,
   );
-  const showQuickPrompts = !hasConversation && !suppressQuickPrompts;
+  const showQuickPrompts = !hasUserMessages && !hideQuickPrompts;
   const selectedModel = useMemo(
     () => MODEL_OPTIONS.find((option) => option.id === selectedModelId) ?? MODEL_OPTIONS[0],
     [selectedModelId],

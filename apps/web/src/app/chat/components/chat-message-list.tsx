@@ -1,6 +1,6 @@
 import type { ChatMessage } from '@mianshitong/shared';
 import type { RefObject } from 'react';
-import { isEditableUserMessage } from '../lib/chat-message-mutations';
+import { getChatMessageListViewState } from '../lib/chat-message-list-view-state';
 import { ChatEmptyState } from './chat-empty-state';
 import { CHAT_MESSAGE_COLUMN_CLASS } from './chat-layout';
 import { ChatMessageItem } from './chat-message-item';
@@ -8,8 +8,8 @@ import { ChatMessageItem } from './chat-message-item';
 interface ChatMessageListProps {
   sessionId: string | null;
   messages: ChatMessage[];
-  hasConversation: boolean;
-  suppressEmptyState: boolean;
+  hasUserMessages: boolean;
+  hideEmptyState: boolean;
   sending: boolean;
   editingMessageId: string | null;
   editingValue: string;
@@ -18,14 +18,14 @@ interface ChatMessageListProps {
   onEditingValueChange: (value: string) => void;
   onCancelEditUserMessage: () => void;
   onSubmitEditUserMessage: () => Promise<void>;
-  onNotice: (content: string) => void;
+  onErrorFeedback: (content: string) => void;
 }
 
 export function ChatMessageList({
   sessionId,
   messages,
-  hasConversation,
-  suppressEmptyState,
+  hasUserMessages,
+  hideEmptyState,
   sending,
   editingMessageId,
   editingValue,
@@ -34,41 +34,36 @@ export function ChatMessageList({
   onEditingValueChange,
   onCancelEditUserMessage,
   onSubmitEditUserMessage,
-  onNotice,
+  onErrorFeedback,
 }: ChatMessageListProps) {
-  const visibleMessages = messages.filter(
-    (message) => message.role !== 'system' && message.kind !== 'system',
-  );
+  const { items } = getChatMessageListViewState({
+    messages,
+    sending,
+    editingMessageId,
+  });
   const messageKeyPrefix = sessionId ?? 'empty';
 
   return (
     <div ref={scrollContainerRef} className="absolute inset-0 touch-pan-y overflow-y-auto">
       <div className={CHAT_MESSAGE_COLUMN_CLASS}>
-        {!hasConversation && !suppressEmptyState ? <ChatEmptyState /> : null}
+        {!hasUserMessages && !hideEmptyState ? <ChatEmptyState /> : null}
 
-        {visibleMessages.map((message, index) => (
+        {items.map(({ message, isLoading, isStreaming, isEditing, canEditUserMessage }, index) => (
           <ChatMessageItem
             key={`${messageKeyPrefix}:${index}`}
             sessionId={sessionId}
             message={message}
-            isLoading={
-              sending &&
-              index === visibleMessages.length - 1 &&
-              message.role === 'assistant' &&
-              !message.content.trim()
-            }
-            isStreaming={
-              sending && index === visibleMessages.length - 1 && message.role === 'assistant'
-            }
-            isEditing={message.id === editingMessageId}
+            isLoading={isLoading}
+            isStreaming={isStreaming}
+            isEditing={isEditing}
             editingValue={editingValue}
             sending={sending}
-            canEditUserMessage={isEditableUserMessage(visibleMessages, message.id)}
+            canEditUserMessage={canEditUserMessage}
             onStartEditUserMessage={onStartEditUserMessage}
             onEditingValueChange={onEditingValueChange}
             onCancelEditUserMessage={onCancelEditUserMessage}
             onSubmitEditUserMessage={onSubmitEditUserMessage}
-            onNotice={onNotice}
+            onErrorFeedback={onErrorFeedback}
           />
         ))}
 

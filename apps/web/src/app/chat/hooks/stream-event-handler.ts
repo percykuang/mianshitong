@@ -1,5 +1,6 @@
 import type { ChatSession } from '@mianshitong/shared';
 import type { SseEventHandler } from '../lib/chat-api';
+import { CHAT_ERROR_COPY } from '../lib/chat-copy';
 import { parseSsePayload } from '../lib/chat-helpers';
 
 interface StreamEventHandlerInput {
@@ -7,7 +8,7 @@ interface StreamEventHandlerInput {
   setActiveSession: (
     value: ChatSession | null | ((previous: ChatSession | null) => ChatSession | null),
   ) => void;
-  setNotice: (value: string | null) => void;
+  setErrorFeedback: (value: string | null) => void;
   setSyncedSession: (session: ChatSession) => void;
 }
 
@@ -47,8 +48,8 @@ export function createStreamEventHandler(input: StreamEventHandlerInput): SseEve
     }
 
     if (eventName === 'error') {
-      input.setNotice(
-        typeof parsed.message === 'string' ? parsed.message : '模型调用失败，请稍后重试',
+      input.setErrorFeedback(
+        typeof parsed.message === 'string' ? parsed.message : CHAT_ERROR_COPY.streamFailed,
       );
     }
   };

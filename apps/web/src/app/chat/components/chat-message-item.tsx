@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useChatMessageFeedback } from '../hooks/use-chat-message-feedback';
+import { getChatMessageItemViewState } from '../lib/chat-message-item-view-state';
 import { ChatAssistantAvatar } from './chat-assistant-avatar';
 import { ChatLoadingIndicator } from './chat-loading-indicator';
 import { ChatMarkdown } from './chat-markdown';
@@ -22,7 +23,7 @@ interface ChatMessageItemProps {
   onEditingValueChange: (value: string) => void;
   onCancelEditUserMessage: () => void;
   onSubmitEditUserMessage: () => Promise<void>;
-  onNotice: (content: string) => void;
+  onErrorFeedback: (content: string) => void;
 }
 
 export function ChatMessageItem({
@@ -38,17 +39,27 @@ export function ChatMessageItem({
   onEditingValueChange,
   onCancelEditUserMessage,
   onSubmitEditUserMessage,
-  onNotice,
+  onErrorFeedback,
 }: ChatMessageItemProps) {
-  const isUserMessage = message.role === 'user' && !isLoading;
-  const shouldShowActions = !isLoading && !isEditing && !isStreaming;
-  const isInterruptedAssistantMessage =
-    message.role === 'assistant' && message.completionStatus === 'interrupted';
-  const { pendingMessageId, setMessageFeedback } = useChatMessageFeedback({
+  const { pendingFeedbackTargetMessageId, submitMessageFeedback } = useChatMessageFeedback({
     sessionId,
-    onError: onNotice,
+    onErrorFeedback,
   });
-  const feedbackPending = pendingMessageId === message.id;
+  const {
+    isUserMessage,
+    shouldShowActions,
+    isInterruptedAssistantMessage,
+    messageFeedbackPending,
+    canShowEditAction,
+  } = getChatMessageItemViewState({
+    message,
+    isLoading,
+    isStreaming,
+    isEditing,
+    sending,
+    canEditUserMessage,
+    pendingFeedbackTargetMessageId,
+  });
 
   return (
     <article className="group/message w-full animate-in duration-200 fade-in slide-in-from-bottom-1">
@@ -137,14 +148,14 @@ export function ChatMessageItem({
             >
               <ChatMessageActions
                 isUserMessage={isUserMessage}
-                canEditUserMessage={canEditUserMessage && !sending}
+                canEditUserMessage={canShowEditAction}
                 content={message.content}
                 messageId={message.id}
-                activeFeedback={message.feedback ?? null}
-                feedbackPending={feedbackPending}
-                onNotice={onNotice}
+                activeMessageFeedback={message.feedback ?? null}
+                messageFeedbackPending={messageFeedbackPending}
+                onErrorFeedback={onErrorFeedback}
                 onStartEditUserMessage={onStartEditUserMessage}
-                onSetMessageFeedback={setMessageFeedback}
+                onSubmitMessageFeedback={submitMessageFeedback}
               />
             </div>
           ) : null}

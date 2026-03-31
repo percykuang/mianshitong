@@ -59,10 +59,7 @@ test('删除当前会话后应回到空聊天页', async ({ page }) => {
 
   await page.getByRole('button', { name: session.title }).hover();
   await page.getByLabel('更多会话操作').click();
-  await page
-    .locator('[data-radix-popper-content-wrapper]')
-    .getByRole('button', { name: '删除', exact: true })
-    .click();
+  await page.getByRole('menuitem', { name: '删除', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
 
   await expect(page).toHaveURL(/\/chat$/);
@@ -70,7 +67,17 @@ test('删除当前会话后应回到空聊天页', async ({ page }) => {
   await expect(page.getByText('新建一个会话后，你的聊天记录会展示在这里。')).toBeVisible();
 });
 
-test('消息复制应更新局部 copied 状态，不触发全局 toast', async ({ page }) => {
+test('侧边栏顶部按钮 hover 时不再显示 tooltip', async ({ page }) => {
+  await openChat(page);
+
+  await page.getByRole('button', { name: '删除所有会话记录' }).hover();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '新建会话' }).hover();
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+});
+
+test('消息复制应仅更新局部 copied 状态，不切换基础文案也不触发顶部反馈条', async ({ page }) => {
   const session = await createRemoteSession(page, '请帮我优化这段项目经历');
   await page.goto(`/chat/${session.id}`);
 
@@ -79,7 +86,7 @@ test('消息复制应更新局部 copied 状态，不触发全局 toast', async 
   await expect(assistantCopy).toHaveAttribute('aria-label', '复制');
   await assistantCopy.click();
   await expect(assistantCopy).toHaveAttribute('data-copy-state', 'copied');
-  await expect(assistantCopy).toHaveAttribute('aria-label', '已复制');
+  await expect(assistantCopy).toHaveAttribute('aria-label', '复制');
   await expect(page.getByText('Copied to clipboard!')).toHaveCount(0);
 });
 
