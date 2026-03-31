@@ -7,13 +7,14 @@ datasource db {
 }
 
 model AuthUser {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  actor        UserActor?
-  chatSessions ChatSessionRecord[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                      String                        @id @default(cuid())
+  email                   String                        @unique
+  passwordHash            String
+  actor                   UserActor?
+  chatSessions            ChatSessionRecord[]
+  knowledgeRetrievalTrace KnowledgeRetrievalTraceRecord[]
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
 }
 
 model AdminUser {
@@ -30,17 +31,18 @@ enum UserActorType {
 }
 
 model UserActor {
-  id                 String             @id @default(cuid())
-  type               UserActorType
-  displayName        String
-  authUserId         String?            @unique
-  guestTokenHash     String?            @unique
-  chatSessions       ChatSessionRecord[]
-  dailyUsageCounters DailyUsageCounter[]
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  lastSeenAt         DateTime           @default(now())
-  authUser           AuthUser?          @relation(fields: [authUserId], references: [id], onDelete: SetNull)
+  id                      String                        @id @default(cuid())
+  type                    UserActorType
+  displayName             String
+  authUserId              String?                       @unique
+  guestTokenHash          String?                       @unique
+  chatSessions            ChatSessionRecord[]
+  dailyUsageCounters      DailyUsageCounter[]
+  knowledgeRetrievalTrace KnowledgeRetrievalTraceRecord[]
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+  lastSeenAt              DateTime                      @default(now())
+  authUser                AuthUser?                     @relation(fields: [authUserId], references: [id], onDelete: SetNull)
 
   @@index([type, lastSeenAt(sort: Desc)])
 }
@@ -58,21 +60,22 @@ model DailyUsageCounter {
 }
 
 model ChatSessionRecord {
-  id        String   @id
-  actorId   String
-  userId    String?
-  title     String
-  modelId   String
-  isPrivate Boolean  @default(true)
-  status    String   @default("idle")
-  config    Json
-  report    Json?
-  runtime   Json
-  messages  Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  actor     UserActor @relation(fields: [actorId], references: [id], onDelete: Cascade)
-  user      AuthUser? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                      String                        @id
+  actorId                 String
+  userId                  String?
+  title                   String
+  modelId                 String
+  isPrivate               Boolean                       @default(true)
+  status                  String                        @default("idle")
+  config                  Json
+  report                  Json?
+  runtime                 Json
+  messages                Json
+  knowledgeRetrievalTrace KnowledgeRetrievalTraceRecord[]
+  createdAt               DateTime                      @default(now())
+  updatedAt               DateTime                      @updatedAt
+  actor                   UserActor                     @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  user                    AuthUser?                     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([actorId, updatedAt(sort: Desc)])
   @@index([userId, updatedAt(sort: Desc)])
@@ -110,4 +113,115 @@ model QuestionRetrievalDoc {
   questionItem        QuestionBankItem @relation(fields: [questionItemId], references: [id], onDelete: Cascade)
 
   @@index([embeddingModel, embeddingVersion, embeddingDimensions])
+}
+
+enum KnowledgeDocumentCategory {
+  tech_knowledge
+  interview_playbook
+  project_resume
+}
+
+enum KnowledgeDocumentContentShape {
+  reference
+  process
+  checklist
+  template
+}
+
+enum KnowledgeRetrievalIntentKind {
+  technical_question
+  interview_playbook
+  project_highlight
+  resume_optimize
+  self_intro
+}
+
+enum KnowledgeRetrievalMode {
+  strong
+  weak
+  none
+}
+
+enum KnowledgeRetrievalTriggerKind {
+  new_message
+  edit_regenerate
+}
+
+model KnowledgeDocument {
+  id           String                        @id @default(cuid())
+  title        String
+  category     KnowledgeDocumentCategory
+  contentShape KnowledgeDocumentContentShape @default(reference)
+  summary      String?
+  content      String
+  tags         String[]                      @default([])
+  isPublished  Boolean                       @default(false)
+  chunks       KnowledgeDocumentChunk[]
+  createdAt    DateTime                      @default(now())
+  updatedAt    DateTime                      @updatedAt
+
+  @@index([category, isPublished, updatedAt(sort: Desc)])
+  @@index([isPublished, updatedAt(sort: Desc)])
+}
+
+model KnowledgeDocumentChunk {
+  id                  String            @id @default(cuid())
+  documentId          String
+  chunkOrder          Int
+  headingPath         String[]          @default([])
+  headingText         String?
+  content             String
+  searchText          String
+  tags                String[]          @default([])
+  normalizedTags      String[]          @default([])
+  embedding           Unsupported("vector")?
+  embeddingModel      String?
+  embeddingVersion    String?
+  embeddingDimensions Int?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  document            KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, chunkOrder])
+  @@index([embeddingModel, embeddingVersion, embeddingDimensions])
+}
+
+model KnowledgeRetrievalTraceRecord {
+  id          String                       @id @default(cuid())
+  sessionId   String
+  actorId     String
+  userId      String?
+  triggerKind KnowledgeRetrievalTriggerKind
+  queryHash   String
+  queryPreview String
+  intentKind  KnowledgeRetrievalIntentKind
+  mode        KnowledgeRetrievalMode
+  categories  KnowledgeDocumentCategory[]  @default([])
+  preferredTags String[]                   @default([])
+  createdAt   DateTime                     @default(now())
+  actor       UserActor                    @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  session     ChatSessionRecord            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user        AuthUser?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  results     KnowledgeRetrievalTraceResultRecord[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([sessionId, createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([intentKind, mode, createdAt(sort: Desc)])
+  @@index([queryHash, createdAt(sort: Desc)])
+}
+
+model KnowledgeRetrievalTraceResultRecord {
+  id           String                       @id @default(cuid())
+  traceId       String
+  rank          Int
+  documentId    String
+  documentTitle String
+  category      KnowledgeDocumentCategory
+  headingPath   String[]                     @default([])
+  score         Float
+  trace         KnowledgeRetrievalTraceRecord @relation(fields: [traceId], references: [id], onDelete: Cascade)
+
+  @@index([traceId, rank])
+  @@index([documentId])
 }

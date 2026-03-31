@@ -1,8 +1,14 @@
 import { expect, test } from '@playwright/test';
 import {
+  cleanupKnowledgeDocumentFixture,
+  cleanupInterviewPlaybookKnowledgeDocumentFixture,
+  cleanupResumeKnowledgeDocumentFixture,
   createRemoteConversationSession,
   createRemoteSession,
   openChat,
+  seedKnowledgeDocumentFixture,
+  seedInterviewPlaybookKnowledgeDocumentFixture,
+  seedResumeKnowledgeDocumentFixture,
 } from './support/chat-e2e-fixtures';
 
 test('新建会话后发送预设消息会走真实流式接口并渲染 provider 输出', async ({ page }) => {
@@ -189,4 +195,61 @@ test('编辑最后一条用户消息后仍可正常重生成', async ({ page }) 
   await expect(page.getByRole('main')).toContainText(
     '[web-e2e] 已按真实模型链路处理：最后一条编辑后问题：重新解释 diff 策略，尽量详细',
   );
+});
+
+test('命中文档知识时应把知识上下文注入到真实聊天链路', async ({ page }) => {
+  const fixture = await seedKnowledgeDocumentFixture();
+
+  try {
+    await openChat(page);
+    await page.getByTestId('multimodal-input').fill(fixture.prompt);
+    await page.getByTestId('send-button').click();
+
+    await expect(page).toHaveURL(/\/chat\/[0-9a-f]{32}$/);
+    await expect(page.getByRole('main')).toContainText(fixture.prompt);
+    await expect(page.getByRole('main')).toContainText(
+      `[web-e2e] 已按真实模型链路处理：${fixture.prompt}`,
+    );
+    await expect(page.getByRole('main')).toContainText(fixture.expectedKnowledgeHitText);
+  } finally {
+    await cleanupKnowledgeDocumentFixture();
+  }
+});
+
+test('简历优化里夹带技术关键词时，真实聊天链路仍应命中 project resume 文档', async ({ page }) => {
+  const fixture = await seedResumeKnowledgeDocumentFixture();
+
+  try {
+    await openChat(page);
+    await page.getByTestId('multimodal-input').fill(fixture.prompt);
+    await page.getByTestId('send-button').click();
+
+    await expect(page).toHaveURL(/\/chat\/[0-9a-f]{32}$/);
+    await expect(page.getByRole('main')).toContainText(fixture.prompt);
+    await expect(page.getByRole('main')).toContainText(
+      `[web-e2e] 已按真实模型链路处理：${fixture.prompt}`,
+    );
+    await expect(page.getByRole('main')).toContainText(fixture.expectedKnowledgeHitText);
+  } finally {
+    await cleanupResumeKnowledgeDocumentFixture();
+  }
+});
+
+test('面试流程问题应命中 interview playbook 文档', async ({ page }) => {
+  const fixture = await seedInterviewPlaybookKnowledgeDocumentFixture();
+
+  try {
+    await openChat(page);
+    await page.getByTestId('multimodal-input').fill(fixture.prompt);
+    await page.getByTestId('send-button').click();
+
+    await expect(page).toHaveURL(/\/chat\/[0-9a-f]{32}$/);
+    await expect(page.getByRole('main')).toContainText(fixture.prompt);
+    await expect(page.getByRole('main')).toContainText(
+      `[web-e2e] 已按真实模型链路处理：${fixture.prompt}`,
+    );
+    await expect(page.getByRole('main')).toContainText(fixture.expectedKnowledgeHitText);
+  } finally {
+    await cleanupInterviewPlaybookKnowledgeDocumentFixture();
+  }
 });

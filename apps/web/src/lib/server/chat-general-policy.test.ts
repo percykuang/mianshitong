@@ -44,6 +44,18 @@ describe('resolveGeneralChatIntent', () => {
     expect(intent).toEqual({ kind: 'resume_optimize' });
   });
 
+  it('简历修改诉求里即使夹带技术关键词，也应优先识别为简历优化', () => {
+    const intent = resolveGeneralChatIntent({
+      content: [
+        '我在改简历，里面有一段 React 性能优化经历。',
+        '但现在写出来像流水账，想知道怎么改写得更有亮点，也更容易让面试官看出业务价值。',
+      ].join(''),
+      userMessageCount: 0,
+    });
+
+    expect(intent).toEqual({ kind: 'resume_optimize' });
+  });
+
   it('不会把完整简历正文误判成入口模板', () => {
     const intent = resolveGeneralChatIntent({
       content: [
@@ -91,6 +103,15 @@ describe('resolveGeneralChatIntent', () => {
     });
 
     expect(intent).toEqual({ kind: 'self_intro' });
+  });
+
+  it('会识别面试流程与打法问题', () => {
+    const intent = resolveGeneralChatIntent({
+      content: '前端面试流程一般是怎么样的？',
+      userMessageCount: 0,
+    });
+
+    expect(intent).toEqual({ kind: 'interview_playbook' });
   });
 
   it('会识别技术概念题', () => {
@@ -187,6 +208,29 @@ describe('prependGeneralChatIntentInstruction', () => {
     expect(messages[2]?.content).toContain('## 什么时候用');
     expect(messages[2]?.content).toContain('什么时候其实没必要用');
   });
+
+  it('会为面试打法问题追加专属指令和 few-shot', () => {
+    const messages = prependGeneralChatIntentInstruction(
+      [
+        {
+          role: 'user',
+          content: '前端面试流程一般是怎么样的？',
+        },
+      ],
+      { kind: 'interview_playbook' },
+    );
+
+    expect(messages[0]?.role).toBe('system');
+    expect(messages[0]?.content).toContain('面试流程 / 面试打法');
+    expect(messages[0]?.content).toContain('技术一面、二面、HR 面');
+    expect(messages[1]).toEqual({
+      role: 'user',
+      content: '前端面试流程一般是怎么样的？',
+    });
+    expect(messages[2]?.role).toBe('assistant');
+    expect(messages[2]?.content).toContain('前端面试通常可以概括成这几步');
+    expect(messages[2]?.content).toContain('技术一面');
+  });
 });
 
 describe('buildGeneralChatFallbackReply', () => {
@@ -216,5 +260,15 @@ describe('buildGeneralChatFallbackReply', () => {
     expect(reply).toContain('## 建议按这个顺序回答');
     expect(reply).toContain('## 你可以继续这样追问');
     expect(reply).toContain('什么时候其实没必要用');
+  });
+
+  it('会为面试打法问题生成兜底回复', () => {
+    const reply = buildGeneralChatFallbackReply({
+      kind: 'interview_playbook',
+    });
+
+    expect(reply).toContain('前端面试通常会经历这几个阶段');
+    expect(reply).toContain('技术一面');
+    expect(reply).toContain('HR 面');
   });
 });

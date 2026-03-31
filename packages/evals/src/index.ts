@@ -22,6 +22,14 @@ export {
   type SkillRegressionEvalResult,
 } from './skill-regression-evals';
 export {
+  KNOWLEDGE_ANSWER_EVAL_CASES,
+  KNOWLEDGE_RETRIEVAL_EVAL_CASES,
+  type KnowledgeAnswerEvalCase,
+  type KnowledgeAnswerEvalExpectations,
+  type KnowledgeRetrievalEvalCase,
+  type KnowledgeRetrievalEvalExpectations,
+} from './knowledge-rag-fixtures';
+export {
   ASSESSMENT_SKILL_EVAL_CASES,
   REPORT_SKILL_EVAL_CASES,
   RESUME_PROFILE_EVAL_CASES,
@@ -32,3 +40,11 @@ export {
   type ResumeProfileEvalCase,
   type ResumeProfileEvalExpectations,
 } from './skill-regression-fixtures';
+export {
+  runKnowledgeAnswerEvalCase,
+  runKnowledgeAnswerEvalSuite,
+  runKnowledgeRetrievalEvalCase,
+  runKnowledgeRetrievalEvalSuite,
+  type KnowledgeAnswerEvalResult,
+  type KnowledgeRetrievalEvalResult,
+} from './knowledge-rag-evals';

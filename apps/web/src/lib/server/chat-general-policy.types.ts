@@ -9,6 +9,7 @@ export type TechnicalQuestionIntentStyle = 'concept' | 'mechanism' | 'comparison
 
 export type GeneralChatIntent =
   | { kind: 'greeting' }
+  | { kind: 'interview_playbook' }
   | { kind: 'resume_optimize' }
   | { kind: 'simple_arithmetic'; arithmetic: ArithmeticIntent }
   | { kind: 'self_intro' }

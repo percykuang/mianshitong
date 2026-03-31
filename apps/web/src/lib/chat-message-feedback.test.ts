@@ -26,6 +26,7 @@ function createSession(): ChatSession {
       planGeneratedAt: null,
       planningTrace: null,
       reportTrace: null,
+      knowledgeRetrievalTrace: [],
     },
     createdAt: '2026-03-09T00:00:00.000Z',
     updatedAt: '2026-03-09T00:00:00.000Z',

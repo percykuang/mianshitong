@@ -5,7 +5,7 @@ import {
   seedAdminTraceSession,
 } from './support/admin-e2e-fixtures';
 
-test('管理员可查看会话详情中的规划、执行与报告 Trace', async ({ page }) => {
+test('管理员可查看会话详情中的规划、执行、报告与知识检索 Trace', async ({ page }) => {
   const fixture = await seedAdminTraceSession();
 
   try {
@@ -47,12 +47,22 @@ test('管理员可查看会话详情中的规划、执行与报告 Trace', async
     await reportCard.getByText(/正确性 · 均分/).click();
     await expect(reportCard).toContainText('js_event_loop');
 
+    const knowledgeCard = page.locator('.ant-card').filter({
+      has: page.getByText('知识检索 Trace', { exact: true }),
+    });
+    await expect(knowledgeCard).toBeVisible();
+    await expect(knowledgeCard).toContainText('技术问答');
+    await expect(knowledgeCard).toContainText('强命中');
+    await expect(knowledgeCard).toContainText('事件循环面试回答模板');
+    await expect(knowledgeCard).toContainText('宏任务与微任务');
+    await expect(knowledgeCard).toContainText('Promise、宏任务、微任务的执行顺序怎么回答更清楚？');
+
     const messageCard = page.locator('.ant-card').filter({
       has: page.getByText('对话记录', { exact: true }),
     });
     await expect(messageCard).toContainText('我知道 Promise。');
     await expect(messageCard).toContainText('调用栈清空后会先执行微任务再执行宏任务');
   } finally {
-    await cleanupAdminTraceSession();
+    await cleanupAdminTraceSession(fixture);
   }
 });

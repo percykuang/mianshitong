@@ -68,6 +68,26 @@ function buildSelfIntroductionReply(): string {
   ].join('\n');
 }
 
+function buildInterviewPlaybookReply(): string {
+  return [
+    '前端面试通常会经历这几个阶段：简历筛选、1 到 2 轮技术面、项目或系统设计追问、HR 面，以及最后的 offer 沟通。',
+    '',
+    '你可以按这个思路准备：',
+    '1. 技术一面：重点准备前端基础、常见高频题和项目经历讲述。',
+    '2. 技术二面：重点准备项目取舍、复杂问题排查、性能优化和架构思路。',
+    '3. HR 面：重点准备离职原因、职业规划、薪资预期和协作案例。',
+    '',
+    '最常见的问题不是“不会背题”，而是项目讲不清、回答没有结构，或者只给结论讲不出取舍。',
+    '',
+    '如果你愿意，我可以下一步直接按你的情况帮你拆：',
+    '- 你是应届还是社招',
+    '- 目标岗位级别',
+    '- 技术栈和项目背景',
+    '',
+    '你把这些告诉我后，我可以继续给你一版更贴近实际的一面 / 二面准备清单。',
+  ].join('\n');
+}
+
 function buildProjectHighlightReply(): string {
   return [
     '可以，简历里的项目亮点不要只写“做了什么”，而要重点写“为什么重要、你解决了什么问题、最后带来了什么结果”。',
@@ -154,6 +174,10 @@ export function buildGeneralChatFallbackReply(intent: GeneralChatIntent): string
 
   if (intent.kind === 'self_intro') {
     return buildSelfIntroductionReply();
+  }
+
+  if (intent.kind === 'interview_playbook') {
+    return buildInterviewPlaybookReply();
   }
 
   if (intent.kind === 'technical_question') {

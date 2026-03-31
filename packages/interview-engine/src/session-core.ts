@@ -164,6 +164,15 @@ function cloneRuntime(runtime: InterviewRuntimeState): InterviewRuntimeState {
           })),
         }
       : null,
+    knowledgeRetrievalTrace: (runtime.knowledgeRetrievalTrace ?? []).map((item) => ({
+      ...item,
+      categories: [...(item.categories ?? [])],
+      preferredTags: [...(item.preferredTags ?? [])],
+      results: (item.results ?? []).map((result) => ({
+        ...result,
+        headingPath: [...(result.headingPath ?? [])],
+      })),
+    })),
   };
 }
 
@@ -188,6 +197,7 @@ export function createRuntimeState(
     planGeneratedAt: null,
     planningTrace: null,
     reportTrace: null,
+    knowledgeRetrievalTrace: [],
   };
 }
 

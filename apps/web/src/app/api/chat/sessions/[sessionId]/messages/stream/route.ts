@@ -19,6 +19,11 @@ import {
   getChatUsageLimitMessage,
   rollbackChatUsage,
 } from '@/lib/server/chat-usage';
+import {
+  appendKnowledgeRetrievalTrace,
+  resolveKnowledgeDocumentContext,
+} from '@/lib/server/knowledge-document-retriever';
+import { recordKnowledgeRetrievalTraceRecordSafely } from '@/lib/server/knowledge-trace-record-repository';
 import { listActiveQuestionBank } from '@/lib/server/question-bank-repository';
 import { resolveQuestionRetriever } from '@/lib/server/question-retriever';
 import {
@@ -166,7 +171,16 @@ export async function POST(
     });
   }
 
-  const turns = toChatTurns(session, content, generalChatIntent);
+  const knowledgeResolution = await resolveKnowledgeDocumentContext({
+    intent: generalChatIntent,
+    content,
+  });
+  const knowledgeContext = knowledgeResolution?.context ?? null;
+  const sessionWithKnowledgeTrace = appendKnowledgeRetrievalTrace(
+    session,
+    knowledgeResolution?.trace ?? null,
+  );
+  const turns = toChatTurns(session, content, generalChatIntent, knowledgeContext);
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -198,12 +212,20 @@ export async function POST(
               userContent: content,
               assistantContent: normalizedAssistantText,
               modelId: session.modelId,
+              runtime: sessionWithKnowledgeTrace.runtime,
             },
             actor.authUserId,
           );
           if (!updatedSession) {
             throw new Error('会话不存在或已失效');
           }
+          await recordKnowledgeRetrievalTraceRecordSafely({
+            sessionId: updatedSession.id,
+            actorId: actor.id,
+            userId: actor.authUserId,
+            triggerKind: 'new_message',
+            trace: knowledgeResolution?.trace ?? null,
+          });
 
           enqueueSseEvent(controller, 'done', { session: updatedSession });
         } catch (error) {
@@ -219,9 +241,17 @@ export async function POST(
                   assistantContent: normalizedAssistantText,
                   modelId: session.modelId,
                   expectedMessageCount: session.messages.length,
+                  runtime: sessionWithKnowledgeTrace.runtime,
                 },
                 actor.authUserId,
               );
+              await recordKnowledgeRetrievalTraceRecordSafely({
+                sessionId,
+                actorId: actor.id,
+                userId: actor.authUserId,
+                triggerKind: 'new_message',
+                trace: knowledgeResolution?.trace ?? null,
+              });
             } else {
               await appendActorSessionExchange(
                 actor.id,
@@ -230,9 +260,17 @@ export async function POST(
                   userContent: content,
                   assistantContent: normalizedAssistantText,
                   modelId: session.modelId,
+                  runtime: sessionWithKnowledgeTrace.runtime,
                 },
                 actor.authUserId,
               );
+              await recordKnowledgeRetrievalTraceRecordSafely({
+                sessionId,
+                actorId: actor.id,
+                userId: actor.authUserId,
+                triggerKind: 'new_message',
+                trace: knowledgeResolution?.trace ?? null,
+              });
             }
             enqueueSseEvent(controller, 'error', { message: resolveErrorMessage(error) });
           } else if (fallbackAssistantText) {
@@ -255,9 +293,17 @@ export async function POST(
                     assistantContent: normalizedFallbackText,
                     modelId: session.modelId,
                     expectedMessageCount: session.messages.length,
+                    runtime: sessionWithKnowledgeTrace.runtime,
                   },
                   actor.authUserId,
                 );
+                await recordKnowledgeRetrievalTraceRecordSafely({
+                  sessionId,
+                  actorId: actor.id,
+                  userId: actor.authUserId,
+                  triggerKind: 'new_message',
+                  trace: knowledgeResolution?.trace ?? null,
+                });
               } else {
                 await rollbackChatUsage({
                   actorId: actor.id,
@@ -272,12 +318,20 @@ export async function POST(
                   userContent: content,
                   assistantContent: normalizedFallbackText,
                   modelId: session.modelId,
+                  runtime: sessionWithKnowledgeTrace.runtime,
                 },
                 actor.authUserId,
               );
               if (!updatedSession) {
                 throw new Error('会话不存在或已失效');
               }
+              await recordKnowledgeRetrievalTraceRecordSafely({
+                sessionId: updatedSession.id,
+                actorId: actor.id,
+                userId: actor.authUserId,
+                triggerKind: 'new_message',
+                trace: knowledgeResolution?.trace ?? null,
+              });
               enqueueSseEvent(controller, 'done', { session: updatedSession });
             }
           } else {

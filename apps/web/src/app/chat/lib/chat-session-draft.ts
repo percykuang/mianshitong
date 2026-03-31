@@ -68,6 +68,7 @@ export function createDraftChatSession(modelId: ModelId, sessionId?: string | nu
       planGeneratedAt: null,
       planningTrace: null,
       reportTrace: null,
+      knowledgeRetrievalTrace: [],
     },
     createdAt: now,
     updatedAt: now,

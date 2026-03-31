@@ -25,6 +25,7 @@ export function decodeSessionRuntime(input: Prisma.JsonValue): {
         assessmentTrace: [],
         planningTrace: null,
         reportTrace: null,
+        knowledgeRetrievalTrace: [],
       },
       pinnedAt: null,
     };
@@ -44,6 +45,7 @@ export function decodeSessionRuntime(input: Prisma.JsonValue): {
       assessmentTrace: normalizedRuntime.assessmentTrace ?? [],
       planningTrace: normalizedRuntime.planningTrace ?? null,
       reportTrace: normalizedRuntime.reportTrace ?? null,
+      knowledgeRetrievalTrace: normalizedRuntime.knowledgeRetrievalTrace ?? [],
     },
     pinnedAt,
   };

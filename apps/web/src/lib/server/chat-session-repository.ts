@@ -6,6 +6,7 @@ import type {
   ModelId,
   SessionSummary,
 } from '@mianshitong/shared';
+import { mergeKnowledgeRetrievalTraceEntries } from '@mianshitong/shared';
 import { compareSessionsByPinnedAndCreated } from '@/lib/chat-session-order';
 import {
   createChatSessionId,
@@ -25,6 +26,23 @@ import {
 
 function toSessionOrNull(record: SessionRecord | null): ChatSession | null {
   return record ? toSession(record) : null;
+}
+
+function mergeRuntimeWithKnowledgeTrace(
+  current: ChatSession['runtime'],
+  incoming?: ChatSession['runtime'],
+): ChatSession['runtime'] {
+  if (!incoming) {
+    return current;
+  }
+
+  return {
+    ...current,
+    knowledgeRetrievalTrace: mergeKnowledgeRetrievalTraceEntries(
+      current.knowledgeRetrievalTrace ?? [],
+      incoming.knowledgeRetrievalTrace ?? [],
+    ),
+  };
 }
 
 function toMigratedSessionCreateData(
@@ -180,6 +198,7 @@ export async function appendActorSessionExchange(
     userCreatedAt?: string;
     assistantCreatedAt?: string;
     assistantCompletionStatus?: ChatMessageCompletionStatus;
+    runtime?: ChatSession['runtime'];
   },
   userId?: string | null,
 ): Promise<ChatSession | null> {
@@ -188,12 +207,16 @@ export async function appendActorSessionExchange(
     current ?? createDraftSession({ modelId: input.modelId }, sessionId),
     input,
   );
+  const nextWithRuntime = {
+    ...nextSession,
+    runtime: mergeRuntimeWithKnowledgeTrace(nextSession.runtime, input.runtime),
+  };
 
   if (current) {
-    return saveActorSession(actorId, nextSession);
+    return saveActorSession(actorId, nextWithRuntime);
   }
 
-  return createActorSessionRecord(actorId, nextSession, userId);
+  return createActorSessionRecord(actorId, nextWithRuntime, userId);
 }
 
 export async function appendActorInterruptedTurn(
@@ -207,6 +230,7 @@ export async function appendActorInterruptedTurn(
     userCreatedAt?: string;
     assistantCreatedAt?: string;
     expectedMessageCount?: number;
+    runtime?: ChatSession['runtime'];
   },
   userId?: string | null,
 ): Promise<ChatSession | null> {
@@ -231,12 +255,16 @@ export async function appendActorInterruptedTurn(
       assistantCompletionStatus: input.assistantContent ? 'interrupted' : undefined,
     },
   );
+  const nextWithRuntime = {
+    ...nextSession,
+    runtime: mergeRuntimeWithKnowledgeTrace(nextSession.runtime, input.runtime),
+  };
 
   if (current) {
-    return saveActorSession(actorId, nextSession);
+    return saveActorSession(actorId, nextWithRuntime);
   }
 
-  return createActorSessionRecord(actorId, nextSession, userId);
+  return createActorSessionRecord(actorId, nextWithRuntime, userId);
 }
 
 export async function replaceActorSessionAfterEdit(
@@ -250,6 +278,7 @@ export async function replaceActorSessionAfterEdit(
     userCreatedAt?: string;
     assistantCreatedAt?: string;
     assistantCompletionStatus?: ChatMessageCompletionStatus;
+    runtime?: ChatSession['runtime'];
   },
 ): Promise<ChatSession | null> {
   const current = await getActorSession(actorId, sessionId);
@@ -263,7 +292,11 @@ export async function replaceActorSessionAfterEdit(
   }
 
   const nextSession = appendSessionMessages(truncated, input);
-  return saveActorSession(actorId, nextSession);
+  const nextWithRuntime = {
+    ...nextSession,
+    runtime: mergeRuntimeWithKnowledgeTrace(nextSession.runtime, input.runtime),
+  };
+  return saveActorSession(actorId, nextWithRuntime);
 }
 
 export async function deleteActorSession(actorId: string, sessionId: string): Promise<boolean> {

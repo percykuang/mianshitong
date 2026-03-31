@@ -4,10 +4,21 @@ import { Prisma, prisma } from '@mianshitong/db';
 import { createInterviewSession, processSessionMessage } from '@mianshitong/interview-engine';
 import type { ChatSession, InterviewQuestion } from '@mianshitong/shared';
 
-const ADMIN_EMAIL = 'e2e-admin@mianshitong.local';
 const ADMIN_PASSWORD = 'Admin123456!';
-const TRACE_USER_EMAIL = 'e2e-user@mianshitong.local';
-const TRACE_SESSION_ID = 'admin-trace-e2e-session';
+const E2E_DATABASE_URL =
+  'postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public';
+const TRACE_USER_EMAIL_PREFIX = 'e2e-user';
+const TRACE_SESSION_ID_PREFIX = 'admin-trace-e2e-session';
+
+interface AdminTraceFixtureIdentity {
+  adminEmail: string;
+  traceUserEmail: string;
+  traceSessionId: string;
+}
+
+function ensureE2eDatabaseUrl(): void {
+  process.env.DATABASE_URL ||= E2E_DATABASE_URL;
+}
 
 function hashAdminPassword(password: string): string {
   const salt = 'admin-e2e-salt';
@@ -15,22 +26,25 @@ function hashAdminPassword(password: string): string {
   return `scrypt:${salt}:${hash}`;
 }
 
-async function cleanupFixtureRecords(): Promise<void> {
+async function cleanupFixtureRecords(identity: AdminTraceFixtureIdentity): Promise<void> {
   await prisma.chatSessionRecord.deleteMany({
     where: {
-      OR: [{ id: TRACE_SESSION_ID }, { user: { email: TRACE_USER_EMAIL } }],
+      OR: [{ id: identity.traceSessionId }, { user: { email: identity.traceUserEmail } }],
     },
   });
   await prisma.userActor.deleteMany({
     where: {
-      OR: [{ authUser: { email: TRACE_USER_EMAIL } }, { displayName: TRACE_USER_EMAIL }],
+      OR: [
+        { authUser: { email: identity.traceUserEmail } },
+        { displayName: identity.traceUserEmail },
+      ],
     },
   });
-  await prisma.authUser.deleteMany({ where: { email: TRACE_USER_EMAIL } });
-  await prisma.adminUser.deleteMany({ where: { email: ADMIN_EMAIL } });
+  await prisma.authUser.deleteMany({ where: { email: identity.traceUserEmail } });
+  await prisma.adminUser.deleteMany({ where: { email: identity.adminEmail } });
 }
 
-async function buildTraceSession(): Promise<ChatSession> {
+async function buildTraceSession(traceSessionId: string): Promise<ChatSession> {
   const questionBank: InterviewQuestion[] = [
     {
       id: 'js_event_loop',
@@ -54,7 +68,7 @@ async function buildTraceSession(): Promise<ChatSession> {
     questionBank,
   });
 
-  session.id = TRACE_SESSION_ID;
+  session.id = traceSessionId;
 
   session = (
     await processSessionMessage({
@@ -84,23 +98,51 @@ async function buildTraceSession(): Promise<ChatSession> {
     })
   ).session;
 
+  session.runtime.knowledgeRetrievalTrace = [
+    {
+      createdAt: '2026-03-22T10:02:30.000Z',
+      intentKind: 'technical_question',
+      mode: 'strong',
+      categories: ['tech_knowledge', 'interview_playbook'],
+      preferredTags: ['前端', '事件循环', 'Promise', '微任务'],
+      queryPreview: 'Promise、宏任务、微任务的执行顺序怎么回答更清楚？',
+      results: [
+        {
+          documentId: 'doc-tech-event-loop',
+          documentTitle: '事件循环面试回答模板',
+          category: 'tech_knowledge',
+          headingPath: ['事件循环', '宏任务与微任务'],
+          score: 1.732,
+        },
+      ],
+    },
+  ];
+
   session.title = 'Admin Trace E2E 会话';
   return session;
 }
 
 export async function seedAdminTraceSession() {
-  await cleanupFixtureRecords();
+  ensureE2eDatabaseUrl();
+  const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const identity: AdminTraceFixtureIdentity = {
+    adminEmail: `e2e-admin+${suffix}@mianshitong.local`,
+    traceUserEmail: `${TRACE_USER_EMAIL_PREFIX}+${suffix}@mianshitong.local`,
+    traceSessionId: `${TRACE_SESSION_ID_PREFIX}-${suffix}`,
+  };
+
+  await cleanupFixtureRecords(identity);
 
   await prisma.adminUser.create({
     data: {
-      email: ADMIN_EMAIL,
+      email: identity.adminEmail,
       passwordHash: hashAdminPassword(ADMIN_PASSWORD),
     },
   });
 
   const authUser = await prisma.authUser.create({
     data: {
-      email: TRACE_USER_EMAIL,
+      email: identity.traceUserEmail,
       passwordHash: 'not-used-in-e2e',
     },
   });
@@ -114,7 +156,7 @@ export async function seedAdminTraceSession() {
     },
   });
 
-  const session = await buildTraceSession();
+  const session = await buildTraceSession(identity.traceSessionId);
 
   await prisma.chatSessionRecord.create({
     data: {
@@ -137,15 +179,44 @@ export async function seedAdminTraceSession() {
     },
   });
 
+  await prisma.knowledgeRetrievalTraceRecord.create({
+    data: {
+      sessionId: session.id,
+      actorId: authUser.id,
+      userId: authUser.id,
+      triggerKind: 'new_message',
+      queryHash: 'admin-trace-e2e-query-hash',
+      queryPreview: 'Promise、宏任务、微任务的执行顺序怎么回答更清楚？',
+      intentKind: 'technical_question',
+      mode: 'strong',
+      categories: ['tech_knowledge', 'interview_playbook'],
+      preferredTags: ['前端', '事件循环', 'Promise', '微任务'],
+      createdAt: new Date('2026-03-22T10:02:30.000Z'),
+      results: {
+        create: [
+          {
+            rank: 0,
+            documentId: 'doc-tech-event-loop',
+            documentTitle: '事件循环面试回答模板',
+            category: 'tech_knowledge',
+            headingPath: ['事件循环', '宏任务与微任务'],
+            score: 1.732,
+          },
+        ],
+      },
+    },
+  });
+
   return {
+    ...identity,
     sessionId: session.id,
-    adminEmail: ADMIN_EMAIL,
     adminPassword: ADMIN_PASSWORD,
   };
 }
 
-export async function cleanupAdminTraceSession(): Promise<void> {
-  await cleanupFixtureRecords();
+export async function cleanupAdminTraceSession(identity: AdminTraceFixtureIdentity): Promise<void> {
+  ensureE2eDatabaseUrl();
+  await cleanupFixtureRecords(identity);
 }
 
 export async function loginAdmin(

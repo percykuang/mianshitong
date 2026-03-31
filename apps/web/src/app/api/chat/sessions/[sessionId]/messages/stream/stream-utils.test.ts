@@ -5,6 +5,7 @@ import {
   enqueueSseEvent,
   finalizeSseStream,
   splitShortcutReplyIntoDeltas,
+  toChatTurns,
 } from './stream-utils';
 
 const originalEnv = {
@@ -58,6 +59,111 @@ describe('createStreamProvider', () => {
 
     expect(provider.name).toBe('mock-stream-provider');
     expect(content).toBe('[web-e2e] 已按真实模型链路处理：可以帮我优化简历吗？');
+  });
+
+  it('在开启测试开关后会回显命中的知识分类与文档标题', async () => {
+    process.env.LLM_PROVIDER = 'mock';
+    process.env.MOCK_STREAM_CHAT_PREFIX = '[web-e2e]';
+    process.env.MOCK_STREAM_ECHO_KNOWLEDGE = '1';
+
+    const { provider, model } = createStreamProvider('deepseek-chat');
+    let content = '';
+
+    for await (const delta of provider.streamChat({
+      model,
+      messages: [
+        {
+          role: 'system',
+          content: [
+            '以下是与当前问题高度相关的内部知识背景。',
+            '',
+            '[知识背景 1]',
+            '背景分类：技术知识',
+            '知识主题：React 性能优化面试手册',
+            '内容：',
+            '先定位，再优化。',
+          ].join('\n'),
+        },
+        {
+          role: 'user',
+          content: 'React 性能优化在面试里应该怎么回答？',
+        },
+      ],
+    })) {
+      content += delta;
+    }
+
+    expect(content).toBe(
+      '[web-e2e] 已按真实模型链路处理：React 性能优化在面试里应该怎么回答？；知识命中：技术知识::React 性能优化面试手册',
+    );
+  });
+});
+
+describe('toChatTurns', () => {
+  it('会在技术问答链路里注入知识文档上下文', () => {
+    const turns = toChatTurns(
+      {
+        id: 'session-1',
+        title: '新的对话',
+        status: 'idle',
+        modelId: 'deepseek-chat',
+        config: {
+          level: 'mid',
+          topics: ['react'],
+          questionCount: 5,
+          feedbackMode: 'end_summary',
+        },
+        messages: [],
+        runtime: {
+          questionPlan: [],
+          currentQuestionIndex: 0,
+          followUpRound: 0,
+          activeQuestionAnswers: [],
+          assessments: [],
+          followUpTrace: [],
+          assessmentTrace: [],
+          resumeProfile: null,
+          interviewBlueprint: null,
+          planningSummary: null,
+          planGeneratedAt: null,
+          planningTrace: null,
+          reportTrace: null,
+          knowledgeRetrievalTrace: [],
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        report: null,
+        isPrivate: true,
+        pinnedAt: null,
+      },
+      'React useMemo 和 useCallback 的区别',
+      {
+        kind: 'technical_question',
+        question: 'React useMemo 和 useCallback 的区别',
+        style: 'comparison',
+      },
+      {
+        mode: 'strong',
+        entries: [
+          {
+            documentId: 'doc-1',
+            documentTitle: 'React Hooks 面试手册',
+            category: 'tech_knowledge',
+            contentShape: 'reference',
+            headingPath: ['React', 'useMemo 和 useCallback'],
+            content: 'useMemo 缓存结果，useCallback 缓存函数引用。',
+            score: 6.8,
+          },
+        ],
+      },
+    );
+
+    expect(turns[0]?.role).toBe('system');
+    expect(turns.some((turn) => turn.content.includes('React Hooks 面试手册'))).toBe(true);
+    expect(turns.at(-1)).toEqual({
+      role: 'user',
+      content: 'React useMemo 和 useCallback 的区别',
+    });
   });
 });
 

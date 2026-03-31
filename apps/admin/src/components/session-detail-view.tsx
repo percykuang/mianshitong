@@ -4,6 +4,7 @@ import type { ChatSession } from '@mianshitong/shared';
 import { Card, Descriptions, List, Tag, Typography } from 'antd';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { SessionExecutionTraceCard } from '@/components/session-execution-trace-card';
+import { SessionKnowledgeTraceCard } from '@/components/session-knowledge-trace-card';
 import { SessionPlanningTraceCard } from '@/components/session-planning-trace-card';
 import { SessionReportTraceCard } from '@/components/session-report-trace-card';
 import type { SessionMessage } from '@/lib/session-messages';
@@ -100,6 +101,7 @@ export function SessionDetailView({ session, messages, runtime }: SessionDetailV
       <SessionPlanningTraceCard runtime={runtime} />
       <SessionExecutionTraceCard runtime={runtime} />
       <SessionReportTraceCard runtime={runtime} />
+      <SessionKnowledgeTraceCard runtime={runtime} />
 
       <Card title="对话记录" styles={{ body: { padding: 0 } }}>
         {visibleMessages.length === 0 ? (

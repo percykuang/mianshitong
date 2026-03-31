@@ -7,6 +7,964 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 5.47（2026-03-31）：增强知识检索 Trace 回填的时间窗口与报告能力
+
+### 目标
+
+- 让知识检索 trace 回填脚本更适合大库或线上分批迁移，不必每次都扫完整历史。
+- 让 dry-run 与正式执行都能产出结构化结果，便于评估影响面和留存迁移记录。
+
+### 主要改动
+
+- `packages/db/scripts/backfill-knowledge-trace-records.mjs`
+  - 新增 `--created-after=<ISO>` 与 `--created-before=<ISO>`，按 trace 自身的 `createdAt` 做窗口过滤。
+  - 新增 `--report-json=<path>`，会输出结构化 JSON 报告。
+  - summary 当前新增 `filteredOutByCreatedAt`，明确显示被时间窗口排除的 trace 数量。
+- `packages/db/src/knowledge-trace-backfill.test.ts`
+  - 补充时间窗口过滤和结构化报告生成的测试。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 当前时间窗口过滤针对的是 runtime trace 自身的 `createdAt`，不是 `ChatSessionRecord.updatedAt`；这样语义更准确，但大窗口场景仍需要扫描会话 runtime。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/db/src/knowledge-trace-backfill.test.ts`
+  - `pnpm trace:knowledge:backfill -- --dry-run --created-after=2026-03-01T00:00:00.000Z --report-json=/tmp/knowledge-trace-backfill-report.json`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 5.46（2026-03-31）：补齐知识检索 Trace 历史回填脚本
+
+### 目标
+
+- 把已经留存在 `ChatSession.runtime.knowledgeRetrievalTrace` 里的历史检索记录补回新表，避免 Admin 概览页切流后看不到旧会话中的有效样本。
+- 保证回填脚本可重复执行且幂等，不会因为二次运行把同一批历史 trace 写出重复数据。
+
+### 主要改动
+
+- `packages/db/scripts/backfill-knowledge-trace-records.mjs`
+  - 新增知识检索 trace 历史回填脚本。
+  - 会按批次扫描 `ChatSessionRecord.runtime.knowledgeRetrievalTrace`，将缺失的新表记录补写到 `KnowledgeRetrievalTraceRecord / KnowledgeRetrievalTraceResultRecord`。
+  - 脚本支持：
+    - `--dry-run`
+    - `--batch-size=<n>`
+    - `--limit-sessions=<n>`
+    - `--session-id=<id>`
+  - 幂等策略使用稳定去重键：
+    - `sessionId + triggerKind + createdAt + intentKind + mode + queryHash + queryPreview`
+- `packages/db/src/knowledge-trace-backfill.test.ts`
+  - 新增最小单测，覆盖历史 `queryHash` 回填、runtime 提取、去重键稳定性与参数解析。
+- `packages/db/package.json`
+  - 新增 `pnpm -C packages/db run trace:backfill` 入口。
+- `package.json`
+  - 根脚本新增 `pnpm trace:knowledge:backfill`。
+
+### 迁移/破坏性变更
+
+- 无新增数据库 migration。
+- 历史 runtime trace 的两个兼容边界需要明确：
+  - 旧 runtime 没有 `triggerKind`，回填时统一按 `new_message` 落库
+  - 旧 runtime 若缺失 `queryHash`，回填时会基于 `queryPreview` 生成近似 hash；若原始 query 当时已被截断，则聚合精度会低于新链路上的实时双写
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/db/src/knowledge-trace-backfill.test.ts`
+  - `pnpm trace:knowledge:backfill -- --dry-run --limit-sessions=20`
+  - `pnpm trace:knowledge:backfill`
+  - `pnpm trace:knowledge:backfill -- --dry-run`
+
+## Iteration 5.45（2026-03-31）：知识检索 Trace 独立事件表第一版
+
+### 目标
+
+- 把知识检索 trace 从 `ChatSession.runtime` 的临时观测形态，演进为可跨会话分析的独立事件表。
+- 保持 Web 主链路低风险：先双写新表，`runtime` 暂时兼容保留，不做一次性切断。
+- 收口 Admin E2E 的运行时隔离，避免复用旧 Prisma Client 进程导致假失败。
+
+### 主要改动
+
+- `packages/db/prisma/schema.prisma`
+  - 新增 `KnowledgeRetrievalTraceRecord`、`KnowledgeRetrievalTraceResultRecord`。
+  - 新增 `KnowledgeRetrievalIntentKind`、`KnowledgeRetrievalMode`、`KnowledgeRetrievalTriggerKind` 枚举。
+  - 为 `AuthUser`、`UserActor`、`ChatSessionRecord` 补齐新 trace 表关联。
+- `packages/db/prisma/migrations/20260331220000_add_knowledge_retrieval_trace_records/migration.sql`
+  - 新增知识检索独立事件表与结果表迁移。
+- `packages/db/src/index.ts`
+  - 导出新增 Prisma model / enum 类型。
+- `packages/shared/src/types/index.ts`
+  - `KnowledgeRetrievalTraceEntry` 新增可选 `queryHash`，用于跨会话聚合同一 query。
+- `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - 新增 query hash 构建逻辑。
+  - 生成 trace 时写入 `queryHash`。
+- `apps/web/src/lib/server/knowledge-trace-record-repository.ts`
+  - 新增独立 trace 表写入仓库层。
+  - 采用 best-effort 持久化，失败只记日志，不阻塞聊天主链路。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 新消息聊天链路接入 trace 双写。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - 编辑重生成链路接入 trace 双写。
+- `apps/admin/src/app/knowledge-retrieval/page.tsx`
+  - 知识检索概览页改为直接读取新 trace 表。
+- `apps/admin/src/lib/knowledge-trace.ts`
+  - 高频 query、回归候选改为按 `queryHash` 聚合，而不是 `queryPreview` 文案本身。
+- `apps/admin/src/components/knowledge-trace-summary-cards.tsx`
+  - 概览统计口径从“会话数”收口为“检索记录数”。
+- `apps/admin/src/components/knowledge-trace-table-card.tsx`
+  - 列表行主键改为独立 trace record id。
+- `apps/admin/e2e/support/admin-e2e-fixtures.ts`
+  - Admin E2E fixture 改为直接写入新 trace 表数据。
+- `apps/admin/next.config.ts`
+  - 支持通过 `NEXT_DIST_DIR` 指定独立构建目录。
+- `playwright.config.ts`
+  - Admin E2E 改为使用独立端口 `3101` 与独立 `distDir`。
+  - 不再复用已有 Admin dev server，避免测试命中旧 Prisma Client 进程。
+
+### 迁移/破坏性变更
+
+- 需要执行数据库迁移：
+  - `pnpm db:migrate:deploy`
+- 需要重新生成 Prisma Client：
+  - `pnpm db:generate`
+- 历史 `ChatSession.runtime.knowledgeRetrievalTrace` 暂不回填到新表。
+- Admin 概览页现阶段只分析新表中的 trace 记录；旧 runtime trace 继续仅作为兼容与会话内上下文保留。
+
+### 验证
+
+- 已执行：
+  - `pnpm db:migrate:deploy`
+  - `pnpm db:generate`
+  - `PLAYWRIGHT_SCOPE=admin pnpm test:e2e:admin --grep '管理员可查看知识检索概览页中的 summary 与 trace 记录'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '命中文档知识时应把知识上下文注入到真实聊天链路|简历优化里夹带技术关键词时，真实聊天链路仍应命中 project resume 文档|面试流程问题应命中 interview playbook 文档'`
+  - `pnpm format:check`
+  - `pnpm lint`
+  - `pnpm typecheck`
+  - `pnpm test`
+  - `pnpm spellcheck`
+
+## Iteration 5.43（2026-03-31）：为知识文档补 contentShape，并按文档形态决定上下文注入策略
+
+## Iteration 5.44（2026-03-31）：收口知识检索 Trace 并发安全、编辑语义与检索热点
+
+### 目标
+
+- 修复知识检索 Trace 在并发请求下可能被旧 runtime 覆盖的问题，避免真实会话排查时出现静默丢记录。
+- 收口“编辑最后一条用户消息”后的知识检索 Trace 语义，避免 Admin 继续展示已失效问题的旧检索记录。
+- 先用低侵入方式优化知识文档检索热点，减少普通聊天每次全量查库并重新 tokenize 的开销。
+
+### 主要改动
+
+- 知识检索 Trace 合并逻辑下沉到共享/仓库层：
+  - `packages/shared/src/utils/index.ts`
+  - `packages/shared/src/index.ts`
+  - `packages/shared/src/index.test.ts`
+  - `apps/web/src/lib/server/chat-session-repository.ts`
+  - 当前新增 `mergeKnowledgeRetrievalTraceEntries`
+  - Web 会话写回时不再直接用请求起点的 `runtime` 全量覆盖，而是基于最新会话 runtime 合并 `knowledgeRetrievalTrace`
+  - 这样在连续发送消息、编辑重生成等并发场景下，后到达请求不会把先到达请求刚写进去的 Trace 覆盖掉
+- 编辑最后一条用户消息后的旧 Trace 语义已收口：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - 当前会在进入编辑截断前，先判断被编辑的原消息是否属于知识检索意图
+  - 若属于知识检索意图，则先裁掉该轮旧 Trace，再基于编辑后的新内容重新生成并写入新的 Trace
+  - 这样 Admin 会话详情里不会继续保留已失效问题的旧检索记录
+- 知识文档检索已补短 TTL 进程内缓存：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - 当前会缓存已发布知识文档的可搜索 chunk 及其 tokens，避免普通聊天每次都重新从数据库拉取全部已发布 chunk 并逐条 tokenize
+  - 现阶段采用 `15s` TTL，优先以最低侵入方式降低热点开销，同时把文档更新后的可见延迟控制在较短窗口内
+- 补齐回归：
+  - `apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+  - `packages/shared/src/index.test.ts`
+  - 当前新增测试明确覆盖：
+    - 并发场景下 Trace 合并不丢条目
+    - 编辑知识检索消息时会移除该轮旧 Trace
+    - 编辑非知识检索消息时不会误删已有 Trace
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 知识检索 Trace 的持久化语义有一处重要收口：
+  - 编辑最后一条知识检索消息后，对应旧问题的最新 Trace 不再保留在会话当前 runtime 中
+  - 当前会话详情更偏“展示当前有效会话链路”，而不是“保留所有已失效版本的历史检索快照”
+
+### 验证
+
+- `pnpm exec vitest run packages/shared/src/index.test.ts apps/web/src/lib/server/knowledge-document-retriever.test.ts packages/retrieval/src/knowledge-document-retrieval.test.ts apps/web/src/lib/server/knowledge-document-context.test.ts`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续需要更强的会话审计能力，可考虑把知识检索 Trace 从 runtime JSON 演进为独立事件流或单独分析表，而不是继续只靠会话当前快照。
+- 若知识文档规模继续上涨，下一步应优先把当前短 TTL 内存缓存升级为更稳定的候选集裁剪或 hybrid/vector 召回，而不是继续扩大应用层全量排序范围。
+
+### 目标
+
+- 把“流程类文档按顺序展开”这件事从意图硬编码里抽出来，升级为知识文档自身的内容形态能力。
+- 避免后续继续靠分类名称、`TopK` 或额外意图分支去兜“流程文档后半段丢失”的问题。
+
+### 主要改动
+
+- 为知识文档新增 `contentShape`：
+  - `packages/db/prisma/schema.prisma`
+  - `packages/db/prisma/migrations/20260331103000_add_knowledge_document_content_shape/migration.sql`
+  - 当前支持：
+    - `reference`
+    - `process`
+    - `checklist`
+    - `template`
+  - 默认值为 `reference`，现有数据迁移后不会丢失
+- Admin 文档管理页已支持编辑和展示内容形态：
+  - `apps/admin/src/components/knowledge-document-options.ts`
+  - `apps/admin/src/components/knowledge-document-editor-form.tsx`
+  - `apps/admin/src/components/knowledge-document-create-view.tsx`
+  - `apps/admin/src/components/knowledge-document-edit-view.tsx`
+  - `apps/admin/src/components/knowledge-documents-table-card.tsx`
+  - `apps/admin/src/app/documents/page.tsx`
+  - `apps/admin/src/app/documents/[id]/edit/page.tsx`
+  - `apps/admin/src/lib/knowledge-document-validation.ts`
+  - 现在后台可以直接把“面试流程 / 阶段说明”这类文档标成“流程型内容”
+- Retrieval 数据结构补齐 `contentShape` 透传：
+  - `packages/retrieval/src/knowledge-document-retrieval.ts`
+  - `packages/retrieval/src/index.ts`
+  - `apps/admin/src/lib/knowledge-document-chunks.ts`
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - `packages/evals/src/knowledge-rag-evals.ts`
+  - Web / Admin / Evals 现在都能拿到统一的文档形态元数据
+- Web 检索策略从“按意图名判断流程展开”切到“按命中文档形态判断”：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - `apps/web/src/lib/server/knowledge-document-context.ts`
+  - 当前规则收口为：
+    - Top1 命中文档若为 `process`，则先选文档，再按原始 `chunkOrder` 顺序展开
+    - 非 `process` 仍保持普通 TopK chunk 注入
+  - 这意味着后续是否需要顺序展开，不再由 `interview_playbook` 这个意图名直接决定
+- 补齐回归：
+  - `packages/retrieval/src/knowledge-document-retrieval.test.ts`
+  - `apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+  - `apps/web/src/lib/server/knowledge-document-context.test.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - 单测现在已经明确覆盖：
+    - `process` 文档会按原顺序展开
+    - 非 `process` 文档仍走普通 TopK
+
+### 迁移/破坏性变更
+
+- 新增数据库 enum 与字段：
+  - `KnowledgeDocumentContentShape`
+  - `KnowledgeDocument.contentShape`
+- 本地已应用迁移 `20260331103000_add_knowledge_document_content_shape`
+- 现有文档默认会被视为 `reference`；若希望享受顺序展开效果，需要在 Admin 中把对应文档改成 `process`
+
+### 验证
+
+- `pnpm exec vitest run packages/retrieval/src/knowledge-document-retrieval.test.ts apps/web/src/lib/server/knowledge-document-retriever.test.ts apps/web/src/lib/server/knowledge-document-context.test.ts packages/evals/src/knowledge-rag-evals.test.ts`
+- `pnpm typecheck`
+- `pnpm verify`
+- Playwright 手动真页验证：
+  - Admin：
+    - 登录后台
+    - 新建文档，选择“分类=面试打法、内容形态=流程型内容”
+    - 保存后在列表页确认“形态=流程型内容”
+    - 进入编辑页确认“内容形态”会正确回填
+  - Web：
+    - 在 mock Web 服务中发送“前端面试流程一般是怎么样的？”
+    - 再到 Admin 的“知识检索”页确认最新 Trace 为“强命中”，Top1 文档为 `Playwright 面试流程手册`
+
+### 下一步
+
+- 可以逐步把现有“流程/步骤/阶段”类知识文档回填为 `contentShape=process`，尤其是：
+  - 面试流程
+  - HR 面
+  - offer 阶段
+  - 面试准备步骤
+- `checklist` / `template` 目前先只做数据层标注；后续若要进一步差异化注入策略，再基于真实 trace 决定是否值得继续演进。
+
+## Iteration 5.42（2026-03-31）：把面试流程类知识检索升级为“先选文档，再按顺序展开”
+
+### 目标
+
+- 彻底收口“面试流程文档明明写了三面，但回答里只剩两面”这类问题，不再靠反复调 `TopK` 撑命中完整度。
+- 把 `interview_playbook` 这类流程型知识，从“chunk 抢排名”升级为更接近业内常见 parent-document / small-to-big 的注入方式。
+
+### 主要改动
+
+- 调整 `interview_playbook` 的知识注入策略：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - 检索阶段仍保留 chunk 级打分，方便判断哪个文档最相关
+  - 但注入阶段不再直接取 TopK chunk，而是：
+    - 先按 chunk 结果聚合出最相关文档
+    - 再按该文档原始 `chunkOrder` 顺序展开
+    - 在固定上下文预算内持续注入，避免流程后半段因为排名靠后被截掉
+- 明确区分“trace 排序结果”和“实际注入上下文”：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - Admin / trace 仍保留真实检索排序，方便定位为什么命中这篇文档
+  - 真正给模型的上下文则按文档顺序展开，避免流程信息残缺
+- 补强流程型知识的 prompt 约束：
+  - `apps/web/src/lib/server/chat-general-policy-instruction.ts`
+  - 当前已明确要求：如果知识背景里已经给出 `一面 / 二面 / 三面 / HR 面 / offer` 这样的阶段顺序，不要自行删减或合并轮次
+- 补强流程型上下文的 system 提示：
+  - `apps/web/src/lib/server/knowledge-document-context.ts`
+  - 当注入的是同一篇 `interview_playbook` 文档的多段内容时，会额外提示“这些流程型知识已按原始文档顺序整理”
+- 补齐回归：
+  - `apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+  - `apps/web/src/lib/server/knowledge-document-context.test.ts`
+  - `apps/web/e2e/chat-smoke.spec.ts`
+  - 新增单测直接验证：`interview_playbook` 命中文档后，注入结果应按原始顺序保留 `投递简历 -> 一面 -> 二面 -> 三面`
+  - Web Playwright 回归当前也已兼容“真实最优文档可能优先于测试 fixture 文档”的场景，避免假失败
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- `interview_playbook` 的上下文拼装语义发生变化：现在更偏“文档级顺序展开”，而不是“纯 TopK chunk 注入”。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/knowledge-document-retriever.test.ts apps/web/src/lib/server/knowledge-document-context.test.ts apps/web/src/lib/server/chat-general-policy.test.ts`
+- `DATABASE_URL="${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}" PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '面试流程问题应命中 interview playbook 文档'`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续继续沉淀 `HR 面 / offer / 面试准备 checklist` 这类内容，可考虑给知识文档再补一层“内容形态”字段，例如 `reference / process / checklist / template`，让不同文档形态走不同注入策略，而不是继续靠分类推断。
+
+## Iteration 5.41（2026-03-30）：为“面试流程/面试打法”问题补独立知识检索意图
+
+### 目标
+
+- 解决“面试流程是怎么样的”“前端面试流程一般怎么走”这类问题明明有知识文档，但普通聊天完全不触发检索的问题。
+- 不把这类问题硬塞进 `technical_question`，而是补一条更清晰、可扩展的 `interview_playbook` 意图链路。
+
+### 主要改动
+
+- 新增普通聊天意图：
+  - `apps/web/src/lib/server/chat-general-policy.types.ts`
+  - `apps/web/src/lib/server/chat-general-policy.constants.ts`
+  - `apps/web/src/lib/server/chat-general-policy-intent.ts`
+  - 当前新增 `interview_playbook`，专门覆盖：
+    - `面试流程`
+    - `一面 / 二面 / 三面`
+    - `HR 面`
+    - `offer`
+    - `面试准备 / 面试打法`
+- 为新意图补齐 prompt 约束、few-shot 和 fallback：
+  - `apps/web/src/lib/server/chat-general-policy-instruction.ts`
+  - `apps/web/src/lib/server/chat-general-policy-examples.ts`
+  - `apps/web/src/lib/server/chat-general-policy-fallback.ts`
+  - 目标不是让它退化成泛泛百科，而是明确按“技术一面 / 技术二面 / HR 面 / offer”这样的前端面试语境来组织回答
+- 把知识检索链路接上新意图：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - `interview_playbook` 当前只检索 `interview_playbook` 分类，避免把“面试流程”误打到 `project_resume` 或 `tech_knowledge`
+  - 新意图的检索偏好标签会默认补 `面试`
+- 扩展共享 trace 契约和 Admin 展示：
+  - `packages/shared/src/types/index.ts`
+  - `packages/shared/src/utils/index.ts`
+  - `packages/shared/src/index.test.ts`
+  - `apps/admin/src/lib/knowledge-trace.ts`
+  - `apps/admin/src/lib/knowledge-trace.test.ts`
+  - `apps/admin/src/components/session-knowledge-trace-card.tsx`
+  - `apps/admin/src/components/knowledge-trace-filter.tsx`
+  - `apps/admin/src/components/knowledge-trace-table-card.tsx`
+  - `apps/admin/src/components/knowledge-trace-candidate-card.tsx`
+  - 现在后台 trace 会把这类记录显示为“面试打法”，不会再落成未知类型或错误标签
+- 补齐回归：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - `apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+  - `apps/web/e2e/support/chat-e2e-fixtures.ts`
+  - `apps/web/e2e/chat-smoke.spec.ts`
+  - 新增 Web Playwright 真页回归：发送“前端面试流程一般是怎么样的？”时，真实聊天链路应命中 `interview_playbook` 文档
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 对知识文档的使用口径有一个重要收口：
+  - “面试流程 / 面试打法 / HR 面 / offer”类文档应归到 `interview_playbook`
+  - 不应继续放在 `project_resume`
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/chat-general-policy.test.ts apps/web/src/lib/server/knowledge-document-retriever.test.ts packages/shared/src/index.test.ts apps/admin/src/lib/knowledge-trace.test.ts`
+- `DATABASE_URL="${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}" PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '面试流程问题应命中 interview playbook 文档|简历优化里夹带技术关键词时，真实聊天链路仍应命中 project resume 文档|命中文档知识时应把知识上下文注入到真实聊天链路'`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续继续补“HR 面会聊什么”“offer 阶段怎么谈”“一面二面有什么区别”，优先继续复用 `interview_playbook` 意图，而不是再往 `technical_question` 里塞规则。
+
+## Iteration 5.40（2026-03-30）：为知识库增强补齐会话级检索 Trace 与后台可观测性
+
+### 目标
+
+- 在现有“知识命中 -> prompt 注入”的 MVP 基线上，补一层真实会话可观测性，方便判断线上每次普通聊天到底检索了什么、命中强弱如何、最终拿了哪些 chunk。
+- 先用最低风险的方案把数据留住并看得见，而不是立即引入新的分析表或埋点系统。
+
+### 主要改动
+
+- 扩展共享会话 runtime 契约：
+  - `packages/shared/src/types/index.ts`
+  - 新增 `KnowledgeRetrievalTraceEntry / KnowledgeRetrievalTraceResult`
+  - `InterviewRuntimeState` 新增 `knowledgeRetrievalTrace`
+- 补齐 runtime 兼容与默认值：
+  - `apps/web/src/lib/server/chat-session-model.ts`
+  - `apps/web/src/lib/server/chat-session-ui-state.ts`
+  - `apps/admin/src/lib/chat-session-runtime.ts`
+  - `packages/interview-engine/src/session-core.ts`
+  - `apps/web/src/app/chat/lib/chat-session-draft.ts`
+  - 若旧 runtime 缺少该字段，会自动回落为空数组，不影响历史会话读取
+- 在知识检索层生成可持久化 trace：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - 当前会记录：
+    - `createdAt`
+    - `intentKind`
+    - `mode`
+    - `categories`
+    - `preferredTags`
+    - `queryPreview`
+    - TopK `results`
+  - 即使最终是 `none`，只要本次存在检索计划，也会留下 trace，便于观察“为什么没命中”
+  - trace 数量当前按会话保留最近 `12` 条，避免 runtime JSON 无限制膨胀
+- 普通聊天与消息编辑链路现在会把检索 trace 一起持久化到会话 runtime：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - `apps/web/src/lib/server/chat-session-repository.ts`
+  - 不新增 Prisma 表，也不做 migration；仍复用 `ChatSessionRecord.runtime` JSON
+- Admin 会话详情新增“知识检索 Trace”卡片：
+  - `apps/admin/src/components/session-knowledge-trace-card.tsx`
+  - `apps/admin/src/components/session-detail-view.tsx`
+  - `apps/admin/src/app/sessions/[sessionId]/page.tsx`
+  - 当前可直接查看每次检索的意图、命中模式、Query 摘要、分类标签，以及命中的文档标题 / 路径 / score
+- Admin 端当前又继续补了一层“跨会话聚合视角”：
+  - `apps/admin/src/app/knowledge-retrieval/page.tsx`
+  - `apps/admin/src/components/knowledge-trace-filter.tsx`
+  - `apps/admin/src/components/knowledge-trace-summary-cards.tsx`
+  - `apps/admin/src/components/knowledge-trace-table-card.tsx`
+  - 现在管理员不需要逐个点开会话，已经可以直接看最近一段时间内的知识检索 summary、Top Query、Top 文档，以及最近 trace 列表并跳转到对应会话
+- 新增离线分析脚本：
+  - `scripts/report-knowledge-trace.mjs`
+  - `package.json`
+  - 现在可以直接运行 `pnpm trace:knowledge:report -- --days 30 --max-sessions 20` 之类的命令，快速看 `strong / weak / none` 分布和高频 query / 文档
+- 为了把“真实 trace -> eval”这一步也补齐，当前又继续加了一层回归候选能力：
+  - `apps/admin/src/lib/knowledge-trace.ts`
+  - `apps/admin/src/components/knowledge-trace-candidate-card.tsx`
+  - `scripts/report-knowledge-trace.mjs`
+  - Admin 概览页现在会额外给出“高优先级回归候选”，优先列出 `none / weak` 的 query，方便人工挑选并回灌到 eval
+  - 命令行脚本现在也支持 `--fixture-suggestions`，会直接打印可复制的 `KnowledgeRetrievalEvalCase` 草稿
+- 补齐回归：
+  - `apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+  - `apps/admin/src/lib/knowledge-trace.test.ts`
+  - `apps/admin/e2e/support/admin-e2e-fixtures.ts`
+  - `apps/admin/e2e/session-detail-trace.spec.ts`
+  - `apps/admin/e2e/knowledge-retrieval.spec.ts`
+  - 现在不仅有 Web 侧知识链路回归，也有 Admin 详情页和知识检索概览页的真页回归
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- `ChatSession.runtime` JSON 新增 `knowledgeRetrievalTrace` 字段；旧会话按兼容默认值读取。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/knowledge-document-retriever.test.ts apps/web/src/lib/server/chat-general-policy.test.ts`
+- `pnpm exec vitest run apps/admin/src/lib/knowledge-trace.test.ts apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+- `DATABASE_URL="${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}" pnpm trace:knowledge:report -- --days 30 --max-sessions 20 --candidate-limit 5 --fixture-suggestions`
+- `DATABASE_URL="${DATABASE_URL:-postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public}" PLAYWRIGHT_SCOPE=admin pnpm test:e2e:admin --grep '管理员可查看知识检索概览页中的 summary 与 trace 记录|管理员可查看会话详情中的规划、执行、报告与知识检索 Trace'`
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '简历优化里夹带技术关键词时，真实聊天链路仍应命中 project resume 文档'`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续想继续提高知识库质量，优先基于这些真实 trace 看“哪些 query 长期落在 weak/none”，再决定是否值得切 hybrid / vector，而不是盲目继续扩样例。
+
+## Iteration 5.39（2026-03-30）：修复“简历优化 + 技术关键词”被误判为技术问答的问题
+
+### 目标
+
+- 解决真实聊天链路里一个更高价值的产品问题：当用户在“改简历/改写项目经历”的诉求里夹带技术关键词时，不应被错误路由到技术问答检索。
+- 把这类混合输入的意图收口和知识命中补成浏览器级回归，而不只停留在离线 fixture。
+
+### 主要改动
+
+- 收口简历优化意图识别规则：
+  - `apps/web/src/lib/server/chat-general-policy.constants.ts`
+  - `RESUME_REQUEST_PATTERN` 现在额外覆盖更自然的写作诉求表达，例如 `怎么写 / 怎么改 / 如何写 / 如何改 / 改`
+  - 目标是识别“我在改简历，这段项目经历怎么改写得更有亮点”这类真实输入，而不是只识别“优化简历”模板句
+- 补齐对应单测：
+  - `apps/web/src/lib/server/chat-general-policy.test.ts`
+  - 新增“简历修改诉求里即使夹带技术关键词，也应优先识别为简历优化”
+- 把知识检索计划抽成纯函数并补混合意图测试：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - `apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+  - 现在可以直接验证：
+    - 自我介绍 + 项目亮点混杂输入，会优先走 `self_intro`
+    - 简历优化 + 技术关键词混杂输入，会优先走 `resume_optimize`
+- 在补 Web E2E 的过程中，还顺手抓出并修掉了一个真实服务端回归：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - 抽 helper 后 `resolveKnowledgeDocumentContext()` 里遗漏了一处 `categories` 变量替换，真实聊天链路会直接抛 `ReferenceError`
+  - 该问题已修复，并通过新增 E2E 真实验证
+- 新增 Web Playwright 回归：
+  - `apps/web/e2e/support/chat-e2e-fixtures.ts`
+  - `apps/web/e2e/chat-smoke.spec.ts`
+  - 新增 `project_resume` 知识文档 fixture，并验证“改简历 + React 性能优化经历”这类消息会命中 `E2E 项目亮点提炼模板`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- Web 端普通聊天的意图识别边界有小幅调整：部分原本会落到 `technical_question` 的“简历修改 + 技术关键词”消息，现在会正确走 `resume_optimize` 链路。
+
+### 验证
+
+- `pnpm exec vitest run apps/web/src/lib/server/chat-general-policy.test.ts apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '简历优化里夹带技术关键词时，真实聊天链路仍应命中 project resume 文档'`
+- `pnpm verify`
+
+### 下一步
+
+- 后续若继续完善混合输入处理，优先再补“自我介绍 + 项目亮点 + 简历修改顾虑”三者混杂的输入，而不是继续细抠单意图样例。
+
+## Iteration 5.38（2026-03-30）：补长输入与噪声样例，逼近真实用户提问分布
+
+### 目标
+
+- 让知识库离线评测不只依赖短问句，而是开始覆盖多句口语描述、带背景信息和个人顾虑的真实用户输入。
+- 检查当前轻量检索在较长输入下是否仍能守住正确文档和合理的强弱命中级别。
+
+### 主要改动
+
+- 继续扩展知识库检索评测样例：
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - 新增长技术问法：围绕 `React 性能优化`，带“容易讲散”“担心说成过度结论”等噪声信息
+  - 新增长简历优化问法：围绕“项目经历写成流水账、看不出业务价值”的真实困扰
+  - 新增长自我介绍问法：带“目标岗位更高级、怕讲成流水账”的背景信息
+- 继续扩展知识库回答评测样例：
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - 新增对应的长输入回答样例，要求回答仍能收口到知识库中的结构化核心点，而不是被噪声带偏
+- 顺手收口了一条回答评测中的禁用短语：
+  - 避免简单的 substring 匹配把“不要讲成某个错误结论”误判成真的错误结论
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无线上运行时变更；这是一次离线评测样例扩充。
+
+### 验证
+
+- `pnpm evals:knowledge:rag`
+- `pnpm verify`
+
+### 下一步
+
+- 后续若要继续提升评测质量，优先补“多意图混杂”的真实用户输入，例如同一条消息里同时提到“自我介绍 + 项目亮点 + 简历修改顾虑”，观察当前意图路由与知识检索会如何收口。
+
+## Iteration 5.37（2026-03-30）：补灰区检索样例，固定当前词法检索的真实边界
+
+### 目标
+
+- 不只验证“明显该命中的问题”和“完全无关的问题”，还要把“语义相关但词法不够直接”的灰区样例固化下来。
+- 为后续 hybrid / vector 检索升级预留同一批对照样例，避免将来只凭主观感觉判断召回是否变好。
+
+### 主要改动
+
+- 继续扩展知识库检索评测样例：
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - 新增两条当前应稳定落在 `weak` 的灰区样例：
+    - 项目表述类：`简历里怎么把自己做过的事写得不那么像记流水账`
+    - 面试开场类：`面试开头怎么说会更顺一点`
+- 这两条样例刻意避免直接复用文档里的标题词和主句式，只保留最少量的意图标签信号，用来描述当前轻量词法检索的真实边界，而不是为现有实现“量身定制”命中词。
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无线上运行时变更；这是一次离线评测边界样例补齐。
+
+### 验证
+
+- `pnpm evals:knowledge:rag`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续升级为 hybrid / vector 检索，应优先观察这两类灰区样例是否从 `weak` 提升为更稳定的 `strong`，以及是否仍保持正确文档排序，而不是只看强命中样例。
+
+## Iteration 5.36（2026-03-30）：继续扩充知识库评测，覆盖简历优化与意译问法
+
+### 目标
+
+- 让知识库离线评测更贴近真实用户输入，不只覆盖“标准标题式问法”，还覆盖简历优化与开场式意译问法。
+- 继续提高对当前轻量检索策略的回归约束，尤其是“意图补充标签是否真的帮助召回”这一点。
+
+### 主要改动
+
+- 继续扩展知识库检索评测样例：
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - 新增 `resume_optimize` 场景，验证“简历里的项目经历怎么写”会优先命中 `项目亮点提炼模板`
+  - 新增“前端面试开场 1 分钟，怎么把自己讲清楚”这类自我介绍意译问法，验证在意图补充 `面试 / 自我介绍` 标签后仍能稳定命中 `前端自我介绍面试打法`
+- 继续扩展知识库回答评测样例：
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - 新增“简历项目经历怎么写更有说服力”的回答评测，要求覆盖 `背景 / 目标 / 动作 / 结果 / 量化 / 业务价值`
+  - 新增“面试开场 1 分钟怎么讲清楚自己”的回答评测，要求仍能收口到三段式结构，而不是退化成通用套话
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无线上运行时变更；这是一次离线评测样例扩充。
+
+### 验证
+
+- `pnpm evals:knowledge:rag`
+- `pnpm verify`
+
+### 下一步
+
+- 后续应优先补：
+  - 更长、更口语化的真实用户问法
+  - “知识库里有但当前词法容易漏召回”的灰区样例
+  - 后续 hybrid/vector 检索升级前后的 A/B 对照样例
+
+## Iteration 5.35（2026-03-30）：扩充知识库高价值评测样例，覆盖项目亮点与 weak 边界
+
+### 目标
+
+- 把知识库离线评测从“只有技术问答和自我介绍”扩展到更接近真实使用的高价值场景。
+- 补齐 `project_resume` 场景和 `weak` 边界样例，避免后续只会验证强命中和完全不命中。
+
+### 主要改动
+
+- 扩展知识库检索评测样例：
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - 新增 `project_highlight` 场景，验证项目亮点类问法会优先命中 `项目亮点提炼模板`
+  - 新增一条更模糊、口语化的表达类问题，验证在只有部分标签和词法重叠时，当前检索会稳定判为 `weak`
+- 扩展知识库回答评测样例：
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - 新增项目亮点回答样例，要求回答覆盖“背景 / 动作 / 结果 / 业务价值”，并优于无知识基线
+- 继续维持当前样例设计原则：
+  - 问法尽量贴近真实用户输入
+  - 不把 fixture 写成只对单一关键词模板生效的“测试句”
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无线上运行时变更；这是一次评测覆盖面扩充。
+
+### 验证
+
+- `pnpm evals:knowledge:rag`
+- `pnpm verify`
+
+### 下一步
+
+- 后续应继续补：
+  - `resume_optimize` 场景
+  - 同义表达 / 意译问法
+  - “知识库里有，但词法容易漏召回”的灰区样例
+
+## Iteration 5.34（2026-03-30）：统一知识命中模式判定并补单独评测入口
+
+### 目标
+
+- 避免知识库评测和 Web 生产链路各自维护一套 `strong / weak / none` 判定规则，导致后续阈值漂移。
+- 给知识库离线评测补一个固定脚本入口，方便后续单独回归，不再手写文件路径。
+
+### 主要改动
+
+- 把知识命中模式判定抽到检索层统一管理：
+  - `packages/retrieval/src/knowledge-document-retrieval.ts`
+  - `packages/retrieval/src/index.ts`
+  - 新增 `resolveKnowledgeDocumentHitMode(results)`，由检索层统一输出 `strong / weak / none`
+- Web 生产链路改为复用统一判定 helper：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - 不再在 Web 侧内联维护阈值和条件判断
+- 扩展知识库评测覆盖面：
+  - `packages/retrieval/src/knowledge-document-retrieval.test.ts`
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - `packages/evals/src/knowledge-rag-evals.ts`
+  - 新增 `expectedMode` 校验，并补一条“无关问题应返回 none”的离线样例
+- 新增根脚本：
+  - `package.json`
+  - `pnpm evals:knowledge:rag`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无线上行为变更；这是一次规则收口与评测入口补齐。
+
+### 验证
+
+- `pnpm exec vitest run packages/retrieval/src/knowledge-document-retrieval.test.ts`
+- `pnpm exec vitest run packages/evals/src/knowledge-rag-evals.test.ts`
+- `pnpm verify`
+
+### 下一步
+
+- 后续若切到 hybrid / vector 检索，应继续复用这套 `expectedMode + TopK + 覆盖增益` fixture，对比新旧检索策略的真实收益，而不是只看主观回答观感。
+
+## Iteration 5.33（2026-03-30）：补齐知识库检索与回答关联度的离线评测骨架
+
+### 目标
+
+- 为知识文档增强补一组可进 CI 的离线评测基线，不再只靠 Web E2E 验证“链路通了”。
+- 把“问题是否命中正确知识”“回答是否真正吸收知识并优于无知识基线”拆成可持续扩展的 fixture + eval runner。
+
+### 主要改动
+
+- 新增知识库评测 fixtures 与执行器：
+  - `packages/evals/src/knowledge-rag-fixtures.ts`
+  - `packages/evals/src/knowledge-rag-evals.ts`
+  - `packages/evals/src/knowledge-rag-evals.test.ts`
+  - 当前第一版采用“分层但低成本”的离线方案：
+    - 检索评测：验证 Top1 文档、TopK 命中、分数阈值与排除项
+    - 回答评测：验证回答覆盖关键事实、避免禁用结论，并支持和无知识基线做 A/B 覆盖增益比较
+- 补齐 `packages/evals` 的 workspace 依赖与导出：
+  - `packages/evals/package.json`
+  - `packages/evals/src/index.ts`
+  - 允许 `evals` 直接复用 `@mianshitong/retrieval` 的知识文档分块与检索逻辑
+- 第一版样例当前覆盖两类高频场景：
+  - 技术问答：`React 性能优化`
+  - 面试话术：`前端自我介绍`
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无线上运行时变更；这是一次离线评测能力补齐。
+
+### 验证
+
+- `pnpm exec vitest run packages/evals/src/knowledge-rag-evals.test.ts`
+
+### 下一步
+
+- 后续可继续把当前 `answer` 评测从“规则短语覆盖”升级为“规则基线 + LLM judge”双层方案，但应保留现有确定性基线，避免 CI 受模型波动影响。
+- 若知识库后续升级到 `pgvector + embeddings` 或 hybrid RAG，这组 fixtures 应继续复用，用于对比检索与回答增益是否真的提升。
+
+## Iteration 5.32（2026-03-30）：补齐 Playwright 自测命令模板
+
+### 目标
+
+- 把“需要做 Playwright 自测”进一步落成可直接执行的命令模板，避免每次临时翻 `package.json` 或 `playwright.config.ts`。
+- 降低后续交付前执行浏览器回归的心智成本，让这条流程真正可复用。
+
+### 主要改动
+
+- 扩展项目级协作约定：
+  - `AGENTS.md`
+  - 新增 `Playwright 自测命令模板` 小节
+  - 固定收录以下常用命令：
+    - `pnpm test:e2e:web`
+    - `pnpm test:e2e:admin`
+    - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '<关键字>'`
+    - `PLAYWRIGHT_SCOPE=admin pnpm test:e2e:admin --grep '<关键字>'`
+    - `PLAYWRIGHT_SKIP_WEBSERVER=1 ...`
+  - 同时补充默认选择原则：优先跑能精准覆盖本次改动面的 `--grep`，影响范围大时再跑对应端全量 E2E
+- 同步更新项目上下文：
+  - `docs/ProjectContext.md`
+  - 记录 Playwright 自测命令模板已成为当前仓库的固定协作资产
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无运行时行为变更；这是一次协作模板补全。
+
+### 验证
+
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '命中文档知识时应把知识上下文注入到真实聊天链路'`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续 Web/Admin 的高频回归场景继续增加，可再把“推荐回归矩阵”沉淀成单独文档，而不是继续堆在协作约定里。
+
+## Iteration 5.31（2026-03-30）：把 Playwright 自测收口进项目级协作约定
+
+### 目标
+
+- 把“代码改完后要做 Playwright 自测”从口头要求收口为项目级固定约束，避免后续只跑单测和静态检查就交付。
+- 让前端交互、聊天链路、流式输出这类真实用户路径在每次迭代后都有最小浏览器验证。
+
+### 主要改动
+
+- 更新项目级协作约定：
+  - `AGENTS.md`
+  - 在“每次改动后的必做清单”里新增 Playwright 自测要求
+  - 约定为：
+    - 对任何影响 Web/Admin 交互、页面行为、聊天链路、流式输出或用户可见流程的改动，交付前默认还需要做至少一轮 Playwright 自测
+    - 若仓库已有对应用例，优先直接运行
+    - 若没有现成用例，至少做一轮手动 Playwright 浏览器验证，并在交付说明里写清验证路径
+- 同步更新项目上下文：
+  - `docs/ProjectContext.md`
+  - 记录“`pnpm verify` + Playwright 自测”已成为当前项目的默认交付口径
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无运行时行为变更；这是一次项目协作流程收口。
+
+### 验证
+
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '命中文档知识时应把知识上下文注入到真实聊天链路'`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续某条功能经常需要手动 Playwright 才能验证，优先把它沉淀成正式 E2E，而不是长期依赖口头自测。
+
+## Iteration 5.30（2026-03-30）：收口知识增强的产品口径，默认不自曝文档来源
+
+### 目标
+
+- 让知识文档增强继续作为“隐式能力”存在，而不是在用户主回复里频繁暴露“根据某文档/资料”的实现痕迹。
+- 保持可解释性边界，但把默认产品感收口为“像资深面试官自然回答”，而不是“检索系统在复述内部资料”。
+
+### 主要改动
+
+- 收口知识文档注入 prompt 的角色表达：
+  - `apps/web/src/lib/server/knowledge-document-context.ts`
+  - 强命中时改为“以下是与当前问题高度相关的内部知识背景”
+  - 弱命中时改为“以下是与当前问题可能相关的内部知识背景”
+  - 明确新增约束：默认不要在正文里主动提到“根据某文档/资料/知识库”，也不要直接报出文档标题；只有用户明确追问依据时，才允许再说明来源
+- 弱化注入块里的显式实现痕迹：
+  - `apps/web/src/lib/server/knowledge-document-context.ts`
+  - `参考资料` -> `知识背景`
+  - `来源分类` -> `背景分类`
+  - `文档标题` -> `知识主题`
+  - `标题路径` -> `主题路径`
+- 同步更新测试与 mock 兼容逻辑：
+  - `apps/web/src/lib/server/knowledge-document-context.test.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - mock provider 继续支持从知识注入块里提取命中文档标题，但现在兼容 `知识主题` 和旧 `文档标题` 两种标签，避免影响现有 Web E2E
+
+### 迁移/破坏性变更
+
+- 无数据库 schema 变更。
+- 无接口 contract 变更；这是一次知识注入提示词与产品口径收口。
+
+### 验证
+
+- `pnpm exec vitest run 'apps/web/src/lib/server/knowledge-document-context.test.ts' 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '命中文档知识时应把知识上下文注入到真实聊天链路'`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续要增强可信度，优先做“可展开的来源卡片 / 查看依据”而不是把来源写进正文首段。
+- 若用户主动问“这个结论依据是什么”，再考虑在回答链路里按需显式引用知识主题，而不是恢复默认自报来源。
+
+## Iteration 5.29（2026-03-30）：为文档知识增强补齐 Web E2E 防回归
+
+### 目标
+
+- 把“知识文档检索命中后会增强聊天回复”这件事沉淀成稳定的浏览器级回归，而不是只靠手工验证。
+- 避免这条链路后续改 prompt、改检索、改 mock provider 时静默失效。
+
+### 主要改动
+
+- 为 Web Playwright 测试环境补知识命中回显开关：
+  - `playwright.config.ts`
+  - Web E2E 启动命令新增 `MOCK_STREAM_ECHO_KNOWLEDGE=1`
+  - 仅在测试环境打开，不影响真实模型链路
+- 增强 mock stream provider 的测试可观测性：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - 当输入消息里存在知识文档 system context，且开启测试开关时，会从 `文档标题：...` 里提取命中文档标题，并在 mock 回复里附加 `知识命中：...`
+- 补充对应单元测试：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - 新断言覆盖“开启测试开关后，mock provider 会回显知识命中的文档标题”
+- 新增知识文档 E2E fixture 与浏览器回归：
+  - `apps/web/e2e/support/chat-e2e-fixtures.ts`
+  - `apps/web/e2e/chat-smoke.spec.ts`
+  - 测试会直接种入一篇已发布 `tech_knowledge` 文档及其 chunks
+  - 然后通过 Web 聊天真实 `/api/chat/sessions/*/messages/stream` 发起技术问题
+  - 最终断言回复中同时包含用户问题和 `知识命中：E2E React 性能优化面试手册`
+- 在这次 Playwright 实测里，还额外修掉了后台文档列表页的一个运行时稳态问题：
+  - `apps/admin/src/app/documents/page.tsx`
+  - `chunkCount` 读取改为 `document._count?.chunks ?? 0`
+  - 避免 dev 进程挂着旧 Prisma Client 或运行时结果缺失时，`Documents` 页直接崩在 `.count`
+
+### 迁移/破坏性变更
+
+- 无新增数据库 schema 变更。
+- 无线上行为变更；新增的知识命中回显仅在 Web E2E 的 mock 环境启用。
+
+### 验证
+
+- `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+- `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '命中文档知识时应把知识上下文注入到真实聊天链路'`
+- `pnpm verify`
+
+### 下一步
+
+- 若后续想把后台文档管理也纳入自动回归，可继续补一条 Admin E2E，覆盖“新建/编辑文档后 chunk 数变化”。
+- 若后续产品需要在 UI 上展示引用来源，可在当前 Web E2E 的基础上继续补“回答里显示引用块/来源卡片”的断言，而不是重写整条测试基建。
+
+## Iteration 5.28（2026-03-30）：落地后台文档知识库与聊天定向检索增强
+
+### 目标
+
+- 用尽量轻量的实现方式，为面试通补一条“后台文档管理 -> 自动分块 -> 检索增强 -> 聊天回答”的领域知识增强链路。
+- 在不引入重型知识中台、向量库和复杂审核流的前提下，让前端技术问答、项目亮点、简历优化、自我介绍等场景先获得更强的领域性。
+
+### 主要改动
+
+- 新增知识文档数据模型与迁移：
+  - `packages/db/prisma/schema.prisma`
+  - `packages/db/prisma/migrations/20260330103000_add_knowledge_documents/migration.sql`
+  - `packages/db/src/index.ts`
+  - 新增 `KnowledgeDocument / KnowledgeDocumentChunk`
+  - 文档分类当前只保留 `tech_knowledge / interview_playbook / project_resume`
+  - 文档使用 `isPublished` 控制是否参与线上检索，不引入复杂状态机
+- 落地 Markdown 自动分块与轻量检索层：
+  - `packages/retrieval/src/knowledge-document-retrieval.ts`
+  - `packages/retrieval/src/knowledge-document-retrieval.test.ts`
+  - `packages/retrieval/src/index.ts`
+  - 保存文档时按 Markdown 标题切 section，保留 `headingPath`
+  - chunk 切分时避免在 fenced code block 中间截断，超长内容再按句子和长度拆分
+  - 检索先采用“词法召回 + heading 加权 + tag 加权”，为后续接 `pgvector` 预留边界
+- 新增后台文档管理模块：
+  - `apps/admin/src/app/documents/page.tsx`
+  - `apps/admin/src/app/documents/new/page.tsx`
+  - `apps/admin/src/app/documents/[id]/edit/page.tsx`
+  - `apps/admin/src/app/api/knowledge-documents/items/route.ts`
+  - `apps/admin/src/app/api/knowledge-documents/items/[id]/route.ts`
+  - `apps/admin/src/components/knowledge-document-*.tsx`
+  - `apps/admin/src/lib/knowledge-document-*.ts`
+  - 支持文档列表、分类筛选、新建、编辑、发布开关与保存时自动重建 chunk
+  - `apps/admin/src/components/admin-shell.tsx` 已补 `Documents` 导航入口
+- 把知识检索接入普通聊天主链路：
+  - `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - `apps/web/src/lib/server/knowledge-document-context.ts`
+  - `apps/web/src/lib/server/knowledge-document-context.test.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/[messageId]/edit/stream/route.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - 仅在命中特定意图时检索，不对所有聊天请求默认检索
+  - 当前命中映射为：
+    - `technical_question` -> `tech_knowledge + interview_playbook`
+    - `project_highlight / resume_optimize` -> `project_resume + interview_playbook`
+    - `self_intro` -> `interview_playbook + project_resume`
+- 明确知识注入的三层策略：
+  - 强命中：优先依据资料回答
+  - 弱命中：资料仅作辅助背景，不强行引用
+  - 未命中：不注入资料，直接回落到现有通用 prompt、意图策略与 few-shot
+
+### 迁移/破坏性变更
+
+- 需要执行新增 Prisma migration，数据库会新增 `KnowledgeDocument` 与 `KnowledgeDocumentChunk` 两张表。
+- 当前第一版只支持 Markdown/纯文本资料录入；PDF、Word、审批、版本管理、引用展示 UI 暂不在 MVP 范围内。
+
+### 验证
+
+- `pnpm exec vitest run packages/retrieval/src/knowledge-document-retrieval.test.ts apps/web/src/lib/server/knowledge-document-context.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+- `pnpm typecheck`
+- `pnpm verify`
+
+### 下一步
+
+- 如果后台资料规模继续增大，优先升级检索层为 `pgvector + embeddings`，而不是先扩张复杂工作流。
+- 若后续产品确认需要“回答时展示引用来源”，可在当前 `KnowledgeDocumentContext` 输出结构上继续补前端引用展示，而不需要重做检索主链。
+
 ## Iteration 5.26（2026-03-30）：收口用户消息手动复制时的额外空行
 
 ### 目标

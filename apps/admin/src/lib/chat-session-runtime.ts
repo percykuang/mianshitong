@@ -25,6 +25,7 @@ export function decodeAdminSessionRuntime(input: Prisma.JsonValue): ChatSession[
       planGeneratedAt: null,
       planningTrace: null,
       reportTrace: null,
+      knowledgeRetrievalTrace: [],
     };
   }
 
@@ -72,5 +73,8 @@ export function decodeAdminSessionRuntime(input: Prisma.JsonValue): ChatSession[
       ? normalizedRuntime.planningTrace
       : null,
     reportTrace: isRecord(normalizedRuntime.reportTrace) ? normalizedRuntime.reportTrace : null,
+    knowledgeRetrievalTrace: Array.isArray(normalizedRuntime.knowledgeRetrievalTrace)
+      ? normalizedRuntime.knowledgeRetrievalTrace
+      : [],
   };
 }

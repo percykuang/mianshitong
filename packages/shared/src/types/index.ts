@@ -248,6 +248,31 @@ export interface InterviewRuntimeState {
   planGeneratedAt: string | null;
   planningTrace: InterviewPlanningTrace | null;
   reportTrace: InterviewReportTrace | null;
+  knowledgeRetrievalTrace: KnowledgeRetrievalTraceEntry[];
+}
+
+export interface KnowledgeRetrievalTraceResult {
+  documentId: string;
+  documentTitle: string;
+  category: 'tech_knowledge' | 'interview_playbook' | 'project_resume';
+  headingPath: string[];
+  score: number;
+}
+
+export interface KnowledgeRetrievalTraceEntry {
+  createdAt: string;
+  intentKind:
+    | 'resume_optimize'
+    | 'self_intro'
+    | 'project_highlight'
+    | 'technical_question'
+    | 'interview_playbook';
+  mode: 'strong' | 'weak' | 'none';
+  categories: Array<'tech_knowledge' | 'interview_playbook' | 'project_resume'>;
+  preferredTags: string[];
+  queryHash?: string;
+  queryPreview: string;
+  results: KnowledgeRetrievalTraceResult[];
 }
 
 export interface ChatMessage {

@@ -58,6 +58,10 @@ export default async function SessionDetailPage({ params }: SessionDetailPagePro
         runtime={{
           ...runtime,
           planGeneratedAt: runtime.planGeneratedAt ? formatDateTime(runtime.planGeneratedAt) : null,
+          knowledgeRetrievalTrace: runtime.knowledgeRetrievalTrace.map((entry) => ({
+            ...entry,
+            createdAt: formatDateTime(entry.createdAt),
+          })),
         }}
       />
     </AdminShell>

@@ -9,6 +9,10 @@ import {
 import type { GeneralChatIntent } from '@/lib/server/chat-general-policy';
 import { prependGeneralChatIntentInstruction } from '@/lib/server/chat-general-policy';
 import { prependChatReplyFormattingInstruction } from '@/lib/server/chat-response-format';
+import {
+  prependKnowledgeDocumentContext,
+  type KnowledgeDocumentContext,
+} from '@/lib/server/knowledge-document-context';
 
 export const encoder = new TextEncoder();
 const SHORTCUT_STREAM_MIN_DURATION_MS = 320;
@@ -30,6 +34,7 @@ export function toChatTurns(
   session: ChatSession,
   nextUserContent: string,
   intent: GeneralChatIntent | null = null,
+  knowledgeContext: KnowledgeDocumentContext | null = null,
 ): ChatTurn[] {
   const history: ChatTurn[] = session.messages
     .filter((message) => message.kind !== 'report')
@@ -44,7 +49,10 @@ export function toChatTurns(
   });
 
   return prependChatReplyFormattingInstruction(
-    prependGeneralChatIntentInstruction(history, intent),
+    prependGeneralChatIntentInstruction(
+      prependKnowledgeDocumentContext(history, knowledgeContext),
+      intent,
+    ),
   );
 }
 
@@ -62,6 +70,39 @@ function resolveMockStreamDelayMs(): number {
   return parsed;
 }
 
+function resolveMockKnowledgeEntries(messages: ChatTurn[]): string[] {
+  const entries = new Set<string>();
+
+  for (const message of messages) {
+    if (
+      message.role !== 'system' ||
+      (!message.content.includes('[参考资料') && !message.content.includes('[知识背景'))
+    ) {
+      continue;
+    }
+
+    let currentCategory = '';
+    for (const rawLine of message.content.split('\n')) {
+      const line = rawLine.trim();
+      if (line.startsWith('背景分类：')) {
+        currentCategory = line.slice('背景分类：'.length).trim();
+        continue;
+      }
+
+      if (line.startsWith('知识主题：') || line.startsWith('文档标题：')) {
+        const title = line.slice(line.indexOf('：') + 1).trim();
+        if (!title) {
+          continue;
+        }
+
+        entries.add(currentCategory ? `${currentCategory}::${title}` : title);
+      }
+    }
+  }
+
+  return [...entries];
+}
+
 class MockStreamChatProvider implements StreamChatProvider {
   public readonly name = 'mock-stream-provider';
 
@@ -72,7 +113,11 @@ class MockStreamChatProvider implements StreamChatProvider {
         .find((message) => message.role === 'user')
         ?.content.trim() ?? '';
     const prefix = process.env.MOCK_STREAM_CHAT_PREFIX?.trim() || '[mock-stream]';
-    const reply = `${prefix} 已按真实模型链路处理：${lastUserMessage || '空消息'}`;
+    const shouldEchoKnowledge = process.env.MOCK_STREAM_ECHO_KNOWLEDGE === '1';
+    const knowledgeEntries = shouldEchoKnowledge ? resolveMockKnowledgeEntries(input.messages) : [];
+    const knowledgeSuffix =
+      knowledgeEntries.length > 0 ? `；知识命中：${knowledgeEntries.join('、')}` : '';
+    const reply = `${prefix} 已按真实模型链路处理：${lastUserMessage || '空消息'}${knowledgeSuffix}`;
     const delayMs = resolveMockStreamDelayMs();
 
     for (const delta of splitShortcutReplyIntoDeltas(reply)) {

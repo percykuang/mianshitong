@@ -26,6 +26,8 @@ export {
   type InterviewReportDimensionTraceSource,
   type InterviewReportLevel,
   type InterviewReport,
+  type KnowledgeRetrievalTraceEntry,
+  type KnowledgeRetrievalTraceResult,
   type InterviewReportNextStepTrace,
   type InterviewReportPointTrace,
   type InterviewReportPointTraceSource,
@@ -47,4 +49,10 @@ export {
 } from './types';
 export { APP_NAME, APP_SLUG, INTERVIEW_TOPICS, MODEL_OPTIONS, QUICK_PROMPTS } from './constants';
 export { DEFAULT_INTERVIEW_CONFIG } from './defaults';
-export { clamp, createEmptyScores, normalizeInterviewConfig } from './utils';
+export {
+  clamp,
+  createEmptyScores,
+  mergeKnowledgeRetrievalTraceEntries,
+  normalizeInterviewConfig,
+  normalizeKnowledgeTracePreferredTags,
+} from './utils';

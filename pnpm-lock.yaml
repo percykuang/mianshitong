@@ -302,6 +302,9 @@ importers:
       '@mianshitong/interview-engine':
         specifier: workspace:*
         version: link:../interview-engine
+      '@mianshitong/retrieval':
+        specifier: workspace:*
+        version: link:../retrieval
       '@mianshitong/shared':
         specifier: workspace:*
         version: link:../shared

@@ -66,6 +66,7 @@
     "percykuang",
     "rerank",
     "hnsw",
-    "zstd"
+    "zstd",
+    "dedup"
   ]
 }

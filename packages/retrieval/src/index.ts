@@ -1,4 +1,21 @@
 export {
+  buildKnowledgeDocumentChunks,
+  buildKnowledgeDocumentSearchText,
+  normalizeKnowledgeDocumentTag,
+  resolveKnowledgeDocumentHitMode,
+  searchKnowledgeDocumentChunks,
+  tokenizeKnowledgeRetrievalText,
+  type KnowledgeDocumentCategory,
+  type KnowledgeDocumentChunkPayload,
+  type KnowledgeDocumentContentShape,
+  type KnowledgeDocumentHitMode,
+  type KnowledgeDocumentSearchQuery,
+  type KnowledgeDocumentSearchResult,
+  type KnowledgeDocumentSearchScoreBreakdown,
+  type KnowledgeDocumentSource,
+  type SearchableKnowledgeDocumentChunk,
+} from './knowledge-document-retrieval';
+export {
   buildQuestionRetrievalSearchText,
   buildQuestionRetrievalDocs,
   buildQuerySearchText,

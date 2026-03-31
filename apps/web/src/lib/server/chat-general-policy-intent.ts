@@ -1,5 +1,6 @@
 import {
   GREETING_PATTERNS,
+  INTERVIEW_PLAYBOOK_PATTERN,
   PROJECT_HIGHLIGHT_PATTERN,
   RESUME_REQUEST_PATTERN,
   SECTION_HINTS,
@@ -167,6 +168,10 @@ export function resolveGeneralChatIntent(input: {
 
   if (SELF_INTRO_PATTERN.test(trimmed)) {
     return { kind: 'self_intro' };
+  }
+
+  if (INTERVIEW_PLAYBOOK_PATTERN.test(trimmed)) {
+    return { kind: 'interview_playbook' };
   }
 
   if (PROJECT_HIGHLIGHT_PATTERN.test(trimmed)) {

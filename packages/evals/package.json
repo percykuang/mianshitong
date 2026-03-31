@@ -12,6 +12,7 @@
   "dependencies": {
     "@mianshitong/agent-skills": "workspace:*",
     "@mianshitong/interview-engine": "workspace:*",
+    "@mianshitong/retrieval": "workspace:*",
     "@mianshitong/shared": "workspace:*"
   },
   "devDependencies": {

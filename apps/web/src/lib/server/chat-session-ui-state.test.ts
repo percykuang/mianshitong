@@ -16,6 +16,7 @@ describe('decodeSessionRuntime', () => {
       planningSummary: null,
       planGeneratedAt: null,
       reportTrace: null,
+      knowledgeRetrievalTrace: [],
       __chatUi: {
         pinnedAt: '2026-03-22T00:00:00.000Z',
       },
@@ -26,5 +27,6 @@ describe('decodeSessionRuntime', () => {
     expect(decoded.runtime.assessmentTrace).toEqual([]);
     expect(decoded.runtime.planningTrace).toBeNull();
     expect(decoded.runtime.reportTrace).toBeNull();
+    expect(decoded.runtime.knowledgeRetrievalTrace).toEqual([]);
   });
 });

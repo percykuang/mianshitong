@@ -47,6 +47,19 @@ export function buildGeneralChatIntentInstruction(intent: GeneralChatIntent): st
     ].join('\n');
   }
 
+  if (intent.kind === 'interview_playbook') {
+    return [
+      '当前用户命中了“面试流程 / 面试打法”高频意图。',
+      '请像有真实面试经验的前端面试官一样回复，不要把答案写成泛泛百科摘要。',
+      '回复要求：',
+      '1. 先直接概括前端面试通常有哪些阶段，不要先寒暄。',
+      '2. 再按阶段拆开讲清每一轮通常考察什么、应该怎么准备、哪些是高频误区。',
+      '3. 优先围绕技术一面、二面、HR 面、offer 阶段来组织，除非用户要求，否则不要展开成过长清单。',
+      '4. 如果知识背景里已经明确给出了阶段顺序，例如一面、二面、三面、HR 面、offer，不要自行合并、删减或改写成另一套轮次。',
+      '5. 最后给一个明确下一步动作，例如“告诉我你的年限和技术栈，我帮你按轮次准备”。',
+    ].join('\n');
+  }
+
   if (intent.kind === 'technical_question') {
     const structureLines =
       intent.style === 'comparison'

@@ -83,6 +83,30 @@ export function buildGeneralChatIntentExamples(intent: GeneralChatIntent): ChatT
     ];
   }
 
+  if (intent.kind === 'interview_playbook') {
+    return [
+      {
+        role: 'user',
+        content: '前端面试流程一般是怎么样的？',
+      },
+      {
+        role: 'assistant',
+        content: [
+          '前端面试通常可以概括成这几步：简历筛选、1 到 2 轮技术面、可能的项目/系统设计追问、HR 面，以及最后的 offer 沟通。',
+          '',
+          '你可以重点这样准备：',
+          '- 技术一面：基础知识和项目经历要讲顺，重点是 JavaScript、框架、浏览器、网络和工程化。',
+          '- 技术二面：更容易追问项目取舍、性能优化、复杂问题排查和设计思路。',
+          '- HR 面：准备离职原因、职业规划、薪资预期和沟通协作案例。',
+          '',
+          '常见误区是只背八股，不准备项目细节和“为什么这么做”的取舍逻辑。',
+          '',
+          '如果你告诉我你的年限、目标岗位和技术栈，我可以继续按“一面 / 二面 / HR 面”帮你拆准备重点。',
+        ].join('\n'),
+      },
+    ];
+  }
+
   if (intent.kind === 'technical_question') {
     if (intent.style === 'comparison') {
       return [

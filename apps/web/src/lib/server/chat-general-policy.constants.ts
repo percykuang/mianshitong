@@ -19,10 +19,12 @@ export const CHAT_REPLY_POLICY_INSTRUCTION = [
 export const GREETING_PATTERNS = [/^你好[呀啊]?$/, /^hello$/i, /^hi$/i, /^嗨$/, /^在吗$/];
 
 export const RESUME_REQUEST_PATTERN =
-  /(优化|修改|润色|完善|评审|点评|改写|看看|review|重写|调整).{0,8}简历|简历.{0,8}(优化|修改|润色|完善|评审|点评|改写|看看|review|重写|调整)/i;
+  /(优化|修改|润色|完善|评审|点评|改写|看看|review|重写|调整|怎么写|怎么改|如何写|如何改|改).{0,8}简历|简历.{0,12}(优化|修改|润色|完善|评审|点评|改写|看看|review|重写|调整|怎么写|怎么改|如何写|如何改|写|改)/i;
 export const PROJECT_HIGHLIGHT_PATTERN =
   /(项目亮点|项目经验|项目描述).{0,8}(挖掘|提炼|优化|润色|改写|突出)|如何挖掘简历项目亮点/;
 export const SELF_INTRO_PATTERN = /(面试|前端).{0,8}自我介绍|自我介绍.{0,8}(面试|前端)/;
+export const INTERVIEW_PLAYBOOK_PATTERN =
+  /((前端|程序员|技术).{0,6})?面试.{0,8}(流程|环节|准备|打法|安排|一般是怎么样|一般怎么|怎么走)|([Hh][Rr]).{0,8}(面|沟通|聊什么|会问什么|流程)|((一面|二面|三面|终面|offer).{0,8}(会问什么|聊什么|流程|怎么准备|一般是什么))/i;
 export const TECHNICAL_COMPARE_PATTERN = /(区别|差异|对比|比较|不同|选哪个|怎么选|vs|VS|versus)/;
 export const TECHNICAL_MECHANISM_PATTERN =
   /(原理|机制|流程|顺序|过程|底层|工作方式|如何工作|怎么工作|如何执行|怎么执行|实现方式|实现原理|为什么会)/;
