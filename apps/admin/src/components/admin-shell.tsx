@@ -8,6 +8,8 @@ import {
   UserOutlined,
   DashboardOutlined,
   UpOutlined,
+  FileTextOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -17,6 +19,8 @@ const NAV_ITEMS = [
   { href: '/users', label: '用户', icon: <UserOutlined /> },
   { href: '/sessions', label: '会话', icon: <MessageOutlined /> },
   { href: '/questions', label: '题库', icon: <BookOutlined /> },
+  { href: '/documents', label: '文档', icon: <FileTextOutlined /> },
+  { href: '/knowledge-retrieval', label: '检索', icon: <SearchOutlined /> },
 ] as const;
 interface AdminShellProps {
   title: string;
