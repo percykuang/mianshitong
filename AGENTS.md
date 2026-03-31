@@ -29,11 +29,50 @@ pnpm spellcheck
 
 - 对任何实际代码、配置、脚本、文档改动，默认在交付前主动执行上述 5 条检查；除非用户明确说明“不需要跑命令”或当前任务仅要求只读分析。
 - 优先使用统一入口 `pnpm verify`，避免遗漏单项检查。
+- 对任何影响 Web/Admin 交互、页面行为、聊天链路、流式输出或用户可见流程的改动，交付前默认还需要使用 Playwright 做至少一轮对应自测。
+- 若仓库里已有对应 Playwright 用例，优先直接运行并汇报结果；若没有现成用例，至少做一轮手动 Playwright 浏览器验证，并在交付说明里写清验证路径。
 
 3. 配置同步
 
 - 新增环境变量：同步更新 `env.example`（不要提交 `.env.local`）。
 - 新增专有名词/缩写：同步更新 `cspell.json`（避免 CI 拼写检查失败）。
+
+## Playwright 自测命令模板
+
+- Web 全量 E2E：
+
+```bash
+pnpm test:e2e:web
+```
+
+- Admin 全量 E2E：
+
+```bash
+pnpm test:e2e:admin
+```
+
+- 只回归某一条 Web 用例：
+
+```bash
+PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '<用例名关键字>'
+```
+
+- 只回归某一条 Admin 用例：
+
+```bash
+PLAYWRIGHT_SCOPE=admin pnpm test:e2e:admin --grep '<用例名关键字>'
+```
+
+- 已有本地服务时跳过 Playwright 自动拉起 WebServer：
+
+```bash
+PLAYWRIGHT_SKIP_WEBSERVER=1 pnpm test:e2e:web --grep '<用例名关键字>'
+```
+
+- 选择命令时的默认原则：
+  - 能精确命中本次改动影响面的，优先跑对应 `--grep` 用例。
+  - 改动影响范围较大或没有现成细粒度用例时，优先跑对应端的全量 E2E。
+  - 若本地已有手动启动的服务，为避免端口冲突，可显式加 `PLAYWRIGHT_SKIP_WEBSERVER=1`。
 
 ## 第三方库/框架的代码编写规范
 
