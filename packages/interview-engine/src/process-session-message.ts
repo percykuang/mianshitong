@@ -13,6 +13,9 @@ import {
   handleCompletedSession,
   handleEmptyInput,
   handleIdleSession,
+  handleWarmupStage,
+  startProjectStage,
+  getInterviewQuestionTotal,
   maybeAskFollowUp,
 } from './process-helpers';
 import { cloneSession, createMessage, pushAssistantMessage, toTitle } from './session-core';
@@ -59,9 +62,77 @@ async function processInterviewingSession(input: {
   now: string;
   assistantMessages: ChatMessage[];
 }): Promise<PostMessageResult> {
+  if (input.session.runtime.currentStage === 'warmup') {
+    return handleWarmupStage(input);
+  }
+
+  if (input.session.runtime.currentStage === 'project') {
+    const projectQuestion = input.session.runtime.projectQuestion;
+    if (!projectQuestion) {
+      return completeInterview({
+        session: input.session,
+        provider: input.provider,
+        assistantMessages: input.assistantMessages,
+        now: input.now,
+      });
+    }
+
+    input.session.runtime.activeQuestionAnswers.push(input.content);
+    if (
+      await maybeAskFollowUp({
+        session: input.session,
+        currentQuestion: projectQuestion,
+        provider: input.provider,
+        assistantMessages: input.assistantMessages,
+        now: input.now,
+      })
+    ) {
+      return { session: input.session, assistantMessages: input.assistantMessages };
+    }
+
+    const mergedAnswer = input.session.runtime.activeQuestionAnswers.join('\n');
+    const { assessment, trace } = await defaultAssessmentSkill.execute({
+      question: projectQuestion,
+      answer: mergedAnswer,
+      createdAt: input.now,
+    });
+    input.session.runtime.assessments.push(assessment);
+    input.session.runtime.assessmentTrace.push(trace);
+    input.session.runtime.reportTrace = null;
+    input.session.runtime.followUpRound = 0;
+    input.session.runtime.activeQuestionAnswers = [];
+    input.session.runtime.projectQuestion = null;
+    input.session.runtime.currentStage = 'wrap_up';
+
+    pushAssistantMessage(input.session, input.assistantMessages, {
+      kind: 'feedback',
+      content: input.provider.generateQuestionFeedback(assessment),
+      now: input.now,
+    });
+
+    return completeInterview({
+      session: input.session,
+      provider: input.provider,
+      assistantMessages: input.assistantMessages,
+      now: input.now,
+    });
+  }
+
   const currentQuestion =
     input.session.runtime.questionPlan[input.session.runtime.currentQuestionIndex];
   if (!currentQuestion) {
+    input.session.runtime.currentStage = 'wrap_up';
+    if (
+      startProjectStage({
+        session: input.session,
+        provider: input.provider,
+        assistantMessages: input.assistantMessages,
+        now: input.now,
+      })
+    ) {
+      return { session: input.session, assistantMessages: input.assistantMessages };
+    }
+
     return ensureCompletedReport(input.session, input.assistantMessages, input.provider, input.now);
   }
 
@@ -91,13 +162,11 @@ async function processInterviewingSession(input: {
   input.session.runtime.followUpRound = 0;
   input.session.runtime.activeQuestionAnswers = [];
 
-  if (input.session.config.feedbackMode === 'per_question') {
-    pushAssistantMessage(input.session, input.assistantMessages, {
-      kind: 'feedback',
-      content: input.provider.generateQuestionFeedback(assessment),
-      now: input.now,
-    });
-  }
+  pushAssistantMessage(input.session, input.assistantMessages, {
+    kind: 'feedback',
+    content: input.provider.generateQuestionFeedback(assessment),
+    now: input.now,
+  });
 
   const nextQuestion =
     input.session.runtime.questionPlan[input.session.runtime.currentQuestionIndex];
@@ -106,12 +175,24 @@ async function processInterviewingSession(input: {
       kind: 'question',
       content: input.provider.generateQuestionMessage({
         question: nextQuestion,
-        index: input.session.runtime.currentQuestionIndex + 1,
-        total: input.session.runtime.questionPlan.length,
+        index: input.session.runtime.currentQuestionIndex + 2,
+        total: getInterviewQuestionTotal(input.session),
       }),
       now: input.now,
     });
     input.session.updatedAt = input.now;
+    return { session: input.session, assistantMessages: input.assistantMessages };
+  }
+
+  input.session.runtime.currentStage = 'wrap_up';
+  if (
+    startProjectStage({
+      session: input.session,
+      provider: input.provider,
+      assistantMessages: input.assistantMessages,
+      now: input.now,
+    })
+  ) {
     return { session: input.session, assistantMessages: input.assistantMessages };
   }
 

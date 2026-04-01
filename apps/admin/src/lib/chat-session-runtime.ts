@@ -15,6 +15,7 @@ export function decodeAdminSessionRuntime(input: Prisma.JsonValue): ChatSession[
       questionPlan: [],
       currentQuestionIndex: 0,
       followUpRound: 0,
+      currentStage: 'technical',
       activeQuestionAnswers: [],
       assessments: [],
       followUpTrace: [],
@@ -25,6 +26,7 @@ export function decodeAdminSessionRuntime(input: Prisma.JsonValue): ChatSession[
       planGeneratedAt: null,
       planningTrace: null,
       reportTrace: null,
+      projectQuestion: null,
       knowledgeRetrievalTrace: [],
     };
   }
@@ -45,6 +47,12 @@ export function decodeAdminSessionRuntime(input: Prisma.JsonValue): ChatSession[
         : 0,
     followUpRound:
       typeof normalizedRuntime.followUpRound === 'number' ? normalizedRuntime.followUpRound : 0,
+    currentStage:
+      normalizedRuntime.currentStage === 'warmup' ||
+      normalizedRuntime.currentStage === 'project' ||
+      normalizedRuntime.currentStage === 'wrap_up'
+        ? normalizedRuntime.currentStage
+        : 'technical',
     activeQuestionAnswers: Array.isArray(normalizedRuntime.activeQuestionAnswers)
       ? normalizedRuntime.activeQuestionAnswers
       : [],
@@ -73,6 +81,9 @@ export function decodeAdminSessionRuntime(input: Prisma.JsonValue): ChatSession[
       ? normalizedRuntime.planningTrace
       : null,
     reportTrace: isRecord(normalizedRuntime.reportTrace) ? normalizedRuntime.reportTrace : null,
+    projectQuestion: isRecord(normalizedRuntime.projectQuestion)
+      ? normalizedRuntime.projectQuestion
+      : null,
     knowledgeRetrievalTrace: Array.isArray(normalizedRuntime.knowledgeRetrievalTrace)
       ? normalizedRuntime.knowledgeRetrievalTrace
       : [],

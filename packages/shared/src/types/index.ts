@@ -221,6 +221,8 @@ export interface InterviewReport {
   breakdown: QuestionAssessment[];
 }
 
+export type InterviewStage = 'warmup' | 'technical' | 'project' | 'wrap_up';
+
 export type MessageRole = 'system' | 'user' | 'assistant';
 export type ChatMessageFeedback = 'like' | 'dislike';
 export type ChatMessageCompletionStatus = 'completed' | 'interrupted';
@@ -238,6 +240,7 @@ export interface InterviewRuntimeState {
   questionPlan: InterviewQuestion[];
   currentQuestionIndex: number;
   followUpRound: number;
+  currentStage: InterviewStage;
   activeQuestionAnswers: string[];
   assessments: QuestionAssessment[];
   followUpTrace: InterviewFollowUpTrace[];
@@ -248,6 +251,7 @@ export interface InterviewRuntimeState {
   planGeneratedAt: string | null;
   planningTrace: InterviewPlanningTrace | null;
   reportTrace: InterviewReportTrace | null;
+  projectQuestion: InterviewQuestion | null;
   knowledgeRetrievalTrace: KnowledgeRetrievalTraceEntry[];
 }
 

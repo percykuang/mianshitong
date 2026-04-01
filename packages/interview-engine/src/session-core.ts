@@ -5,6 +5,7 @@ import {
   type CreateSessionInput,
   type InterviewQuestion,
   type InterviewRuntimeState,
+  type InterviewStage,
   type MessageKind,
   type MessageRole,
 } from '@mianshitong/shared';
@@ -68,6 +69,10 @@ function cloneQuestion(question: InterviewQuestion): InterviewQuestion {
   };
 }
 
+function resolveInterviewStage(value: unknown): InterviewStage {
+  return value === 'warmup' || value === 'project' || value === 'wrap_up' ? value : 'technical';
+}
+
 function cloneRuntime(runtime: InterviewRuntimeState): InterviewRuntimeState {
   const questionPlan = Array.isArray(runtime.questionPlan) ? runtime.questionPlan : [];
   const activeQuestionAnswers = Array.isArray(runtime.activeQuestionAnswers)
@@ -80,6 +85,7 @@ function cloneRuntime(runtime: InterviewRuntimeState): InterviewRuntimeState {
   return {
     ...runtime,
     questionPlan: questionPlan.map(cloneQuestion),
+    currentStage: resolveInterviewStage(runtime.currentStage),
     activeQuestionAnswers: [...activeQuestionAnswers],
     assessments: assessments.map((item) => ({
       ...item,
@@ -164,6 +170,7 @@ function cloneRuntime(runtime: InterviewRuntimeState): InterviewRuntimeState {
           })),
         }
       : null,
+    projectQuestion: runtime.projectQuestion ? cloneQuestion(runtime.projectQuestion) : null,
     knowledgeRetrievalTrace: (runtime.knowledgeRetrievalTrace ?? []).map((item) => ({
       ...item,
       categories: [...(item.categories ?? [])],
@@ -187,6 +194,7 @@ export function createRuntimeState(
     questionPlan: [],
     currentQuestionIndex: 0,
     followUpRound: 0,
+    currentStage: 'technical',
     activeQuestionAnswers: [],
     assessments: [],
     followUpTrace: [],
@@ -197,6 +205,7 @@ export function createRuntimeState(
     planGeneratedAt: null,
     planningTrace: null,
     reportTrace: null,
+    projectQuestion: null,
     knowledgeRetrievalTrace: [],
   };
 }

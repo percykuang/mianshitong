@@ -34,6 +34,7 @@ export {
   type InterviewReportTrace,
   type InterviewScoreDimension,
   type InterviewRuntimeState,
+  type InterviewStage,
   type InterviewTopic,
   type MessageKind,
   type MessageRole,

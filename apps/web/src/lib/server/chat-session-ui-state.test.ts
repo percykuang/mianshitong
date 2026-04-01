@@ -7,6 +7,7 @@ describe('decodeSessionRuntime', () => {
       questionPlan: [],
       currentQuestionIndex: 0,
       followUpRound: 0,
+      currentStage: 'warmup',
       activeQuestionAnswers: [],
       assessments: [],
       followUpTrace: [],
@@ -16,6 +17,7 @@ describe('decodeSessionRuntime', () => {
       planningSummary: null,
       planGeneratedAt: null,
       reportTrace: null,
+      projectQuestion: null,
       knowledgeRetrievalTrace: [],
       __chatUi: {
         pinnedAt: '2026-03-22T00:00:00.000Z',
@@ -27,6 +29,8 @@ describe('decodeSessionRuntime', () => {
     expect(decoded.runtime.assessmentTrace).toEqual([]);
     expect(decoded.runtime.planningTrace).toBeNull();
     expect(decoded.runtime.reportTrace).toBeNull();
+    expect(decoded.runtime.currentStage).toBe('warmup');
+    expect(decoded.runtime.projectQuestion).toBeNull();
     expect(decoded.runtime.knowledgeRetrievalTrace).toEqual([]);
   });
 });

@@ -25,6 +25,8 @@ export function decodeSessionRuntime(input: Prisma.JsonValue): {
         assessmentTrace: [],
         planningTrace: null,
         reportTrace: null,
+        currentStage: 'technical',
+        projectQuestion: null,
         knowledgeRetrievalTrace: [],
       },
       pinnedAt: null,
@@ -45,6 +47,13 @@ export function decodeSessionRuntime(input: Prisma.JsonValue): {
       assessmentTrace: normalizedRuntime.assessmentTrace ?? [],
       planningTrace: normalizedRuntime.planningTrace ?? null,
       reportTrace: normalizedRuntime.reportTrace ?? null,
+      currentStage:
+        (normalizedRuntime.currentStage as ChatSession['runtime']['currentStage'] | undefined) ??
+        'technical',
+      projectQuestion:
+        (normalizedRuntime.projectQuestion as
+          | ChatSession['runtime']['projectQuestion']
+          | undefined) ?? null,
       knowledgeRetrievalTrace: normalizedRuntime.knowledgeRetrievalTrace ?? [],
     },
     pinnedAt,
