@@ -69,6 +69,25 @@ describe('resolveKnowledgeRetrievalPlan', () => {
     expect(plan?.resultLimit).toBe(8);
   });
 
+  it('技术问题带有面试语境时，仍应优先走 technical_question 检索', () => {
+    const content = 'React 性能优化在面试里应该怎么回答？什么时候不该滥用 useMemo 和 useCallback？';
+
+    const intent = resolveGeneralChatIntent({
+      content,
+      userMessageCount: 0,
+    });
+    const plan = resolveKnowledgeRetrievalPlan({ intent, content });
+
+    expect(intent).toMatchObject({
+      kind: 'technical_question',
+      question: content,
+    });
+    expect(plan).not.toBeNull();
+    expect(plan?.categories).toEqual(['tech_knowledge', 'interview_playbook']);
+    expect(plan?.preferredTags).toContain('react');
+    expect(plan?.preferredTags).toContain('usememo');
+  });
+
   it('命中 process 形态文档后，应按文档原顺序展开上下文，而不是只保留前几个高分 chunk', () => {
     const searchableChunks = [
       {

@@ -44,7 +44,11 @@ export function ChatMessageList({
   const messageKeyPrefix = sessionId ?? 'empty';
 
   return (
-    <div ref={scrollContainerRef} className="absolute inset-0 touch-pan-y overflow-y-auto">
+    <div
+      ref={scrollContainerRef}
+      data-testid="chat-scroll-container"
+      className="absolute inset-0 touch-pan-y overflow-y-auto"
+    >
       <div className={CHAT_MESSAGE_COLUMN_CLASS}>
         {!hasUserMessages && !hideEmptyState ? <ChatEmptyState /> : null}
 

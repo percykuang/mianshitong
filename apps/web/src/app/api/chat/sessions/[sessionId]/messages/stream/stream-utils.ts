@@ -56,18 +56,22 @@ export function toChatTurns(
   );
 }
 
-function resolveMockStreamDelayMs(): number {
+function resolveConfiguredMockStreamDelayMs(): number | null {
   const raw = process.env.MOCK_STREAM_DELTA_DELAY_MS?.trim();
   if (!raw) {
-    return MOCK_STREAM_DEFAULT_DELAY_MS;
+    return null;
   }
 
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed < 0) {
-    return MOCK_STREAM_DEFAULT_DELAY_MS;
+    return null;
   }
 
   return parsed;
+}
+
+function resolveMockStreamDelayMs(): number {
+  return resolveConfiguredMockStreamDelayMs() ?? MOCK_STREAM_DEFAULT_DELAY_MS;
 }
 
 function resolveMockKnowledgeEntries(messages: ChatTurn[]): string[] {
@@ -308,10 +312,12 @@ export async function emitShortcutReplyAsStream(input: {
     SHORTCUT_STREAM_MAX_DURATION_MS,
     Math.max(SHORTCUT_STREAM_MIN_DURATION_MS, deltas.length * 36),
   );
-  const delayMs =
+  const autoDelayMs =
     deltas.length > 1
       ? Math.max(SHORTCUT_STREAM_MIN_DELAY_MS, Math.round(targetDuration / deltas.length))
       : 0;
+  const configuredDelayMs = resolveConfiguredMockStreamDelayMs();
+  const delayMs = configuredDelayMs !== null && deltas.length > 1 ? configuredDelayMs : autoDelayMs;
 
   let emitted = '';
 

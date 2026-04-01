@@ -7,6 +7,1389 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 6.08（2026-04-01）：修复首条超长消息发送后的自动滚动丢失问题
+
+### 目标
+
+- 修复聊天页里“用户发送第一条很长的消息时，消息区不会自动滚动到底部，assistant 开始回复后也不继续跟随”的交互问题。
+- 保留原有交互语义：如果用户在流式阶段主动上滑，系统仍然不应该强行把用户拉回底部。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-auto-scroll.ts`
+  - 新增显式的 `followLock` 语义，用来区分：
+    - 用户刚主动发送消息，系统应继续跟随到底部
+    - 用户真的手动上滑，系统应停止跟随
+  - 修复了首条超长消息场景下的时序问题：
+    - 以前会在长消息先把内容撑高后，立刻根据当前位置算出“已经不在底部”，从而提前把 follow 关掉
+    - 现在在发送期间，只要 follow lock 还在，就不会因为一次内容高度突增而误判为“用户离开底部”
+  - 同时在发送结束时补了一次收尾滚动，然后再释放 follow lock。
+- `apps/web/src/app/chat/components/chat-message-list.tsx`
+  - 为消息滚动容器补了 `data-testid="chat-scroll-container"`，用于 Playwright 直接验证真实滚动位置。
+- 测试
+  - `apps/web/src/app/chat/hooks/use-auto-scroll.dom.test.ts`
+    - 新增首条超长消息场景，锁住“先请求 follow、后消息瞬间撑高”时仍保持自动跟随。
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 新增超长首消息回归，直接验证真实页面中滚动容器与底部的距离会持续保持在阈值内。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整聊天页自动滚动策略和测试辅助选择器，不影响消息协议、会话模型或页面结构本身。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run apps/web/src/app/chat/hooks/use-auto-scroll.dom.test.ts`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '首条超长消息发送后，聊天区应持续自动跟随到底部'`
+  - `pnpm verify`
+
+### 下一步
+
+- 当前首条长消息导致的自动滚动丢失已经补上。后续如果聊天区引入图片、附件预览或折叠代码块，更值得继续验证的是动态内容二次撑高时是否仍然能稳定跟随，而不是首条消息时序本身。
+
+- 补充一条真实场景回归增强：`apps/web/e2e/chat-smoke.spec.ts` 里的超长首消息输入，当前已经从压缩版示例扩成更接近真实用户测试的完整简历结构，覆盖个人优势、工作经历、多个项目和补充说明，减少“测试数据太短、时序刚好没触发问题”的侥幸空间。
+
+## Iteration 6.07（2026-04-01）：收紧首轮简历开场格式，禁止先点评并统一标签同行输出
+
+### 目标
+
+- 修复模拟面试首轮收到完整简历时仍然先输出一段“点评”式总结的问题。
+- 继续收紧 `**点评**：` 和 `**第X个问题：**` 的格式，要求标签后直接接正文，不再单独换行。
+- 让真实流式、引擎首题题面和 mock / fallback 链路在开场口吻上保持一致，避免不同链路再出现割裂。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 开场首题进一步收口为更自然的简历承接：
+    - 改成 `你好，我看过你的简历了...现在我们开始模拟面试吧。`
+    - `**第一个问题：**` 改为与题干同行输出。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 面试专用 system prompt 新增两条硬规则：
+    - 开场破冰第一题若内部计划没有 feedback，禁止模型自行补 `**点评**：`
+    - `**点评**：` / `**第X个问题：**` 标签后必须直接接正文，不要换行
+  - `replyShapeInstruction` 现在会区分“warmup 首题且无 feedback”的场景，明确要求：
+    - 先用 1 到 2 句简短自然的话承接简历
+    - 不要长篇评价简历
+    - 然后直接进入 `**第一个问题：**`
+  - 同步把 warmup / technical / project 的 main question 口吻示例改成与目标格式一致，减少模型继续学到旧的分行写法。
+- `packages/llm/src/mock-provider.ts`
+  - mock / fallback 的主问题文案也收成 `**第X个问题：** ...` 同行格式，避免降级链路回退到旧题面。
+- 测试
+  - `packages/interview-engine/src/index.test.ts`
+    - 锁住新的首轮承接文案与同行题面格式。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 锁住 warmup 首题不得自补 `**点评**：`
+    - 锁住标签后直接接正文、不换行的 prompt 约束
+    - 更新 main question few-shot 断言，防止回退到旧分行格式
+  - `packages/llm/src/mock-provider.test.ts`
+    - 锁住 mock 主问题改为粗体编号同行输出
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 锁住首轮收到简历后先自然开场、不先点评
+    - 锁住 warmup 回答不完整时仍先追问，再进入 `第二个问题`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只继续收紧用户可见口吻与格式协议，不影响阶段推进、评分和流式协议本身。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts' packages/llm/src/mock-provider.test.ts`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖|模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 当前首轮简历开场已经不再先做“简历点评”，格式也被硬约束住了。下一轮如果还要继续打磨，更值得看的会是主问题后的点评篇幅是否还能再短一点，以及不同模型下首段承接是否还存在轻微模板感。
+
+- 补充一条更细的产品格式要求：如果题目后面带有括号提示，这段提示不仅要保留，而且必须独占一行展示，不能被模型省掉，也不能接在问题句后面。
+- 因此当前真实流式 prompt 又加了一层更硬的约束：内部计划里如果已经带了括号提示，最终输出必须原样保留并落成单独一行。
+
+## Iteration 6.03（2026-04-01）：把技术题追问承接句继续收成更像现场口吻
+
+## Iteration 6.04（2026-04-01）：把项目深挖追问承接句继续收成更像现场追问
+
+## Iteration 6.06（2026-04-01）：收紧面试回复格式协议并修复题号重置问题
+
+### 目标
+
+- 修复模拟面试真实对话里两类高优先级问题：
+  - 回复段落结构不稳定，没能稳定落成“承接 / 点评 / 第 X 个问题 / 可选提示”这种可预期格式
+  - 模型在继续往下出题时，偶发把题号重置回 `第一个问题`
+- 让引擎首题题面更贴近用户期望，同时把真实流式 prompt 的格式与题号规则收成硬约束，而不再只靠 few-shot 学习。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 开场首题的本地题面重写为更接近目标格式：
+    - 去掉 `我当前对你的理解是...` 这类系统分析句
+    - 改成 `好的，我看了你的简历。`
+    - 主问题改成粗体 `**第一个问题：**`
+    - 轻提示单独落成括号行
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 在面试专用 system prompt 里新增硬约束：
+    - 如果这一轮是新主问题，优先按“承接 -> **点评** -> **第X个问题：** -> （提示）”输出
+    - 如果这一轮是追问，禁止输出新的 `**第X个问题：**`
+    - 如果内部计划已经给出题号，例如 `第二个问题`，输出里的题号必须完全一致，不得改写、跳号或重置
+  - 新增按回合类型生成的 `replyShapeInstruction`，把格式规则显式传给真实模型，而不是只靠 few-shot 暗示。
+- 测试
+  - `packages/interview-engine/src/index.test.ts`
+    - 锁住首题题面不再出现 `我当前对你的理解是`
+    - 锁住 warmup 转技术题时不会重新出现 `第一个问题`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 锁住新的格式协议文案与题号硬约束
+    - 锁住追问回合不能重新编号
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 新增断言：进入 `第二个问题` 后，最后一条 assistant 不应再包含 `第一个问题`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整首题题面和真实流式的输出约束，不影响阶段状态机、评分和流式协议本身。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 当前面试主链上“段落结构失稳”和“题号重置”的高优问题已补上。如果后续还要继续打磨，更值得看的会是总结收口在真实模型下是否还会偶发偏长或偏教练式，而不是继续补格式层硬规则。
+
+## Iteration 6.05（2026-04-01）：把开场首题与总结收口里剩余的系统播报感继续压掉
+
+### 目标
+
+- 继续清理用户第一眼就能感知到的系统播报感，避免开场主问里还出现“我们先热个身”、项目题里还出现“能力上限”、mock 总结里还出现“面试结束，总分”。
+- 让首题、项目主问和总结收口更像真人面试官说话，而不是训练器或评分器回显。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 开场主问示例继续收口：
+    - `我先根据你刚才给的信息，从自我介绍开始` -> `我们先从自我介绍开始`
+    - `我们先热个身` 直接去掉
+  - 项目主问第二示例继续收口：
+    - `最能体现能力上限的项目` -> `最能代表你的项目`
+    - `按背景、挑战、方案、结果这条线展开` -> `把背景、挑战、方案和结果讲清楚`
+- `packages/llm/src/mock-provider.ts`
+  - mock / fallback 总结开头从 `面试结束，总分 ...` 收成更自然的 `今天这轮我会给你 ...，当前更接近 ...`
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 更新总结断言，防止回退到 `面试结束，总分`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 新增开场主问和项目主问断言，锁住去 `热个身`、去 `能力上限` 后的新口吻。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整开场主问、项目主问和 mock 总结的用户可见文案，不影响阶段状态机、评分或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 当前面试主链上最明显的“系统/训练器播报感”已经基本收口。如果后续还要继续打磨，更值得看的会是总结收口在真实模型场景下的整体篇幅和节奏，而不再是单个词句替换。
+
+### 目标
+
+- 继续降低项目深挖追问里的动作播报感，避免真实流式 few-shot 和 mock/fallback 继续使用“我继续追一个细节”“这次你重点补清楚”这类训练器口吻。
+- 让项目题追问更像面试官顺着项目细节往下压，而不是先说明自己正在做追问动作。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 项目深挖 follow-up 的 few-shot 承接句继续收短：
+    - 背景复杂度：`我继续追一个点` -> `那背景和边界这块你讲具体一点`
+    - 收益验证：`我继续追一个细节` -> `那结果怎么验证，你讲具体一点`
+    - 方案取舍：`我继续追一个关键点` -> `那为什么这么选，你展开一下`
+  - 同时把“代价”类第二示例也收成更自然的 `那代价这块你也说一下`。
+- `packages/llm/src/mock-provider.ts`
+  - mock / fallback 的项目深挖追问同步收口，避免 fallback 场景继续回退到旧的训练式承接句。
+  - 项目题结尾提示也统一从 `这次你重点补清楚` 收成更自然的 `你这次就把 XXX 这块讲具体一点。`
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 更新项目题 context / outcome 断言，锁住新的承接句与结尾提示。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 更新项目题方案取舍夹具，并新增背景 / 结果型 few-shot 断言，防止旧承接句回退。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整项目深挖追问的用户可见口吻，不影响阶段状态机、评分、追问焦点或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查总结收口里是否还保留过强的“系统报告感”，例如过于固定的“面试结束，总分”这类表述是否还要继续收口。
+
+### 目标
+
+- 继续降低技术题追问里的脚本承接感，避免真实流式 few-shot 和 mock/fallback 继续使用“我继续追问一下”“我继续追一个点”这类训练器口吻。
+- 让技术题追问更像面试官顺着回答往下压细节，而不是先播报“现在要追问了”。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 技术题 follow-up 的 few-shot 承接句继续收短：
+    - 场景题：`我继续追一个点` -> `那你往下拆一下`
+    - 工程题：`我继续追一个点` -> `那取舍这块你展开一下`
+    - 原理题：`你接着说说` 收成更直接的 `那你把机制再往下讲一层`
+- `packages/llm/src/mock-provider.ts`
+  - mock / fallback 的技术题追问同步收口，避免 fallback 场景继续回退到旧的训练式承接句。
+  - 同时把 `这次你重点补充` 统一收成更自然的 `你这次就把 XXX 这块补具体一点。`
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 更新三类技术题追问断言，锁住新的承接句与补充引导。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 更新原理题追问夹具，并新增工程题 few-shot 断言，防止旧承接句回退。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整技术题追问的用户可见口吻，不影响阶段状态机、评分、追问焦点或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查项目深挖 follow-up 的承接句，例如“我继续追一个细节”这类半句，是否也还可以继续收短。
+
+## Iteration 6.02（2026-04-01）：把 warmup 切技术题的承接句继续收成更自然的现场转场
+
+### 目标
+
+- 继续降低 warmup 结束后切到技术题时的“说明状态再发问”感，避免真实流式 few-shot 继续教模型说出过长的转场播报。
+- 让模型更容易学到“先接一句，再直接进题”的现场感，而不是“先做阶段总结，再解释题型”。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 原理机制题的转场示例继续收短：
+    - `好，我大概知道你的背景了。第二个问题，我们先聊一道基础原理题` -> `好，背景我先记住了。第二个问题`
+    - `下面我想先确认一下你的基础深度` -> `我们直接看基础深度`
+  - 同时把主问题拆成更像现场追问的短句，例如把 `以及为什么会这样安排` 收成单独一句 `为什么会这样安排？`
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+  - 更新 few-shot 断言，锁住新的短转场表达，并防止旧的书面承接句回退。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整真实流式从 warmup 切到技术题的口吻示例，不影响阶段状态机、评分、题面或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查技术题 follow-up few-shot 里的追问承接句，例如“我继续追问一下”“我想继续往工程实践里压一层”这类半句是否也还可以继续收短。
+
+## Iteration 6.01（2026-04-01）：把 warmup few-shot 里的解释性半句继续压短
+
+### 目标
+
+- 继续降低真实流式 warmup 追问示例里的“解释性播报”感，避免模型学到过长的承接半句。
+- 让真实模型更容易学到“先打断、再直问”的开场追问口吻，而不是“先解释流程，再抛问题”。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - warmup follow-up 的 few-shot 第二示例继续收短：
+    - 经历主线：`我知道你做过前端，但我还想再压实一点` -> `我再压实一点`
+    - 求职动机：`技术题我们等一下再进。我想先听清一件事` -> `先不聊技术`
+    - 代表项目：`我们先别往后跳，先把代表作听实一点` -> `我们先别往后跳`
+  - 同时把示例问题本身也继续往更口语的现场追问收口，例如 `最想解决现在的什么问题`、`最能代表你的项目，先展开讲`。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+  - 新增/更新断言，锁住新的短承接表达，并防止旧的解释性半句回退。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整真实流式 warmup few-shot 的用户可见口吻示例，不影响阶段状态机、评分、追问分类或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查 warmup 首题后的第一句点评和技术题承接句之间，是否还有类似“先说明状态再发问”的完整书面句残留。
+
+## Iteration 6.00（2026-04-01）：把 warmup 追问第二句继续收成更像现场打断式提问
+
+### 目标
+
+- 继续降低 warmup 追问里的书面感，避免第二句问题还写得过满、过完整，像准备好的问答稿。
+- 让开场追问更接近真人现场打断式提问：问题更短，压重点更直接，但原有追问焦点不变。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - warmup 内置追问继续收短：
+    - 经历主线：`最稳定的一条主线是什么` -> `主线更偏哪条`
+    - 代表项目：`如果现在就展开讲一个项目，你会先讲哪个？为什么先讲它？` -> `那如果现在就展开一个项目，你先讲哪个？`
+    - 求职动机：`最关注的是什么` -> `最在意哪层`
+- `packages/llm/src/mock-provider.ts`
+  - mock / fallback 的 warmup 追问同步收成更短的现场问法，避免 fallback 场景继续回退到完整书面句。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 真实流式 warmup follow-up few-shot 同步收口：
+    - 追经历主线和代表项目的主问题更短、更像现场打断
+    - 求职动机的第二示例也改成更自然的“我想先听清一件事”
+    - 代表项目的第二示例也改成“先把代表作听实一点”
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 更新 warmup 三类追问断言，锁住新的短问法。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 更新 warmup 主线 / 代表项目 / 求职动机的 few-shot 断言，防止旧句型回退。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整 warmup 追问第二句和 few-shot 示例的用户可见文案，不影响阶段状态机、评分、追问分类或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查 warmup 第二示例里的解释性半句还要不要继续压缩，让整条追问更接近真人打断式问法，而不是“主问题 + 解释句”双句都比较完整。
+
+## Iteration 5.99（2026-04-01）：把 warmup 追问结尾从“标签提示”收成更自然的现场引导
+
+### 目标
+
+- 继续降低 warmup 追问里的标签感，避免最后还继续说“这次你重点补清楚：XXX”这种像训练器在贴标签的收尾。
+- 让 warmup 追问最后一句更像面试官现场引导，把用户往“继续讲具体一点”推，而不是像 checklist 提示。
+
+### 主要改动
+
+- `packages/llm/src/mock-provider.ts`
+  - warmup 三类追问的结尾提示统一从：
+    - `这次你重点补清楚：XXX`
+  - 收成：
+    - `你这次就重点把 XXX 这块讲具体一点。`
+  - 当前只调整 warmup 追问的收尾口吻，不改缺失点分类和追问焦点。
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 更新 warmup 三类追问断言，锁住新的收尾引导。
+    - 同时防止 warmup 回退到 `这次你重点补清楚` 这种标签式说法。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整 warmup 追问末尾的用户可见文案，不影响阶段状态机、评分、追问分类或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查 warmup 追问里的第二句提问是否还可以继续收短，让整条追问更接近真人现场打断式提问，而不是两句都写得很完整。
+
+## Iteration 5.98（2026-04-01）：把 warmup 追问里的点评首句继续收成更自然的现场反馈
+
+### 目标
+
+- 继续降低 warmup 追问里的训练器味，避免追问前的点评首句还停留在“你的基本背景已经有了，但……还没有立起来”“沿着什么主线在积累”这类明显带训练痕迹的说法。
+- 让 warmup 追问前的点评更像面试官现场听完回答后的即时反馈，再自然承接下一句追问。
+
+### 主要改动
+
+- `packages/llm/src/mock-provider.ts`
+  - warmup 三类追问的点评首句同步收口：
+    - 经历主线：强调“真正串起来的主线，我还没有完全听出来”
+    - 代表项目：强调“最该先展开讲的那个项目，还没有落下来”
+    - 求职动机：强调“为什么出来看机会，现在还不够具体”
+  - 当前没有改 warmup 的缺失点判断和追问焦点，只调整追问前的反馈说法。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 真实流式 warmup follow-up few-shot 同步收口，确保真实流式和 mock / fallback 的评语继续保持一致，不再混用旧的训练式点评。
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 更新 warmup 三类追问断言，锁住新的点评首句，并防止旧表达回退。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 更新 warmup 主线 / 代表项目 / 求职动机的 few-shot 断言，锁住新的点评首句。
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 更新“开场回答不完整时，应先追问再进入技术题”的 Web 回归断言，页面里现在会出现“真正串起来的主线”，且不再出现“沿着什么主线在积累”。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整 warmup 追问前的点评文案，不影响阶段状态机、评分、追问分类或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查 warmup 追问后面的结尾提示是否也还偏训练器，例如“这次你重点补清楚：XXX”这类标签式收尾，要不要继续收成更自然的现场引导。
+
+## Iteration 5.97（2026-04-01）：把 warmup 追问前缀从“脚本承接”收成更像现场口吻
+
+### 目标
+
+- 继续降低 warmup 追问里的脚本味，避免在追问前继续出现“我先追一个点 / 我继续追一个点 / 先不急着进技术题 / 我先不往后切题”这类明显像流程控制器在播报的句子。
+- 让开场追问更像真人面试官现场压细节，而不是先报一个控制动作，再问问题。
+
+### 主要改动
+
+- `packages/llm/src/mock-provider.ts`
+  - warmup 追问前缀统一收口：
+    - `我先追一个点` -> `我先确认一下`
+    - `我继续追一个点` -> `我再确认一下`
+  - 当前没有改 warmup 的缺失点分类和追问焦点，只调整承接口吻。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 真实流式 warmup follow-up few-shot 同步收口：
+    - `我先追一个点` -> `我先确认一下`
+    - `我继续追一个点` -> `我再确认一下`
+    - `先不急着进技术题` -> `技术题我们等一下再进`
+    - `我先不往后切题` -> `我们先别往后跳`
+  - 这样用户看到的 warmup 追问会更像现场承接，而不是状态机在解释自己接下来要做什么。
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 更新 warmup 三类追问断言，锁住新的承接前缀。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 更新 warmup 主线 / 代表项目 / 求职动机的 few-shot 断言，防止旧前缀回退。
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 更新“开场回答不完整时，应先追问再进入技术题”的 Web 断言，页面里现在应出现“我先确认一下”，不再出现“我先追一个点”。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整 warmup 追问承接口吻，不影响阶段状态机、评分、追问分类或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查 warmup 追问里的点评首句本身要不要再收一层，例如“你的基本背景已经有了，但……还没有立起来”这类明显带训练痕迹的评语，是否也可以继续往更自然的现场反馈推进。
+
+## Iteration 5.96（2026-04-01）：把 warmup 追问从“训练句型”收成更像现场追问
+
+### 目标
+
+- 继续降低开场追问的训练感，避免 warmup 里继续出现“如果只选一个项目来证明你的能力上限”“如果只用一两句话概括”这类太像答题教练的话。
+- 让开场追问更像面试官现场压细节：仍然追经历主线、代表项目和求职动机，但换成更自然的问法。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - warmup 内置追问改成更自然的表达：
+    - 经历主线：改成“最稳定的一条主线是什么”
+    - 代表项目：改成“如果现在就展开讲一个项目，你会先讲哪个”
+    - 求职动机：改成“你这次出来看机会，最关注的是什么”
+  - 当前没有改 warmup 的缺失点判断和推进逻辑，只调整用户可见追问文案。
+- `packages/llm/src/mock-provider.ts`
+  - mock / fallback 的 warmup 追问同步改口吻，避免 fallback 场景继续暴露旧的训练句型。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 真实流式 warmup follow-up few-shot 同步收口：
+    - 不再用“如果只用一两句话概括”
+    - 不再用“证明你的能力上限”
+  - 仍保持原有三类 warmup 追问语义，只把说法收得更像现场对话。
+- 测试
+  - `packages/interview-engine/src/index.test.ts`
+    - 新增 warmup 不完整回答后的追问断言，锁住“最稳定的一条主线是什么”，并防止旧句型回退。
+  - `packages/llm/src/mock-provider.test.ts`
+    - 新增 warmup 主线追问断言，并更新代表项目、求职动机断言。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 新增 warmup 主线追问 few-shot 断言，并更新代表项目 / 求职动机示例断言。
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 更新“开场回答不完整时，应先追问再进入技术题”的 Web 回归断言，确保页面里出现新的主线追问，不再出现旧的训练式话术。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整 warmup 追问的用户可见文案，不影响阶段状态机、评分、追问分类和流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在开场回答不完整时，应先追问再进入技术题|模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查 warmup 追问里的点评前缀本身要不要再收一层，例如“我先追一个点 / 我继续追一个点”是否也可以进一步变成更口语化的现场承接。
+
+## Iteration 5.95（2026-04-01）：把 warmup 点评从“教学提示”收成更像现场反馈
+
+### 目标
+
+- 继续降低模拟面试开场阶段的“训练器味”，避免用户答完自我介绍后，系统继续用“建议后面按三段来讲”“补一句 X 是 Y”这种教学模板说话。
+- 让 warmup 完成后的点评更接近真人面试官现场反馈，再更自然地承接到下一道技术题。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 调整 warmup 完成后的本地点评文案：
+    - 过短回答：不再说“按三段来讲”，改成更自然的“把最近主线、代表项目和看机会原因讲实一点”
+    - 中等长度回答：不再举 `X / Y` 占位例子，改成“把项目名称、关键动作和结果先拎出来”
+    - 完整回答：从“量化结果和个人角色”扩成“个人角色、关键取舍和结果量化”
+  - 当前没有改 warmup 的阶段推进、覆盖判断和追问规则，只调整用户可见反馈文案。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 真实流式 few-shot 里，从 warmup 切到原理机制题的承接示例也同步收口：
+    - 从“你刚才的自我介绍主线是清楚的”
+    - 改成“好，我大概知道你的背景了”
+  - 这一步的目的不是换语气词，而是减少“模板点评 + 固定切题”的训练器味。
+- 测试
+  - `packages/interview-engine/src/index.test.ts`
+    - 新增 warmup 点评文案断言，锁住：
+      - 会出现“你的基本背景我大概知道了”
+      - 不再回退到 `我最有代表性的项目是 X`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 新增从 warmup 进入原理机制题时的 few-shot 承接断言。
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - Web 回归断言同步补一条，确保页面不再出现旧的占位式 warmup 提示文案。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整 warmup 点评和承接示例的用户可见文案，不影响状态机、评分或流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts`
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查 warmup 追问本身是否还需要再压一层，比如把“如果只选一个项目来证明你的能力上限”这类明显带训练感的句子再收成更像面试官现场追问的表达。
+
+## Iteration 5.94（2026-04-01）：把 warmup 首题从“三条提纲”收成一句真人主问
+
+### 目标
+
+- 继续降低模拟面试开场第一句的“脚本播报感”，避免 warmup 首题一上来就用“三件事 + 编号提纲”教用户答题。
+- 让破冰首题更接近真人面试官现场开问：先抛一个自然主问，再用一句轻引导点出经历主线、代表项目和求职动机。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - warmup 首题从：
+    - `请你先用 1 到 2 分钟做个自我介绍，重点讲清三件事`
+    - `1. ... 2. ... 3. ...`
+  - 收成一句更自然的主问：
+    - `你先做个简短自我介绍吧。重点讲讲最近几段经历的主线、最能代表你的项目，以及你这次为什么看机会。`
+  - 当前没有改 `keyPoints`、追问逻辑和阶段推进，只调整用户可见题面。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 真实流式 warmup few-shot 同步收口，不再继续示范“1 到 2 分钟”“重点讲清楚”这类训练器式话术。
+- 测试
+  - `packages/interview-engine/src/index.test.ts`
+    - 新增断言，锁住 warmup 首题会保留“第一个问题”但不再出现：
+      - `重点讲清三件事`
+      - `1.`
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 同步更新 warmup 主问题测试，锁住 few-shot 已切到更自然的首题口吻。
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - Web 回归断言同步更新，确保页面首题不再回退到旧的提纲式题面。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整 warmup 首题和 few-shot 的用户可见文案，不影响阶段状态机、评分或报告结构。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts`
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先检查 warmup 反馈文案本身是否也还有“教学提示感”，尤其是过短回答后的建议话术，看看要不要继续收成更像现场点评的口吻。
+
+## Iteration 5.93（2026-04-01）：把项目深挖主问题从五条提纲，收成短主问 + 轻引导
+
+### 目标
+
+- 继续降低项目深挖阶段的“答题大纲感”，避免主问题一上来就把 5 条回答结构全部写给用户。
+- 让项目题更像真人面试官现场发问：先抛一个短主问，再给一句轻引导，结构感更多交给后续追问去补。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 项目深挖主问题仍然保留原有三类画像和性能子类型分类，但题面从条目式提纲改成“短主问 + 轻引导”：
+    - 工程化项目：强调“为什么要做 / 你主导了什么 / 怎么证明做成了”
+    - 性能项目：强调“问题怎么暴露 / 怎么定位和取舍 / 怎么验证优化有效”
+    - 业务项目：强调“目标是什么 / 你负责什么 / 怎么证明结果成立”
+  - 当前没有改 `keyPoints` 和 `followUps`，只是把结构感从首题题面里收掉，交给现有追问机制继续承接。
+- `packages/interview-engine/src/index.test.ts`
+  - 同步更新断言，锁住：
+    - 项目题面仍然会按画像分型
+    - 题面不再出现 `1.` 这种五条编号提纲
+    - 关键产品语义仍然保留，例如工程化题会追“为什么做”和“怎么证明做成了”
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只调整项目深挖主问题的用户可见题面，不影响现有阶段推进、追问分类和评分逻辑。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先考虑把 warmup 首题也再收短一档，减少“重点讲清三件事”这种显式提示，让开场更接近真人自然开问。
+
+## Iteration 5.92（2026-04-01）：把报告正文从固定字段顺排，收成更像口头反馈的结构
+
+### 目标
+
+- 继续降低报告阶段的模板感，不只让收口语气分型，还要让正文结构本身更像真人口头反馈，而不是固定输出“优势 / 短板 / 下一步建议”三行。
+- 保持现有 `InterviewReport` 数据结构不变，只调整 mock / fallback 下用户可见的组织方式。
+
+### 主要改动
+
+- `packages/llm/src/mock-provider.ts`
+  - `generateReportMessage()` 不再固定输出：
+    - `优势：...`
+    - `短板：...`
+    - `下一步建议：...`
+  - 当前会根据 `report.level` 和现有 `strengths / gaps / nextSteps` 生成更自然的短段落：
+    - `strong`：先强调最能拉开区分度的亮点，再说如何继续拉上限
+    - `solid`：先点亮点，再指出最影响说服力的问题，最后给出优先准备顺序
+    - `needs-work`：先明确当前最先该补什么，再给出更直接的准备顺序
+  - 这次仍然没有修改 `InterviewReport` 结构，只是把已有字段重新组织成更像人说话的报告正文。
+- `packages/llm/src/mock-provider.test.ts`
+  - 新增断言，锁住：
+    - 高分报告会出现“这轮最能拉开区分度的……”
+    - 待提升报告会出现“当前最先要补的……”
+    - 文案不再回退到固定的 `优势：/短板：` 字段顺排
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只影响 mock / fallback / stop 场景下报告正文的组织方式，不影响评分、报告结构和真实流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先考虑让项目深挖阶段的“主问题题面”进一步缩短，减少条目式提示，让模型更多通过上下文自然追问，而不是在题面里把回答结构写得太满。
+
+## Iteration 5.91（2026-04-01）：把总结收口继续细分成亮点型 / 平衡型 / 补短板型
+
+### 目标
+
+- 继续降低模拟面试最后一段“统一模板总结”的假感，避免所有面试结束语都长得差不多。
+- 让总结阶段更像真人面试官的现场收口：表现好时先肯定亮点，表现一般时做平衡反馈，表现偏弱时直接指出先补什么。
+
+### 主要改动
+
+- `packages/llm/src/mock-provider.ts`
+  - mock provider 的总结文案不再只有一套统一收尾，而是根据 `report.level` 细分成三种收口方式：
+    - `strong`：肯定亮点型
+    - `solid`：平衡反馈型
+    - `needs-work`：补短板型
+  - 这样在 mock / fallback / stop 场景里，最后一段也不会再退化成同一套统一总结模板。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 给真实模型的 report few-shot 同步补了三类收口示例，直接复用现有 `session.report.level` 做轻量推断，不新增状态字段。
+  - 当前 report 阶段至少会区分：
+    - 高分时先肯定亮点，再补“怎么继续拉上限”
+    - 中间档时先肯定一部分，再指出最该提升的表达问题
+    - 待提升时直接说明当前最该补什么，不再泛泛鼓励
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 新增高分报告和待提升报告的文案断言。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 新增高分 / 待提升报告会注入对应收口示例的断言。
+    - 同步更新已有总结测试，锁住默认平衡反馈型示例。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只是在 report 阶段补充更细的语言语义，不影响面试状态推进、评分与报告结构本身。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先收“报告正文内部结构”，例如把优势、短板和下一步建议的排序做得更像真人口头反馈，而不是固定字段顺排。
+
+## Iteration 5.90（2026-04-01）：把技术题继续细分成原理机制 / 场景设计 / 工程实践三类口吻
+
+### 目标
+
+- 继续降低模拟面试在技术题阶段的“统一模板感”，避免所有技术题都共享同一套点评后承接和追问口吻。
+- 让技术题的自然度更接近真人面试官：聊原理题时追机制和边界，聊场景题时追方案拆解和边界条件，聊工程题时追约束与取舍。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 新增轻量技术题分类：
+    - `mechanism`：原理机制题
+    - `scenario`：场景设计题
+    - `engineering`：工程实践题
+  - 分类仍然坚持低侵入原则，不改数据库和 runtime 结构，只根据当前题目的用户可见题干文本做轻量推断。
+  - 真实模型的 few-shot 现在会按技术题类型切不同示例：
+    - 原理机制题：更强调底层原因、执行顺序和边界差异
+    - 场景设计题：更强调方案拆解、数据流和边界条件
+    - 工程实践题：更强调工具链取舍、落地约束和迁移成本
+- `packages/llm/src/mock-provider.ts`
+  - mock provider 里的技术题追问也同步按三类技术题切口吻，不再统一返回“关键细节还不够展开”。
+  - 这样在 mock / stop / fallback 场景下，技术题也不会再显得像一条模板换皮。
+- 测试
+  - `packages/llm/src/mock-provider.test.ts`
+    - 新增三条测试，分别锁住原理机制题、场景设计题、工程实践题的追问口吻。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 新增技术题场景设计主问题和工程实践追问的 few-shot 注入断言。
+    - 同步更新已有断言，确保工程题不再使用通用技术题示例，原理题也不再回退到统一“点评后继续追问”口吻。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只是在真实模型 prompt 和 mock 文案层补技术题语义，不影响现有阶段推进、评分和报告结构。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先把总结收口也做分型，例如“整体表现总结”“给出改进建议”“明确下一轮准备重点”，避免 report 阶段也只用同一套收尾口吻。
+
+## Iteration 5.89（2026-04-01）：让开场破冰也能先追问，再自然进入技术题
+
+## Iteration 5.88（2026-04-01）：把性能优化项目继续拆成加载 / 渲染 / 构建三种问法
+
+### 目标
+
+- 继续提升模拟面试的真人感，修复当前 warmup 阶段“回答完就一定直接进技术题”的脚本味问题。
+- 让开场也具备更像 HR / 一面面试官的节奏：回答不完整时，先点评并追问经历主线、代表项目或求职动机；回答足够完整时，再自然切到下一题。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 开场破冰不再只是静态首题字符串，而是补成了一道轻量的 runtime 虚拟问题 `warmup_self_intro`。
+  - warmup 现在会在本地生成一条和正式题一致结构的 `followUpTrace`，但仍坚持低侵入原则：
+    - 不新增数据库字段
+    - 不改状态机大结构
+    - 只复用现有 `followUpTrace / followUpRound / activeQuestionAnswers`
+  - 新增 warmup 语义判断：
+    - `经历主线`
+    - `代表项目`
+    - `求职动机`
+  - 开场回答不完整时会先留在 `warmup` 阶段追问；回答足够完整时才切到 `technical` 阶段。
+  - 为了避免追问过度，这次额外补了一层阈值收口：如果候选人已经覆盖了大部分关键信息，且回答长度足够，就不再为了缺一个点强行追问。
+- `packages/llm/src/mock-provider.ts`
+  - mock provider 现在也为 warmup 追问单独分了三种口吻：
+    - 追经历主线
+    - 追代表项目
+    - 追求职动机
+  - 这样在 mock / fallback / stop 场景下，开场追问也不会再退化成技术题式的统一追问模板。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 给真实模型的 few-shot 新增 warmup follow-up 专用示例，按上面三类缺失点切不同表达方式。
+  - 这样真实流式回复在开场阶段也更像真人面试官，而不是只会泛泛说“方向对了，再展开一点”。
+- 测试
+  - `packages/interview-engine/src/index.test.ts`
+    - 新增 warmup 不完整回答时会先追问、再进入技术题的回归。
+    - 同步调整已有 trace 断言，适配 warmup 也会写入 `followUpTrace` 的新语义。
+  - `packages/llm/src/mock-provider.test.ts`
+    - 新增 warmup 追代表项目 / 追求职动机的 mock 文案断言。
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 新增 warmup follow-up few-shot 注入断言。
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 新增真实 Web E2E：开场回答不完整时，应先追问再进入技术题。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只是在已有面试 runtime 上补 warmup 追问语义，不影响原有流式协议、报告结构和项目深挖阶段。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖|模拟面试在开场回答不完整时，应先追问再进入技术题'`
+
+### 下一步
+
+- 如果继续往“更像真人面试官”推进，下一轮优先细分技术题之后的自然承接语义，例如“点评后继续追机制”“点评后切场景题”“点评后转项目”，减少不同题型之间共用同一套过渡口吻。
+
+## Iteration 5.87（2026-04-01）：把项目深挖主问题分成工程化 / 性能 / 业务三种问法
+
+## Iteration 5.86（2026-04-01）：把项目深挖追问细分成背景 / 取舍 / 验证三类
+
+## Iteration 5.85（2026-04-01）：继续去掉模拟面试里的脚本味标签与模板话术
+
+### 目标
+
+- 继续提升项目深挖阶段的真实感，避免“性能优化项目”仍然只有一套泛化题面。
+- 让模型更像真人面试官那样，根据候选人的性能项目类型追不同重点，而不是只问“怎么定位、怎么验证”。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 在现有 `engineering / performance / delivery` 三分类之上，继续把 `performance` 细分成：
+    - `loading`：加载性能
+    - `rendering`：渲染性能
+    - `build`：构建性能
+  - 子分类仍然坚持低侵入原则，直接复用 `ResumeProfile` 里的 `primaryTags / projectTags / strengths / evidence` 与用户输入文本做轻量信号推断，不新增数据库字段。
+  - 为了减少“构建优化”被误判成纯工程化项目，这次给“构建性能优化”额外补了一层性能语义加权：如果同时出现构建链路词和明显的优化收益词，会优先进入性能项目分支，再在内部细分为构建性能。
+  - 项目深挖主问题、关键点和追问现在会按三类性能子场景切不同问法：
+    - 加载性能：更强调首屏、白屏、FCP/LCP、资源加载顺序和缓存策略
+    - 渲染性能：更强调卡顿、FPS、无效重渲染、长列表和交互流畅度
+    - 构建性能：更强调冷启动、增量构建、编译器替换、兼容性风险和研发反馈速度
+- `packages/interview-engine/src/index.test.ts`
+  - 把原来的统一“性能画像”测试细分成三条单测，分别锁住加载 / 渲染 / 构建三类题面和追问，避免后续回退成统一模板。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只是在运行时生成项目深挖题时补充更细的语义推断，不影响现有面试状态机、报告结构和流式协议。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts`
+
+### 下一步
+
+- 如果继续沿“更像真人面试官”的方向推进，下一轮优先把 warmup / HR 追问也继续细分，例如单独区分“离职原因”“求职动机”“职业规划”“团队协作冲突”，而不是继续沿用统一的开场追问口吻。
+
+### 目标
+
+- 继续提升项目深挖阶段的真实感，不再只用一个通用项目题覆盖所有候选人。
+- 让用户可见文案里的项目标签更自然，避免再把 `engineering` 这种内部 canonical tag 直接展示出来。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 新增轻量项目类型推断：
+    - `engineering`
+    - `performance`
+    - `delivery`
+  - 推断信号直接复用现有 `ResumeProfile` 的 `primaryTags / projectTags / strengths / evidence`，不新增持久化字段。
+  - 项目深挖主问题现在会按类型切三套题面：
+    - 工程化项目：更强调系统痛点、技术决策、推进落地和研发效率收益
+    - 性能优化项目：更强调现象、瓶颈定位、优化手段与指标验证
+    - 业务项目：更强调业务目标、协作、约束与交付效果
+  - 同时补了一层 tag 展示映射，把 `engineering / performance / javascript` 这类内部标签翻成更自然的中文展示文案。
+- `packages/interview-engine/src/index.test.ts`
+  - 新增三条测试，覆盖三类画像分别会生成对应风格的项目深挖题。
+  - 同时补断言，确保工程化项目题面里不再出现 `engineering` 这类裸标签。
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 阶段式面试 E2E 新增断言：
+    - 首轮不应出现 `重点经历集中在 engineering`
+    - 项目深挖阶段应出现 `工程化或基础设施项目`
+    - 页面里不应再出现 `engineering`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 这次仍然只是在生成项目题时做轻量推断，不影响已有面试状态机、评分和报告结构。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts`
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm verify`
+
+### 下一步
+
+- 下一轮如果继续做自然度，优先把“性能优化项目”的主问题再拆成“加载性能 / 渲染性能 / 构建性能”三种子问法，这样会比继续堆统一性能题更像真人追项目。
+
+### 目标
+
+- 继续提升项目深挖阶段的“真人面试官感”，避免所有项目追问都落成一种泛化口吻。
+- 在不改状态机和数据库结构的前提下，让现有项目追问能根据缺失点自动切换语义焦点。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 新增基于 `followUpTrace.askedMissingPoint` 的轻量分类：
+    - `context`：追背景复杂度 / 职责边界
+    - `tradeoff`：追方案取舍 / 权衡
+    - `outcome`：追结果验证 / 收益闭环
+  - 项目深挖追问的 few-shot 不再只有一组，而是会按上面的分类切换不同示例。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 面试流式桥接现在把当前最新一条 `followUpTrace` 一起传给 `buildInterviewReplyTurns()`，让真实模型不仅知道“现在在追问”，还知道“这次在追什么”。
+- `packages/llm/src/mock-provider.ts`
+  - mock 项目追问口吻也同步按 `missingPoint` 做轻量分类，和真实模型 prompt 尽量保持同一产品语义。
+- 新增 `packages/llm/src/mock-provider.test.ts`
+  - 锁住：
+    - 题目头不再带 topic 标签
+    - 项目追背景复杂度的 mock 口吻
+    - 项目追收益验证的 mock 口吻
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+  - 新增断言，覆盖项目深挖追问在三种子类型下会注入不同示例。
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - stop 用例的中止触发改为浏览器原生 `element.click()`，同时放宽阶段推进断言超时，降低关键 E2E 的时序抖动。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 这次改动完全建立在现有 `followUpTrace` 和项目题 `keyPoints` 上，不新增持久化字段。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/llm/src/mock-provider.test.ts`
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖|模拟面试在真实流式回复中停止生成后，仍应保留已输出的 assistant 部分内容'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果继续做自然度，下一轮可以把项目深挖主问题也按“工程化项目 / 业务项目 / 性能优化项目”再细分主问方式，这样后续追问会更顺。
+
+### 目标
+
+- 继续收口模拟面试里用户还能明显感知到的“脚本味”，尤其是 stop / fallback / mock 场景下残留的题目标签和项目题模板术语。
+- 让项目深挖更像真人面试官追项目，而不是要求候选人机械套 STAR 模板。
+
+### 主要改动
+
+- `packages/llm/src/mock-provider.ts`
+  - `generateQuestionMessage()` 不再生成 `第 N 个问题（engineering）` 这种带 topic 标签的文案，统一改成自然的 `第 N 个问题：`。
+  - `generateFollowUpMessage()` 针对项目深挖题单独分支：
+    - 不再沿用技术题追问口吻
+    - 改成更像项目复盘的“背景和动作讲到了，但取舍过程还不够完整，我继续追一个细节……”
+- `packages/interview-engine/src/process-helpers.ts`
+  - 项目深挖主问题从“按 STAR 的思路讲清楚”改成更自然的“你可以按这条主线来讲”，保留结构感，但降低模板感。
+- `packages/interview-engine/src/index.test.ts`
+  - 新增断言，覆盖：
+    - 技术题题干不再带 `(javascript)` 之类 topic 标签
+    - 项目深挖题干不再出现 `STAR`
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 阶段式面试 E2E 新增断言：
+    - 首轮不应出现 `（engineering）`
+    - 项目深挖提示里不应出现 `按 STAR 的思路讲清楚`
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前改动主要作用于 mock / stop / fallback 可见文案和项目深挖题面，不影响真实模型流式协议与状态推进。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts`
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖|模拟面试在真实流式回复中停止生成后，仍应保留已输出的 assistant 部分内容'`
+  - `pnpm verify`
+
+### 下一步
+
+- 后续如果继续往“更像真人”推进，优先考虑把项目深挖追问再细分成“追背景复杂度 / 追方案取舍 / 追收益验证”三类，而不是继续在同一条追问文案里兼顾所有目的。
+
+## Iteration 5.84（2026-04-01）：让面试真实流式感知阶段语义，并屏蔽内部规划播报
+
+### 目标
+
+- 继续降低模拟面试里“虽然在流，但说话还是偏通用模板”的感觉，让真实模型明确知道当前是破冰、技术题、项目深挖还是总结阶段。
+- 修复内部 `system` 规划片段在 mock / 早停场景下可能漏进用户可见草案的问题，避免再次出现“已根据你的输入生成本场面试计划”这种出戏文本。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - `buildInterviewReplyTurns()` 现在会显式接收 `interviewStage`，并把它组装进给真实模型的回合上下文。
+  - 面试专用 few-shot 继续细分，新增/强化：
+    - 开场破冰主问题
+    - 技术题主问题
+    - 项目深挖主问题
+    - 技术题追问
+    - 项目深挖追问
+    - 总结收口
+  - `buildDeterministicInterviewReplyDraft()` 现在会过滤 `kind = system` 的内部计划片段，确保用户可见草案只保留真正应该说出口的内容。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 真实模型流式分支现在把 `interviewResult.session.runtime.currentStage` 一起传给面试流式桥接，避免 prompt 只能看到“这一轮要干什么”，却看不到“当前已经处在哪个阶段”。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+  - 新增断言，覆盖：
+    - warmup 阶段会注入破冰式口吻示例
+    - project 阶段会注入项目复盘式主问/追问示例
+    - 用户可见草案会过滤内部 `system` 片段
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 阶段式面试 E2E 新增断言：首轮页面不应出现 `已根据你的输入生成本场面试计划`。
+- `playwright.config.ts`
+  - Web E2E 的 mock stream 分片延迟从 `120ms` 再调整为 `180ms`，进一步稳住 stop 类串跑回归。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 这次仍然没有改状态机的题目推进逻辑，只是让真实模型在同样的节奏下更清楚自己“现在是在什么阶段说话”。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖|模拟面试在真实流式回复中停止生成后，仍应保留已输出的 assistant 部分内容'`
+  - `pnpm verify`
+
+### 下一步
+
+- 下一轮如果继续做自然度，优先把项目深挖和 HR 面继续拆成更细的 few-shot 子类型，例如“项目复盘追结果”“项目追取舍”“HR 追离职原因”“HR 追职业规划”，而不是回到一套大而全的统一示例。
+
+## Iteration 5.83（2026-04-01）：增强面试真实流式口吻，并统一快捷流的 mock 节奏
+
+### 目标
+
+- 继续把模拟面试的用户可见回复从“像内部计划改写”往“像真人面试官现场说话”推进。
+- 修复面试 stop E2E 背后的根因，让面试专用快捷流和普通 mock 流一样受统一的分片延迟配置控制。
+
+### 主要改动
+
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 为真实模型的面试专用 prompt 新增更细的口吻约束：
+    - 减少空泛口头禅
+    - 提问要更像顺着现场交流往下追
+  - 按回合类型注入差异化 few-shot：
+    - 点评后进入下一道主问题
+    - 点评后继续追问
+    - 总结收口
+    - 点评后继续推进
+  - 这样做的目的不是再加规则，而是把“自然说法”交给真实模型模仿，减少模板痕迹。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+  - 新增断言，覆盖不同回合类型会看到不同的 few-shot 示例，避免后续 prompt 回退成单一模板。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.ts`
+  - `emitShortcutReplyAsStream()` 现在也会读取 `MOCK_STREAM_DELTA_DELAY_MS`。
+  - 这意味着面试 mock 流和普通 mock provider 的流式节奏终于统一，Playwright 的 stop 用例不再依赖运气抢点击窗口。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts`
+  - 新增单测，锁住“配置 `MOCK_STREAM_DELTA_DELAY_MS` 时，快捷流也会按该延迟输出”的行为。
+- `playwright.config.ts`
+  - Web E2E 的 mock stream 分片延迟从 `72ms` 提高到 `120ms`，给“停止生成”类用例更稳定的操作窗口。
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 调整模拟面试 stop 用例的触发方式：
+    - 在按钮进入“停止生成”状态后立即触发中止
+    - 重点断言最终的 `已停止生成` 持久化结果，而不是继续和首段输出时机抢 race
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 真实环境仍由实际 `streamChat()` 逐 token 输出；这次只增强 prompt 质量，并统一测试环境下的 mock 流节奏。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts' 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在真实流式回复中停止生成后，仍应保留已输出的 assistant 部分内容'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm verify`
+
+### 下一步
+
+- 如果后续继续做 HR 面、算法题或更多项目深挖场景，优先沿用“按回合类型补 few-shot”的方式扩面，不要重新回到大段规则和硬模板。
+
+## Iteration 5.82（2026-04-01）：补强面试编号上下文，并为真实流式中止加回归保护
+
+### 目标
+
+- 进一步降低模拟面试中“主问题 / 追问”口吻混杂的风险，让真实模型更稳定地区分“继续追问”与“进入下一题”。
+- 为新的面试真实流式链路补一条停止生成回归，确保中断时已输出内容可保留。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 追问消息的 `kind` 从 `question` 改成显式的 `follow_up`，避免主问题和追问在后续 prompt 组装时语义混淆。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 新增回合上下文推断：
+    - `当前回合类型：进入下一道主问题 / 继续追问 / 总结收口 / 点评后继续推进`
+    - `当前关联主问题编号：第 N 个问题`
+  - 组装给真实模型的 prompt 时，把这层上下文和内部计划片段一起传入，降低模型在追问时误重新编号、或在切题时沿用追问口吻的概率。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+  - 新增追问场景断言，覆盖：
+    - `follow_up` 回合会被识别为“继续追问”
+    - 会正确继承上一道主问题的编号
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 新增真实 Web E2E：
+    - `模拟面试在真实流式回复中停止生成后，仍应保留已输出的 assistant 部分内容`
+  - 覆盖面试专用流式链路在 stop 时的用户可见行为与刷新后持久化表现。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- `ChatMessage.kind = follow_up` 在面试链路中的使用范围扩大，但前端渲染仍兼容现有 assistant 消息展示，不影响普通聊天链路。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在真实流式回复中停止生成后，仍应保留已输出的 assistant 部分内容|模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm test:e2e:web`
+
+## Iteration 5.81（2026-04-01）：让模拟面试改走真实模型流式回复，而不是本地脚本整段返回
+
+### 目标
+
+- 解决当前模拟面试“虽然流程像面试，但回复看起来不是模型逐 token 生成，而是本地脚本整段返回”的问题。
+- 保持现有 `interview-engine` 的状态推进、追问判定、评分与报告骨架不变，只把用户可见的面试官话术切到真实模型流式生成。
+
+### 主要改动
+
+- 新增 `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.ts`
+  - 负责把 `interview-engine` 生成的内部回合计划包装成给真实模型使用的 prompt：
+    - 可见对话历史
+    - 当前用户回答
+    - 内部计划片段（点评 / 追问 / 下一题 / 总结）
+  - 新增“同一回合多条 assistant 计划片段折叠为一条最终消息”的 helper，适配当前前端“一次请求只流一个 assistant 气泡”的协议。
+- `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/route.ts`
+  - 面试分支不再直接把 `processSessionMessage()` 返回的整段 assistant 文本一次性落库后 `done`。
+  - 现在的链路改成：
+    - 先由 `interview-engine` 推进状态，产出内部计划片段
+    - 先持久化一份折叠后的草案消息，确保会话状态已前进
+    - 再调用当前 `StreamChatProvider`（DeepSeek / Ollama）对用户可见文本做真实流式生成
+    - 流式结束后，用最终模型文本覆盖草案消息再落库
+  - `mock` 环境下继续走可控的测试流式文本，确保 Playwright / Vitest 稳定。
+- 新增测试：
+  - `apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts`
+    - 覆盖草案折叠
+    - 覆盖给模型的 prompt 拼装
+    - 覆盖多条 assistant 计划合并为单条最终消息
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 前端 SSE 协议仍保持单 assistant 气泡流式更新，不需要额外改客户端协议。
+- 当前真实模型流式仅接管“用户可见的面试官回复”，而不是重写状态机本身；也就是说：
+  - 追问/切题/报告时机仍由 `interview-engine` 决策
+  - 但具体说出来的话，已改成真实模型流式生成
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/interview-streaming.test.ts' packages/interview-engine/src/index.test.ts 'apps/web/src/app/api/chat/sessions/[sessionId]/messages/stream/stream-utils.test.ts'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm test:e2e:web`
+
+## Iteration 5.80（2026-04-01）：把模拟面试从系统播报改成真人式逐问逐答
+
+### 目标
+
+- 修正当前模拟面试“太像系统配置播报、不像真人面试官”的问题。
+- 让用户发来简历并说“开始面试”后，直接进入一问一答节奏，而不是先看到“本场共几题 / 反馈模式”这类出戏文案。
+
+### 主要改动
+
+- `packages/interview-engine/src/process-helpers.ts`
+  - 启动面试时不再额外插入 kickoff 播报消息。
+  - 开场破冰题改成直接在首条问题里自然接住简历内容，并明确以“第一个问题”开问。
+  - 热身点评不再附带“我们继续进入技术题”这类系统提示，改成只保留点评本身。
+  - 技术题与项目深挖题的显示序号统一按“热身题也算一道题”推进：
+    - 热身题：第一个问题
+    - 第一技术题：第二个问题
+    - 项目深挖：继续顺延
+- `packages/interview-engine/src/process-session-message.ts`
+  - 技术题和项目深挖题在回答收口后，都会先输出点评，再决定是否进入下一题或最终报告，不再受 `feedbackMode` 影响而跳过点评。
+  - 下一道主问题的显示序号同步改成新的自然编号规则。
+- `packages/llm/src/mock-provider.ts`
+  - `generateQuestionMessage()` 从 `问题 1/4` 改成 `第一个问题 / 第二个问题` 风格。
+  - `generateFollowUpMessage()` 从生硬的“我补一个追问”改成“点评 + 我继续追问一下”。
+  - `generateQuestionFeedback()` 去掉“本题反馈 / 评分”式系统口吻，改成更像真人面试官的点评语气。
+  - kickoff 兜底文案也同步收敛，不再暴露总题数和反馈模式。
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 模拟面试 E2E 断言切换到新预期：
+    - 页面不应出现 `本场共` / `反馈模式`
+    - 开场应直接进入 `第一个问题`
+    - 热身后应出现 `点评：` 和 `第二个问题`
+- `packages/interview-engine/src/index.test.ts`
+  - 补单测断言，覆盖：
+    - 首题显示为 `第一个问题`
+    - 不再出现 `本场共`
+    - 第一技术题显示为 `第二个问题`
+    - 追问文案带有新的点评式语气
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- `InterviewConfig.feedbackMode` 暂时仍保留在配置层，但不再决定每题结束后是否展示点评；当前面试主链统一采用“结题先点评，再继续”的对话体验。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run packages/interview-engine/src/index.test.ts`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm test:e2e:web`
+
+## Iteration 5.79（2026-04-01）：收口知识检索缓存串扰与面试流程 E2E 稳定性
+
+### 目标
+
+- 解决 Web 全量 E2E 并发场景下，技术问答偶发命中 `interview_playbook` 而不是 `tech_knowledge` 的回归。
+- 收口模拟面试与多轮真实聊天 fixture 的等待策略，避免流式未结束时就进入下一轮断言。
+
+### 主要改动
+
+- `apps/web/src/lib/server/knowledge-document-retriever.ts`
+  - 继续保留知识分片内存缓存，但从“仅 TTL”升级为“TTL + 已发布文档元信息校验”：
+    - 新增 published 文档 `count`
+    - 新增 published 文档最新 `updatedAt`
+  - 只要知识文档有新增、删除或更新，就会主动失效缓存并重新拉取 chunk，避免并发 E2E 和真实后台维护场景拿到过期知识集。
+- `apps/web/e2e/support/chat-e2e-fixtures.ts`
+  - 新增 `waitForCompletedAssistantTurn`，统一等待：
+    - 用户消息出现
+    - assistant 预期内容出现
+    - 发送按钮恢复为“发送消息”
+  - `createRemoteSession` 与 `createRemoteConversationSession` 统一复用，降低多轮真实聊天链路的时序抖动。
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 阶段式面试 E2E 不再假设“每次回答后都必须立即出现本题反馈”，改为：
+    - 每轮先等待流式结束
+    - 再判断是否已进入“项目深挖”阶段
+  - 将阶段推进尝试轮数放宽，避免被追问轮次影响。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 知识检索缓存行为更及时，后台更新已发布文档后无需再等待固定 TTL 才能被新请求感知。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run apps/web/src/lib/server/chat-general-policy.test.ts apps/web/src/lib/server/knowledge-document-retriever.test.ts`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '命中文档知识时应把知识上下文注入到真实聊天链路'`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+  - `pnpm test:e2e:web`
+
+## Iteration 5.78（2026-04-01）：模拟面试执行链路升级为阶段式流程首版
+
+### 目标
+
+- 不推翻现有 `ResumeProfile / InterviewBlueprint / QuestionPlan / Report` 骨架，先把面试执行体验从“顺排技术题”升级为更像真实面试官的阶段式流程。
+- 首版收口到 `warmup -> technical -> project -> wrap_up` 四段，优先改善开场体验与项目深挖能力。
+
+### 主要改动
+
+- `packages/shared/src/types/index.ts`
+  - 为 `InterviewRuntimeState` 新增：
+    - `currentStage`
+    - `projectQuestion`
+  - 明确面试执行阶段语义，继续复用现有 runtime JSON 持久化结构。
+- `packages/interview-engine/src/process-helpers.ts`
+  - 启动面试后不再直接进入第一道技术题，而是：
+    - 先生成开场破冰问题
+    - 再根据用户输入切入技术题
+  - 新增项目深挖问题构建与阶段切换 helper。
+  - 收紧项目深挖触发条件：只有用户提供了较完整背景信息时，才会在技术题后进入项目深挖。
+- `packages/interview-engine/src/process-session-message.ts`
+  - 面试执行链路改为按 `currentStage` 分支：
+    - `warmup`：轻点评后进入技术题
+    - `technical`：沿用原有追问、评分与题单推进
+    - `project`：对动态生成的项目题继续做追问与评分
+    - `wrap_up`：生成最终报告
+- 兼容与默认值同步补齐：
+  - `packages/interview-engine/src/session-core.ts`
+  - `apps/web/src/lib/server/chat-session-model.ts`
+  - `apps/web/src/app/chat/lib/chat-session-draft.ts`
+  - `apps/web/src/lib/server/chat-session-ui-state.ts`
+  - `apps/admin/src/lib/chat-session-runtime.ts`
+- 补充与调整测试：
+  - `packages/interview-engine/src/index.test.ts`
+    - 新增阶段式流转断言
+    - 覆盖“简历更完整时会进入项目深挖”
+  - 同步更新 Web/Admin 侧依赖旧 runtime 字段的测试用例。
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 新增一条真实 Web E2E，覆盖：
+      - `warmup` 开场破冰
+      - `technical` 技术题切入
+      - `project` 项目深挖阶段出现
+  - `apps/web/e2e/support/chat-e2e-fixtures.ts`
+    - 新增 `createConfiguredSession`，用于在同一访客身份下创建带自定义 config 的远端会话，减少阶段式面试 E2E 的不稳定因素。
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 会话 runtime JSON 新增可选字段：
+  - `currentStage`
+  - `projectQuestion`
+- 已补兼容兜底，旧会话缺少这两个字段时会自动回落到默认值。
+
+### 验证
+
+- 已执行：
+  - `pnpm verify`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试应按阶段依次进入破冰、技术题和项目深挖'`
+
 ## Iteration 5.77（2026-04-01）：统一会话更新后的缓存与激活态同步 helper
 
 ### 目标

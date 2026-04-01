@@ -14,6 +14,7 @@ const originalEnv = {
 
 afterEach(() => {
   process.env = { ...originalEnv };
+  vi.useRealTimers();
 });
 
 describe('splitShortcutReplyIntoDeltas', () => {
@@ -118,6 +119,7 @@ describe('toChatTurns', () => {
           questionPlan: [],
           currentQuestionIndex: 0,
           followUpRound: 0,
+          currentStage: 'technical',
           activeQuestionAnswers: [],
           assessments: [],
           followUpTrace: [],
@@ -128,6 +130,7 @@ describe('toChatTurns', () => {
           planGeneratedAt: null,
           planningTrace: null,
           reportTrace: null,
+          projectQuestion: null,
           knowledgeRetrievalTrace: [],
         },
         createdAt: new Date().toISOString(),
@@ -203,6 +206,33 @@ describe('emitShortcutReplyAsStream', () => {
     expect(result.content.length).toBeGreaterThan(0);
     expect('你好，世界。继续输出'.startsWith(result.content)).toBe(true);
     expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('配置 MOCK_STREAM_DELTA_DELAY_MS 时会把快捷流也放慢到可控节奏', async () => {
+    process.env.MOCK_STREAM_DELTA_DELAY_MS = '120';
+    vi.useFakeTimers();
+    const enqueue = vi.fn();
+
+    const promise = emitShortcutReplyAsStream({
+      controller: { enqueue } as unknown as ReadableStreamDefaultController<Uint8Array>,
+      content: '第一句。第二句。第三句。',
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(119);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(enqueue).toHaveBeenCalledTimes(2);
+
+    await vi.runAllTimersAsync();
+
+    await expect(promise).resolves.toEqual({
+      aborted: false,
+      content: '第一句。第二句。第三句。',
+    });
   });
 });
 

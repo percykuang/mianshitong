@@ -170,10 +170,6 @@ export function resolveGeneralChatIntent(input: {
     return { kind: 'self_intro' };
   }
 
-  if (INTERVIEW_PLAYBOOK_PATTERN.test(trimmed)) {
-    return { kind: 'interview_playbook' };
-  }
-
   if (PROJECT_HIGHLIGHT_PATTERN.test(trimmed)) {
     return { kind: 'project_highlight' };
   }
@@ -189,6 +185,10 @@ export function resolveGeneralChatIntent(input: {
   const technicalIntent = resolveTechnicalQuestionIntent(trimmed);
   if (technicalIntent) {
     return technicalIntent;
+  }
+
+  if (INTERVIEW_PLAYBOOK_PATTERN.test(trimmed)) {
+    return { kind: 'interview_playbook' };
   }
 
   return null;

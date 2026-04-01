@@ -67,6 +67,11 @@
     "rerank",
     "hnsw",
     "zstd",
-    "dedup"
+    "dedup",
+    "ttfb",
+    "rsbuild",
+    "Rsbuild",
+    "xgplayer",
+    "qrcode"
   ]
 }

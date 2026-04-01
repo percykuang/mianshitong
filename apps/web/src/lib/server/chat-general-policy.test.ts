@@ -152,6 +152,18 @@ describe('resolveGeneralChatIntent', () => {
       style: 'comparison',
     });
   });
+
+  it('技术题即使带有面试语境，也应优先识别为技术问答', () => {
+    const intent = resolveGeneralChatIntent({
+      content: 'React 性能优化在面试里应该怎么回答？什么时候不该滥用 useMemo 和 useCallback？',
+      userMessageCount: 0,
+    });
+
+    expect(intent).toMatchObject({
+      kind: 'technical_question',
+      question: 'React 性能优化在面试里应该怎么回答？什么时候不该滥用 useMemo 和 useCallback？',
+    });
+  });
 });
 
 describe('prependGeneralChatIntentInstruction', () => {

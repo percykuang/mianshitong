@@ -22,6 +22,7 @@ const sessionSources: KnowledgeTraceSessionSource[] = [
       questionPlan: [],
       currentQuestionIndex: 0,
       followUpRound: 0,
+      currentStage: 'technical',
       activeQuestionAnswers: [],
       assessments: [],
       followUpTrace: [],
@@ -32,6 +33,7 @@ const sessionSources: KnowledgeTraceSessionSource[] = [
       planGeneratedAt: null,
       planningTrace: null,
       reportTrace: null,
+      projectQuestion: null,
       knowledgeRetrievalTrace: [
         {
           createdAt: '2026-03-30T10:00:00.000Z',
@@ -64,6 +66,7 @@ const sessionSources: KnowledgeTraceSessionSource[] = [
       questionPlan: [],
       currentQuestionIndex: 0,
       followUpRound: 0,
+      currentStage: 'technical',
       activeQuestionAnswers: [],
       assessments: [],
       followUpTrace: [],
@@ -74,6 +77,7 @@ const sessionSources: KnowledgeTraceSessionSource[] = [
       planGeneratedAt: null,
       planningTrace: null,
       reportTrace: null,
+      projectQuestion: null,
       knowledgeRetrievalTrace: [
         {
           createdAt: '2026-03-30T11:00:00.000Z',

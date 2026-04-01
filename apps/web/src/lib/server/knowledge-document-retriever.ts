@@ -24,8 +24,14 @@ const INTERVIEW_PLAYBOOK_CONTEXT_CHAR_BUDGET = 3600;
 const KNOWLEDGE_RETRIEVAL_QUERY_PREVIEW_LIMIT = 120;
 const KNOWLEDGE_DOCUMENT_CACHE_TTL_MS = 15_000;
 
+interface PublishedKnowledgeChunksCacheMeta {
+  count: number;
+  latestUpdatedAt: string | null;
+}
+
 let searchableKnowledgeChunksCache: {
   expiresAt: number;
+  meta: PublishedKnowledgeChunksCacheMeta;
   chunks: SearchableKnowledgeDocumentChunk[];
 } | null = null;
 
@@ -101,6 +107,24 @@ function resolvePreferredTags(intent: GeneralChatIntent | null, content: string)
   return [...new Set(baseTags)];
 }
 
+function resolveKnowledgeCategoryPriority(
+  intent: KnowledgeRetrievalIntent,
+): KnowledgeDocumentCategory[] | null {
+  if (intent.kind === 'technical_question') {
+    return ['tech_knowledge', 'interview_playbook'];
+  }
+
+  if (intent.kind === 'project_highlight' || intent.kind === 'resume_optimize') {
+    return ['project_resume', 'interview_playbook'];
+  }
+
+  if (intent.kind === 'self_intro') {
+    return ['interview_playbook', 'project_resume'];
+  }
+
+  return null;
+}
+
 export interface KnowledgeRetrievalPlan {
   categories: KnowledgeDocumentCategory[];
   preferredTags: string[];
@@ -110,6 +134,47 @@ export interface KnowledgeRetrievalPlan {
 export interface ResolvedKnowledgeDocumentContextResult {
   context: KnowledgeDocumentContext;
   trace: KnowledgeRetrievalTraceEntry;
+}
+
+export function rerankKnowledgeSearchResultsByIntent(input: {
+  intent: KnowledgeRetrievalIntent;
+  results: KnowledgeSearchResult;
+}): KnowledgeSearchResult {
+  const categoryPriority = resolveKnowledgeCategoryPriority(input.intent);
+  if (!categoryPriority) {
+    return input.results;
+  }
+
+  const priorityMap = new Map(
+    categoryPriority.map((category, index) => [category, index] as const),
+  );
+
+  return [...input.results].sort((left, right) => {
+    const leftPriority = priorityMap.get(left.chunk.category) ?? categoryPriority.length;
+    const rightPriority = priorityMap.get(right.chunk.category) ?? categoryPriority.length;
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    if (right.score !== left.score) {
+      return right.score - left.score;
+    }
+
+    if (right.matchedTags.length !== left.matchedTags.length) {
+      return right.matchedTags.length - left.matchedTags.length;
+    }
+
+    if (right.lexicalOverlap.length !== left.lexicalOverlap.length) {
+      return right.lexicalOverlap.length - left.lexicalOverlap.length;
+    }
+
+    if (left.chunk.chunkOrder !== right.chunk.chunkOrder) {
+      return left.chunk.chunkOrder - right.chunk.chunkOrder;
+    }
+
+    return left.chunk.id.localeCompare(right.chunk.id);
+  });
 }
 
 function estimateKnowledgeContextEntrySize(chunk: SearchableKnowledgeDocumentChunk): number {
@@ -381,8 +446,28 @@ export function trimKnowledgeRetrievalTraceForEditedMessage(
 async function listPublishedSearchableKnowledgeChunks(): Promise<
   SearchableKnowledgeDocumentChunk[]
 > {
+  const publishedMeta = await prisma.knowledgeDocument.aggregate({
+    where: {
+      isPublished: true,
+    },
+    _count: {
+      id: true,
+    },
+    _max: {
+      updatedAt: true,
+    },
+  });
+  const cacheMeta: PublishedKnowledgeChunksCacheMeta = {
+    count: publishedMeta._count.id,
+    latestUpdatedAt: publishedMeta._max.updatedAt?.toISOString() ?? null,
+  };
   const now = Date.now();
-  if (searchableKnowledgeChunksCache && searchableKnowledgeChunksCache.expiresAt > now) {
+  if (
+    searchableKnowledgeChunksCache &&
+    searchableKnowledgeChunksCache.expiresAt > now &&
+    searchableKnowledgeChunksCache.meta.count === cacheMeta.count &&
+    searchableKnowledgeChunksCache.meta.latestUpdatedAt === cacheMeta.latestUpdatedAt
+  ) {
     return searchableKnowledgeChunksCache.chunks;
   }
 
@@ -423,6 +508,7 @@ async function listPublishedSearchableKnowledgeChunks(): Promise<
 
   searchableKnowledgeChunksCache = {
     expiresAt: now + KNOWLEDGE_DOCUMENT_CACHE_TTL_MS,
+    meta: cacheMeta,
     chunks: searchableChunks,
   };
 
@@ -452,11 +538,15 @@ export async function resolveKnowledgeDocumentContext(input: {
             limit: searchableChunks.length,
           },
         });
+  const rerankedResults = rerankKnowledgeSearchResultsByIntent({
+    intent: input.intent,
+    results: rankedResults,
+  });
 
-  const mode = resolveKnowledgeDocumentHitMode(rankedResults);
+  const mode = resolveKnowledgeDocumentHitMode(rerankedResults);
   const contextResults = selectKnowledgeSearchResultsForContext({
     searchableChunks,
-    rankedResults,
+    rankedResults: rerankedResults,
     resultLimit: plan.resultLimit,
   });
 
@@ -467,7 +557,7 @@ export async function resolveKnowledgeDocumentContext(input: {
       content: input.content,
       plan,
       mode,
-      results: rankedResults.slice(0, plan.resultLimit),
+      results: rerankedResults.slice(0, plan.resultLimit),
     }),
   };
 }

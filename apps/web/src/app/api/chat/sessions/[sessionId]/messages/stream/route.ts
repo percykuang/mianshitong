@@ -31,10 +31,16 @@ import {
   enqueueSseEvent,
   emitShortcutReplyAsStream,
   finalizeSseStream,
+  isAbortError,
   isRecord,
   resolveErrorMessage,
   toChatTurns,
 } from './stream-utils';
+import {
+  buildDeterministicInterviewReplyDraft,
+  buildInterviewReplyTurns,
+  collapseInterviewAssistantMessages,
+} from './interview-streaming';
 
 export const runtime = 'nodejs';
 
@@ -88,18 +94,16 @@ export async function POST(
   let provider: StreamChatProvider | null = null;
   let model: string | null = null;
 
-  if (!shouldUseInterviewEngine) {
-    try {
-      const result = createStreamProvider(session.modelId);
-      provider = result.provider;
-      model = result.model;
-    } catch (error) {
-      if (!fallbackAssistantText) {
-        return new Response(resolveErrorMessage(error), {
-          status: 400,
-          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        });
-      }
+  try {
+    const result = createStreamProvider(session.modelId);
+    provider = result.provider;
+    model = result.model;
+  } catch (error) {
+    if (shouldUseInterviewEngine || !fallbackAssistantText) {
+      return new Response(resolveErrorMessage(error), {
+        status: 400,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
     }
   }
 
@@ -117,6 +121,12 @@ export async function POST(
         const run = async () => {
           let hasError = false;
           let shouldRollback = true;
+          let interviewResult: Awaited<ReturnType<typeof processSessionMessage>> | null = null;
+          let persistedDraftSession = null as Awaited<
+            ReturnType<typeof saveOrCreateActorSession>
+          > | null;
+          let deterministicDraft = '';
+          let streamedAssistantText = '';
 
           try {
             enqueueSseEvent(controller, 'start', { sessionId });
@@ -125,33 +135,122 @@ export async function POST(
             const retriever =
               session.status === 'idle' ? await resolveQuestionRetriever(questionBank) : null;
 
-            const result = await processSessionMessage({
+            interviewResult = await processSessionMessage({
               session,
               content,
               questionBank: session.status === 'idle' ? questionBank : undefined,
               questionRetriever: retriever?.questionRetriever,
               retrievalStrategy: retriever?.retrievalStrategy,
             });
+            if (interviewResult.assistantMessages.length === 0) {
+              const updatedSession = await saveOrCreateActorSession(
+                actor.id,
+                interviewResult.session,
+                actor.authUserId,
+              );
+              if (!updatedSession) {
+                throw new Error('会话不存在或已失效');
+              }
+
+              shouldRollback = false;
+              enqueueSseEvent(controller, 'done', { session: updatedSession });
+              return;
+            }
+
+            deterministicDraft = buildDeterministicInterviewReplyDraft(
+              interviewResult.assistantMessages,
+            );
+            const collapsedDraft = collapseInterviewAssistantMessages({
+              session: interviewResult.session,
+              assistantMessages: interviewResult.assistantMessages,
+              content: deterministicDraft,
+            });
+            persistedDraftSession = await saveOrCreateActorSession(
+              actor.id,
+              collapsedDraft.session,
+              actor.authUserId,
+            );
+            shouldRollback = false;
+            if (!persistedDraftSession) {
+              throw new Error('会话不存在或已失效');
+            }
+
+            if (provider?.name === 'mock-stream-provider') {
+              const emitted = await emitShortcutReplyAsStream({
+                controller,
+                content: deterministicDraft,
+                signal: request.signal,
+              });
+              streamedAssistantText = emitted.content;
+              if (emitted.aborted) {
+                const abortError = new Error('The operation was aborted.');
+                abortError.name = 'AbortError';
+                throw abortError;
+              }
+            } else {
+              const turns = buildInterviewReplyTurns({
+                session,
+                userContent: content,
+                assistantMessages: interviewResult.assistantMessages,
+                interviewStage: interviewResult.session.runtime.currentStage,
+                currentFollowUpTrace: interviewResult.session.runtime.followUpTrace.at(-1) ?? null,
+              });
+
+              for await (const delta of provider!.streamChat({
+                messages: turns,
+                model: model!,
+                signal: request.signal,
+              })) {
+                streamedAssistantText += delta;
+                enqueueSseEvent(controller, 'delta', { delta });
+              }
+            }
+
+            const normalizedAssistantText = normalizeAssistantMarkdown(streamedAssistantText);
+            const finalContent = normalizedAssistantText || deterministicDraft;
+            const finalized = collapseInterviewAssistantMessages({
+              session: interviewResult.session,
+              assistantMessages: interviewResult.assistantMessages,
+              content: finalContent,
+            });
             const updatedSession = await saveOrCreateActorSession(
               actor.id,
-              result.session,
+              finalized.session,
               actor.authUserId,
             );
             if (!updatedSession) {
               throw new Error('会话不存在或已失效');
             }
 
-            shouldRollback = false;
             enqueueSseEvent(controller, 'done', { session: updatedSession });
           } catch (error) {
-            hasError = true;
+            const partialAssistantText = normalizeAssistantMarkdown(streamedAssistantText);
+
+            if (
+              interviewResult &&
+              persistedDraftSession &&
+              (partialAssistantText || isAbortError(error))
+            ) {
+              const interrupted = collapseInterviewAssistantMessages({
+                session: interviewResult.session,
+                assistantMessages: interviewResult.assistantMessages,
+                content: partialAssistantText || deterministicDraft,
+                completionStatus: isAbortError(error) ? 'interrupted' : 'completed',
+              });
+              await saveOrCreateActorSession(actor.id, interrupted.session, actor.authUserId);
+            }
+
+            hasError = !persistedDraftSession || !isAbortError(error);
             if (shouldRollback) {
               await rollbackChatUsage({
                 actorId: actor.id,
                 actorType: actor.type,
               });
             }
-            enqueueSseEvent(controller, 'error', { message: resolveErrorMessage(error) });
+
+            if (!isAbortError(error)) {
+              enqueueSseEvent(controller, 'error', { message: resolveErrorMessage(error) });
+            }
           } finally {
             finalizeSseStream(controller, { ok: !hasError });
           }

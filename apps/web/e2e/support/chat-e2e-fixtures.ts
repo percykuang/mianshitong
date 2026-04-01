@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { prisma } from '@mianshitong/db';
 import { buildKnowledgeDocumentChunks } from '@mianshitong/retrieval';
+import type { CreateSessionInput } from '@mianshitong/shared';
 
 export interface CreatedChatSession {
   id: string;
@@ -11,6 +12,10 @@ export interface CreatedChatSession {
 export interface ChatConversationTurn {
   user: string;
   assistant?: string;
+}
+
+export interface CreatedConfiguredSession {
+  id: string;
 }
 
 export interface SeededKnowledgeDocumentFixture {
@@ -25,6 +30,7 @@ const INTERVIEW_PLAYBOOK_DOCUMENT_E2E_TITLE = 'E2E 前端面试流程手册';
 const RESUME_KNOWLEDGE_DOCUMENT_E2E_TITLE = 'E2E 项目亮点提炼模板';
 const E2E_DATABASE_URL =
   'postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public';
+const E2E_ASSISTANT_RESPONSE_TIMEOUT_MS = 15_000;
 
 function ensureE2eDatabaseUrl(): void {
   process.env.DATABASE_URL ||= E2E_DATABASE_URL;
@@ -246,6 +252,42 @@ export async function openChat(page: Page): Promise<void> {
   await expect(page.getByTestId('multimodal-input')).toBeVisible();
 }
 
+export async function createConfiguredSession(
+  page: Page,
+  input: CreateSessionInput,
+): Promise<CreatedConfiguredSession> {
+  await openChat(page);
+
+  const result = await page.evaluate(async (payload) => {
+    const response = await fetch('/api/chat/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const json = (await response.json()) as {
+      session?: { id?: string };
+      message?: string;
+    };
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      sessionId: json.session?.id ?? null,
+      message: json.message ?? null,
+    };
+  }, input);
+
+  expect(result.ok, result.message ?? `创建会话失败，状态码 ${result.status}`).toBe(true);
+  expect(result.sessionId).toMatch(/^[0-9a-f]{32}$/);
+
+  return {
+    id: result.sessionId!,
+  };
+}
+
 function resolveExpectedAssistantContent(prompt: string): string {
   return `[web-e2e] 已按真实模型链路处理：${prompt}`;
 }
@@ -257,6 +299,26 @@ function resolveSessionIdFromUrl(url: string): string {
   }
 
   return matched[1];
+}
+
+async function waitForCompletedAssistantTurn(
+  page: Page,
+  input: {
+    userContent: string;
+    assistantContent: string;
+  },
+): Promise<void> {
+  const main = page.getByRole('main');
+
+  await expect(main).toContainText(input.userContent, {
+    timeout: E2E_ASSISTANT_RESPONSE_TIMEOUT_MS,
+  });
+  await expect(main).toContainText(input.assistantContent, {
+    timeout: E2E_ASSISTANT_RESPONSE_TIMEOUT_MS,
+  });
+  await expect(page.getByTestId('send-button')).toHaveAttribute('aria-label', '发送消息', {
+    timeout: E2E_ASSISTANT_RESPONSE_TIMEOUT_MS,
+  });
 }
 
 export async function createRemoteSession(page: Page, prompt: string): Promise<CreatedChatSession> {
@@ -272,8 +334,10 @@ export async function createRemoteSession(page: Page, prompt: string): Promise<C
 
   await expect(page).toHaveURL(/\/chat\/[0-9a-f]{32}$/);
   const assistantContent = resolveExpectedAssistantContent(prompt);
-  await expect(page.getByRole('main')).toContainText(prompt);
-  await expect(page.getByRole('main')).toContainText(assistantContent);
+  await waitForCompletedAssistantTurn(page, {
+    userContent: prompt,
+    assistantContent,
+  });
 
   return {
     id: resolveSessionIdFromUrl(page.url()),
@@ -297,8 +361,10 @@ export async function createRemoteConversationSession(
     await page.getByTestId('send-button').click();
 
     const assistantContent = turn.assistant ?? resolveExpectedAssistantContent(turn.user);
-    await expect(page.getByRole('main')).toContainText(turn.user);
-    await expect(page.getByRole('main')).toContainText(assistantContent);
+    await waitForCompletedAssistantTurn(page, {
+      userContent: turn.user,
+      assistantContent,
+    });
   }
 
   const lastTurn = turns.at(-1)!;

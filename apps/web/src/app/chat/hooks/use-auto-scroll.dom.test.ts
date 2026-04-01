@@ -17,6 +17,8 @@ type AutoScrollHookProps = {
 
 function createScrollContainer() {
   let scrollTopValue = 0;
+  let scrollHeightValue = 3200;
+  let clientHeightValue = 800;
   const scrollToMock = vi.fn((options?: ScrollToOptions | number, top?: number) => {
     if (typeof options === 'number') {
       scrollTopValue = typeof top === 'number' ? top : options;
@@ -31,11 +33,11 @@ function createScrollContainer() {
 
   Object.defineProperty(element, 'scrollHeight', {
     configurable: true,
-    get: () => 3200,
+    get: () => scrollHeightValue,
   });
   Object.defineProperty(element, 'clientHeight', {
     configurable: true,
-    get: () => 800,
+    get: () => clientHeightValue,
   });
   Object.defineProperty(element, 'scrollTop', {
     configurable: true,
@@ -53,6 +55,12 @@ function createScrollContainer() {
     getScrollTop: () => scrollTopValue,
     setScrollTop: (value: number) => {
       scrollTopValue = value;
+    },
+    setScrollHeight: (value: number) => {
+      scrollHeightValue = value;
+    },
+    setClientHeight: (value: number) => {
+      clientHeightValue = value;
     },
   };
 }
@@ -282,6 +290,65 @@ describe('useAutoScroll', () => {
         activeSessionLoading: false,
         messageCount: 10,
         lastMessageContent: '',
+        sending: true,
+        followRequestKey: 1,
+      });
+      vi.runAllTimers();
+    });
+
+    expect(result.current.isPinnedToBottom).toBe(true);
+    expect(container.getScrollTop()).toBe(3200);
+  });
+
+  it('首条超长消息发送时，即使内容在发送后瞬间撑高也会保持 follow', () => {
+    const initialProps: AutoScrollHookProps = {
+      activeSessionId: null,
+      activeSessionLoading: false,
+      messageCount: 0,
+      lastMessageContent: undefined,
+      sending: false,
+      followRequestKey: 0,
+    };
+    const { result, rerender } = renderHook<ReturnType<typeof useAutoScroll>, AutoScrollHookProps>(
+      (props) => useAutoScroll(props),
+      {
+        initialProps,
+      },
+    );
+    const container = createScrollContainer();
+    container.setScrollHeight(800);
+    result.current.scrollContainerRef.current = container.element;
+
+    act(() => {
+      rerender({
+        ...initialProps,
+        followRequestKey: 1,
+      });
+      vi.runAllTimers();
+    });
+
+    act(() => {
+      container.setScrollHeight(3200);
+      rerender({
+        activeSessionId: 'draft-session',
+        activeSessionLoading: false,
+        messageCount: 2,
+        lastMessageContent: '',
+        sending: true,
+        followRequestKey: 1,
+      });
+      vi.runAllTimers();
+    });
+
+    expect(result.current.isPinnedToBottom).toBe(true);
+    expect(container.getScrollTop()).toBe(3200);
+
+    act(() => {
+      rerender({
+        activeSessionId: 'draft-session',
+        activeSessionLoading: false,
+        messageCount: 2,
+        lastMessageContent: '第一段流式内容',
         sending: true,
         followRequestKey: 1,
       });
