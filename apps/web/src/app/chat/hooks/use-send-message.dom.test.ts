@@ -327,4 +327,103 @@ describe('useSendMessage', () => {
     expect(refreshSessions).toHaveBeenCalled();
     expect(chatApiMocks.persistInterruptedSessionTurn).not.toHaveBeenCalled();
   });
+
+  it('如果本地已收到部分 assistant 内容，不应被远端已落草稿的 completed 消息覆盖', async () => {
+    const baseSession = appendUserAssistantMessages(
+      createDraftChatSession('deepseek-chat', 'abort_session_interview_partial'),
+      {
+        userContent: '第一轮回答',
+        assistantContent: '第二个问题：请解释事件循环。',
+        now: '2026-03-09T15:00:00.000Z',
+      },
+    );
+    const remoteDraftSession = {
+      ...baseSession,
+      messages: [
+        ...baseSession.messages,
+        {
+          id: 'server_user_partial',
+          role: 'user' as const,
+          kind: 'text' as const,
+          content: '浏览器事件循环怎么执行？',
+          createdAt: '2026-03-09T15:10:00.000Z',
+        },
+        {
+          id: 'server_assistant_partial',
+          role: 'assistant' as const,
+          kind: 'text' as const,
+          content: '点评：完整草稿。第二个问题：完整追问。',
+          createdAt: '2026-03-09T15:10:01.000Z',
+          completionStatus: 'completed' as const,
+        },
+      ],
+      updatedAt: '2026-03-09T15:10:01.000Z',
+    };
+    const interruptedRemoteSession = {
+      ...baseSession,
+      messages: [
+        ...baseSession.messages,
+        {
+          id: 'server_user_partial',
+          role: 'user' as const,
+          kind: 'text' as const,
+          content: '浏览器事件循环怎么执行？',
+          createdAt: '2026-03-09T15:10:00.000Z',
+        },
+        {
+          id: 'server_assistant_partial',
+          role: 'assistant' as const,
+          kind: 'text' as const,
+          content: '点评：',
+          createdAt: '2026-03-09T15:10:01.000Z',
+          completionStatus: 'interrupted' as const,
+        },
+      ],
+      updatedAt: '2026-03-09T15:10:01.000Z',
+    };
+    activeSession = baseSession;
+
+    chatApiMocks.openStreamRequest.mockResolvedValue(new Response(''));
+    chatApiMocks.readSseStream.mockImplementation(async (_response, onEvent) => {
+      onEvent('delta', JSON.stringify({ delta: '点评：' }));
+      throw createAbortError();
+    });
+    chatApiMocks.fetchSessionById.mockResolvedValue(remoteDraftSession);
+    chatApiMocks.persistInterruptedSessionTurn.mockResolvedValue(interruptedRemoteSession);
+
+    const { result } = renderHook(() =>
+      useSendMessage({
+        sending: false,
+        readActiveSession: () => activeSession,
+        createOptimisticSession: () => {
+          throw new Error('should not create session');
+        },
+        refreshSessions,
+        refreshChatUsage,
+        setSending,
+        setErrorFeedback,
+        setInputValue,
+        readInputValue: () => inputValue,
+        registerAbortController,
+        clearAbortController,
+        setActiveSession,
+        setActiveSessionId,
+        replaceSession,
+      }),
+    );
+
+    await act(async () => {
+      await result.current('浏览器事件循环怎么执行？');
+    });
+
+    expect(chatApiMocks.persistInterruptedSessionTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'abort_session_interview_partial',
+        userContent: '浏览器事件循环怎么执行？',
+        assistantContent: '点评：',
+        expectedMessageCount: 2,
+      }),
+    );
+    expect(activeSession).toEqual(interruptedRemoteSession);
+  });
 });

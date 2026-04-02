@@ -244,6 +244,69 @@ export function appendSessionMessages(
   return next;
 }
 
+export function finalizePersistedInterruptedTurn(
+  session: ChatSession,
+  input: {
+    userContent: string;
+    assistantContent?: string;
+    now?: string;
+    assistantCreatedAt?: string;
+  },
+): ChatSession | null {
+  const normalizedUserContent = input.userContent.trim();
+  if (!normalizedUserContent) {
+    return null;
+  }
+
+  let lastUserIndex = -1;
+  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
+    if (session.messages[index]?.role === 'user') {
+      lastUserIndex = index;
+      break;
+    }
+  }
+
+  const lastUserMessage = session.messages[lastUserIndex];
+  if (!lastUserMessage || lastUserMessage.content.trim() !== normalizedUserContent) {
+    return null;
+  }
+
+  const normalizedAssistantContent = input.assistantContent?.trim() ?? '';
+  const nextMessages = session.messages.slice(0, lastUserIndex + 1);
+  const trailingAssistant = session.messages[lastUserIndex + 1];
+
+  if (normalizedAssistantContent) {
+    if (trailingAssistant?.role === 'assistant') {
+      nextMessages.push({
+        ...trailingAssistant,
+        content: normalizedAssistantContent,
+        completionStatus: 'interrupted',
+      });
+    } else {
+      nextMessages.push(
+        createMessage({
+          role: 'assistant',
+          kind: 'text',
+          content: normalizedAssistantContent,
+          createdAt: input.assistantCreatedAt ?? input.now ?? new Date().toISOString(),
+          completionStatus: 'interrupted',
+        }),
+      );
+    }
+  }
+
+  return {
+    ...session,
+    title:
+      nextMessages.filter((message) => message.role === 'user').length === 1
+        ? toTitle(normalizedUserContent)
+        : session.title,
+    messages: nextMessages,
+    updatedAt: input.now ?? new Date().toISOString(),
+    status: 'idle',
+  };
+}
+
 export function getLastUserMessageId(messages: ChatMessage[]): string | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];

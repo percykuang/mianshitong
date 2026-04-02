@@ -16,6 +16,7 @@ import {
 import {
   appendSessionMessages,
   createDraftSession,
+  finalizePersistedInterruptedTurn,
   toSession,
   toSessionCreateData,
   toSessionSummary,
@@ -241,6 +242,15 @@ export async function appendActorInterruptedTurn(
     typeof input.expectedMessageCount === 'number' &&
     current.messages.length > input.expectedMessageCount
   ) {
+    const finalized = finalizePersistedInterruptedTurn(current, input);
+    if (finalized) {
+      const nextWithRuntime = {
+        ...finalized,
+        runtime: mergeRuntimeWithKnowledgeTrace(finalized.runtime, input.runtime),
+      };
+      return saveActorSession(actorId, nextWithRuntime);
+    }
+
     return current;
   }
 

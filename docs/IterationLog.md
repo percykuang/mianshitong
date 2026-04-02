@@ -7,6 +7,87 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 6.10（2026-04-02）：新增 verify:full 统一入口用于全量回归
+
+### 目标
+
+- 保持 `pnpm verify` 继续聚焦格式、Lint、类型、单测和拼写检查，不把日常开发入口直接变成重型命令。
+- 同时补一个统一的全量回归入口，避免每次都靠人工记忆再额外补跑 Admin/Web E2E。
+
+### 主要改动
+
+- `package.json`
+  - 新增 `verify:full`
+  - 当前语义为：
+    - 先执行 `pnpm verify`
+    - 再执行 `pnpm test:e2e:admin`
+    - 最后执行 `pnpm test:e2e:web`
+- 文档
+  - 本条迭代记录明确区分：
+    - `verify`：日常快速自检
+    - `verify:full`：包含 Playwright 的全量回归入口
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 不改变现有 `verify` 的行为，只新增一个更重的统一脚本入口。
+
+### 验证
+
+- 待执行：
+  - `pnpm verify`
+  - `pnpm verify:full`
+
+### 下一步
+
+- 当前如果后续 CI 也想统一入口，可以直接复用 `pnpm verify:full`，而不是在工作流里分散维护多段命令。
+
+## Iteration 6.09（2026-04-02）：修复模拟面试停止生成时被远端草稿覆盖的问题
+
+### 目标
+
+- 修复模拟面试链路里“用户在 assistant 已开始流式输出后点击停止生成，但当前页和刷新后仍然看到完整回复、没有 `已停止生成` 标识”的问题。
+- 保持普通聊天已有的 stop 语义一致：只要本地已经收到 assistant 部分内容，中断后就应该保留这段部分内容，并以 `interrupted` 状态持久化。
+
+### 主要改动
+
+- `apps/web/src/app/chat/hooks/use-send-message.ts`
+  - 调整 abort 后的远端会话采信逻辑：
+    - 以前只要远端消息数比本地基线多，就直接信任远端
+    - 现在如果本地 optimistic assistant 已经收到部分内容，而远端最后一条 assistant 还不是 `interrupted`，就不再直接采用远端 completed 草稿，而是优先走本地 `interrupted` 收口与持久化
+- `apps/web/src/lib/server/chat-session-model.ts`
+  - 新增 `finalizePersistedInterruptedTurn`
+  - 用来处理“本轮 user / assistant 草稿已经先落库，但随后又发生中断”的场景：
+    - 若已有部分 assistant 内容，则把最后一条 assistant 收成该部分内容并标记为 `interrupted`
+    - 若中断前还没有可见 assistant 输出，则移除已先落库的 assistant 草稿
+- `apps/web/src/lib/server/chat-session-repository.ts`
+  - `appendActorInterruptedTurn` 不再在“当前消息数已大于 expectedMessageCount”时直接短路返回
+  - 现在会优先尝试把已落库的当前 turn 收成 interrupted 结果，再保存回会话
+- 测试
+  - `apps/web/src/app/chat/hooks/use-send-message.dom.test.ts`
+    - 新增回归：本地已有 assistant 部分内容时，不应被远端已落库但仍是 completed 的草稿覆盖
+  - `apps/web/src/lib/server/chat-session-model.test.ts`
+    - 新增回归：锁住“已落库草稿转 interrupted 部分内容”和“无输出时移除 assistant 草稿”两种场景
+  - `apps/web/e2e/chat-smoke.spec.ts`
+    - 面试 stop 用例改为等 assistant 真正开始输出正文后再点击停止，避免误点到尚未进入可中断窗口的状态
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只修复中断竞态与会话持久化语义，不影响正常完成态的消息结构与面试阶段推进。
+
+### 验证
+
+- 已执行：
+  - `pnpm exec vitest run apps/web/src/app/chat/hooks/use-send-message.dom.test.ts apps/web/src/lib/server/chat-session-model.test.ts`
+  - `PLAYWRIGHT_SCOPE=web pnpm test:e2e:web --grep '模拟面试在真实流式回复中停止生成后，仍应保留已输出的 assistant 部分内容'`
+
+### 下一步
+
+- 当前 stop 竞态已补到“先落草稿再流式”的面试链路。后续如果编辑重生成、报告生成或其他流式链路也开始采用“先持久化草稿再流式”的模式，应该优先复用同类 interrupted 收口，而不是再各自补一套竞态判断。
+
 ## Iteration 6.08（2026-04-01）：修复首条超长消息发送后的自动滚动丢失问题
 
 ### 目标

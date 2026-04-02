@@ -310,6 +310,7 @@ test('编辑最后一条用户消息后仍可正常重生成', async ({ page }) 
 });
 
 test('模拟面试应按阶段依次进入破冰、技术题和项目深挖', async ({ page }) => {
+  test.setTimeout(90_000);
   const session = await createConfiguredSession(page, {
     config: {
       topics: ['engineering'],
@@ -371,9 +372,12 @@ test('模拟面试应按阶段依次进入破冰、技术题和项目深挖', as
           '我会先做构建分析定位瓶颈，再从代码分割、缓存、tree shaking、依赖治理和增量构建这些方向优化；在 monorepo 里还会处理 workspace 依赖边界、CI 质量门禁和版本发布。',
         );
       await page.getByTestId('send-button').click();
-      await expect(page.getByTestId('send-button')).toHaveAttribute('aria-label', '发送消息', {
-        timeout: 15_000,
-      });
+      await expect
+        .poll(async () => page.getByTestId('send-button').getAttribute('aria-label'), {
+          timeout: 30_000,
+          message: '等待本轮面试回复流式结束',
+        })
+        .toBe('发送消息');
 
       try {
         await projectPrompt.waitFor({ state: 'visible', timeout: 1500 });
@@ -442,6 +446,7 @@ test('模拟面试在开场回答不完整时，应先追问再进入技术题',
 test('模拟面试在真实流式回复中停止生成后，仍应保留已输出的 assistant 部分内容', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const session = await createConfiguredSession(page, {
     config: {
       topics: ['engineering'],
@@ -466,15 +471,28 @@ test('模拟面试在真实流式回复中停止生成后，仍应保留已输�
       '我最近几段经历的主线都是前端工程化和构建优化，最能代表我的项目是推动 swc 替换 babel 和 monorepo 体系落地，这次想找更偏平台化的机会。',
     );
   await page.getByTestId('send-button').click();
+  await expect(page.getByRole('main')).toContainText('第二个问题', { timeout: 10_000 });
 
-  const stopButton = page.getByTestId('send-button');
+  await page
+    .getByTestId('multimodal-input')
+    .fill(
+      '浏览器事件循环里，宏任务和微任务都会进入调度队列。一次事件循环通常先执行一个宏任务，宏任务结束后会清空微任务队列，Promise.then 属于微任务，setTimeout 回调属于宏任务。',
+    );
+  await page.getByTestId('send-button').click();
+
+  const stopButton = page.getByRole('button', { name: '停止生成' });
   const latestAssistantMessage = page.locator('article').last();
 
-  await expect(stopButton).toHaveAttribute('aria-label', '停止生成');
-  await stopButton.evaluate((element) => {
-    (element as HTMLButtonElement).click();
-  });
+  await expect(stopButton).toBeVisible();
+  await expect
+    .poll(async () => (await latestAssistantMessage.innerText()).trim(), {
+      timeout: 10_000,
+      message: '等待面试 assistant 开始输出部分内容',
+    })
+    .toContain('点评：');
+  await stopButton.click();
 
+  await expect(page.getByRole('button', { name: '发送消息' })).toBeVisible({ timeout: 8_000 });
   await expect(latestAssistantMessage).toContainText('已停止生成', { timeout: 8_000 });
   await expect(latestAssistantMessage).not.toHaveText(/^$/);
 

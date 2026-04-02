@@ -57,6 +57,39 @@ function hasRemoteSessionAdvanced(
   return remoteSession.messages.length > baseSession.messages.length;
 }
 
+function getAssistantMessageById(session: ChatSession | null, assistantMessageId: string | null) {
+  if (!session || !assistantMessageId) {
+    return null;
+  }
+
+  return (
+    session.messages.find(
+      (message) => message.id === assistantMessageId && message.role === 'assistant',
+    ) ?? null
+  );
+}
+
+function shouldTrustRemoteSessionAfterAbort(input: {
+  baseSession: ChatSession | null;
+  remoteSession: ChatSession | null;
+  localInterruptedAssistantContent: string;
+}): boolean {
+  if (!hasRemoteSessionAdvanced(input.baseSession, input.remoteSession)) {
+    return false;
+  }
+
+  if (!input.localInterruptedAssistantContent) {
+    return true;
+  }
+
+  const remoteAssistant =
+    [...(input.remoteSession?.messages ?? [])]
+      .reverse()
+      .find((message) => message.role === 'assistant') ?? null;
+
+  return remoteAssistant?.completionStatus === 'interrupted';
+}
+
 export function useSendMessage({
   sending,
   readActiveSession,
@@ -152,11 +185,27 @@ export function useSendMessage({
         }
       } catch (error) {
         if (isAbortError(error)) {
+          const interruptedSession = finalizeInterruptedAssistantMessage({
+            session: readActiveSession(),
+            optimisticAssistantId,
+            submittedContent: trimmed,
+          });
+          const interruptedAssistant = getAssistantMessageById(
+            interruptedSession,
+            optimisticAssistantId,
+          );
+          const interruptedAssistantContent = interruptedAssistant?.content.trim() ?? '';
           const remoteSession = session
             ? await fetchSessionById(session.id).catch(() => null)
             : null;
 
-          if (hasRemoteSessionAdvanced(session, remoteSession)) {
+          if (
+            shouldTrustRemoteSessionAfterAbort({
+              baseSession: session,
+              remoteSession,
+              localInterruptedAssistantContent: interruptedAssistantContent,
+            })
+          ) {
             await syncResolvedRemoteSession({
               session: remoteSession!,
               refreshSessions,
@@ -165,22 +214,12 @@ export function useSendMessage({
               replaceSession,
             });
           } else {
-            const interruptedSession = finalizeInterruptedAssistantMessage({
-              session: readActiveSession(),
-              optimisticAssistantId,
-              submittedContent: trimmed,
-            });
-
             setActiveSession(interruptedSession);
-
-            const interruptedAssistant = interruptedSession?.messages.find(
-              (message) => message.id === optimisticAssistantId,
-            );
             if (interruptedSession && session) {
               const persistedSession = await persistInterruptedSessionTurn({
                 sessionId: session.id,
                 userContent: trimmed,
-                assistantContent: interruptedAssistant?.content,
+                assistantContent: interruptedAssistantContent || undefined,
                 modelId: session.modelId,
                 expectedMessageCount: session.messages.length,
                 userCreatedAt: optimisticUserCreatedAt ?? undefined,

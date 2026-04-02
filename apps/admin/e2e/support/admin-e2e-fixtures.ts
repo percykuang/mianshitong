@@ -73,7 +73,8 @@ async function buildTraceSession(traceSessionId: string): Promise<ChatSession> {
   session = (
     await processSessionMessage({
       session,
-      content: '开始模拟面试，我有 3 年前端经验，主要做 React 和 JavaScript。',
+      content:
+        '开始模拟面试，我有 3 年前端经验，主要做 React 和 JavaScript，也做过前端工程化和构建提速，最能代表我的项目是推动多包仓库构建优化，这次想找更偏平台化的机会。',
       questionBank,
       now: '2026-03-22T10:01:00.000Z',
     })
@@ -82,9 +83,19 @@ async function buildTraceSession(traceSessionId: string): Promise<ChatSession> {
   session = (
     await processSessionMessage({
       session,
-      content: '我知道 Promise。',
+      content:
+        '最近几段经历的主线还是前端工程化和基础能力建设，最能代表我的项目是推动构建提速和规范落地，这次想找更偏平台化的机会。',
       questionBank,
       now: '2026-03-22T10:02:00.000Z',
+    })
+  ).session;
+
+  session = (
+    await processSessionMessage({
+      session,
+      content: '我知道 Promise。',
+      questionBank,
+      now: '2026-03-22T10:03:00.000Z',
     })
   ).session;
 
@@ -94,13 +105,23 @@ async function buildTraceSession(traceSessionId: string): Promise<ChatSession> {
       content:
         '调用栈清空后会先执行微任务再执行宏任务，Promise 属于微任务，最后再进入下一轮事件循环。',
       questionBank,
-      now: '2026-03-22T10:03:00.000Z',
+      now: '2026-03-22T10:04:00.000Z',
+    })
+  ).session;
+
+  session = (
+    await processSessionMessage({
+      session,
+      content:
+        '我做过一个构建优化项目，当时背景是多包仓库构建越来越慢，我负责定位瓶颈、推动 swc 替换 babel，并结合缓存和按需构建缩短耗时。过程中我权衡了兼容性、迁移成本和收益，最后通过构建时间、失败率和研发反馈验证了效果。',
+      questionBank,
+      now: '2026-03-22T10:05:00.000Z',
     })
   ).session;
 
   session.runtime.knowledgeRetrievalTrace = [
     {
-      createdAt: '2026-03-22T10:02:30.000Z',
+      createdAt: '2026-03-22T10:03:30.000Z',
       intentKind: 'technical_question',
       mode: 'strong',
       categories: ['tech_knowledge', 'interview_playbook'],
@@ -191,7 +212,7 @@ export async function seedAdminTraceSession() {
       mode: 'strong',
       categories: ['tech_knowledge', 'interview_playbook'],
       preferredTags: ['前端', '事件循环', 'Promise', '微任务'],
-      createdAt: new Date('2026-03-22T10:02:30.000Z'),
+      createdAt: new Date('2026-03-22T10:03:30.000Z'),
       results: {
         create: [
           {
