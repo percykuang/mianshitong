@@ -34,6 +34,7 @@
     "format": "prettier -w .",
     "format:check": "prettier -c .",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm spellcheck",
+    "verify:full": "pnpm verify && pnpm test:e2e:admin && pnpm test:e2e:web",
     "spellcheck": "cspell lint --no-progress .",
     "typecheck": "pnpm db:generate && pnpm -r --if-present typecheck",
     "test": "vitest run",
