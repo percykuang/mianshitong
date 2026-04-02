@@ -135,7 +135,9 @@ test('删除当前会话后应回到空聊天页', async ({ page }) => {
   const session = await createRemoteSession(page, '这条会话用于删除测试');
   await page.goto(`/chat/${session.id}`);
 
-  await page.getByRole('button', { name: session.title }).hover();
+  const sessionButton = page.getByRole('button', { name: session.title });
+  await expect(sessionButton).toBeVisible();
+  await sessionButton.hover();
   await page.getByLabel('更多会话操作').click();
   await page.getByRole('menuitem', { name: '删除', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();

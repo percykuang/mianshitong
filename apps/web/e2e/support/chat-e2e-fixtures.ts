@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { expect, type Page } from '@playwright/test';
 import { prisma } from '@mianshitong/db';
 import { buildKnowledgeDocumentChunks } from '@mianshitong/retrieval';
@@ -31,9 +32,46 @@ const RESUME_KNOWLEDGE_DOCUMENT_E2E_TITLE = 'E2E 项目亮点提炼模板';
 const E2E_DATABASE_URL =
   'postgresql://mianshitong:mianshitong@127.0.0.1:5432/mianshitong?schema=public';
 const E2E_ASSISTANT_RESPONSE_TIMEOUT_MS = 15_000;
+const QUESTION_BANK_FIXTURE_PREFIX = 'rag_fixture_';
+
+let ensureQuestionBankFixturesPromise: Promise<void> | null = null;
 
 function ensureE2eDatabaseUrl(): void {
   process.env.DATABASE_URL ||= E2E_DATABASE_URL;
+}
+
+async function ensureInterviewQuestionBankFixtures(): Promise<void> {
+  ensureE2eDatabaseUrl();
+
+  if (!ensureQuestionBankFixturesPromise) {
+    ensureQuestionBankFixturesPromise = (async () => {
+      const existingCount = await prisma.questionBankItem.count({
+        where: {
+          questionId: {
+            startsWith: QUESTION_BANK_FIXTURE_PREFIX,
+          },
+        },
+      });
+
+      if (existingCount > 0) {
+        return;
+      }
+
+      execFileSync('pnpm', ['retrieval:seed-fixtures'], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DATABASE_URL: process.env.DATABASE_URL ?? E2E_DATABASE_URL,
+        },
+        stdio: 'inherit',
+      });
+    })().catch((error) => {
+      ensureQuestionBankFixturesPromise = null;
+      throw error;
+    });
+  }
+
+  await ensureQuestionBankFixturesPromise;
 }
 
 export async function seedKnowledgeDocumentFixture(): Promise<SeededKnowledgeDocumentFixture> {
@@ -256,6 +294,7 @@ export async function createConfiguredSession(
   page: Page,
   input: CreateSessionInput,
 ): Promise<CreatedConfiguredSession> {
+  await ensureInterviewQuestionBankFixtures();
   await openChat(page);
 
   const result = await page.evaluate(async (payload) => {

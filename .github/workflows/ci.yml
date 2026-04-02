@@ -92,6 +92,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
       - run: pnpm db:migrate:deploy
+      - run: pnpm retrieval:seed-fixtures
       - run: pnpm exec playwright install chromium --with-deps
       - run: pnpm test:e2e:web
       - uses: actions/upload-artifact@v4

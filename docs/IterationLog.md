@@ -7,6 +7,41 @@
 - 每次完成一个可运行增量（哪怕很小），就在顶部追加一条新记录（新在上）。
 - 每条记录尽量包含：目标、主要改动、破坏性变更/迁移、下一步。
 
+## Iteration 6.11（2026-04-02）：补齐 Web E2E 题库初始化并收掉 CI 上的删除会话 flaky
+
+### 目标
+
+- 修复 CI 上 `web-e2e` 在 fresh DB 环境里跑面试相关用例时，因题库未初始化而直接返回“当前题库里没有匹配你画像的可用题目”的问题。
+- 顺手收掉删除当前会话用例在 CI 上偶发拿不到侧边栏按钮的 flaky。
+
+### 主要改动
+
+- `apps/web/e2e/support/chat-e2e-fixtures.ts`
+  - 新增 `ensureInterviewQuestionBankFixtures`
+  - 在 `createConfiguredSession` 前自动检查是否已有 `rag_fixture_` 题库夹具；若当前数据库为空，则主动执行 `pnpm retrieval:seed-fixtures`
+  - 这样 Web E2E 不再隐式依赖“本机数据库刚好之前跑过 seed”
+- `apps/web/e2e/chat-smoke.spec.ts`
+  - 删除当前会话用例在 `hover` 前先等待对应会话按钮可见，降低 CI 上侧边栏尚未稳定渲染时的时序抖动
+- `.github/workflows/ci.yml`
+  - `web-e2e` job 在 `db:migrate:deploy` 后显式执行 `pnpm retrieval:seed-fixtures`
+  - 让 CI 日志和测试前置条件更直观，而不是把题库准备隐含在测试运行期
+
+### 迁移/破坏性变更
+
+- 无数据库 migration。
+- 无接口协议变更。
+- 当前只补齐 E2E 前置数据与测试稳定性，不影响业务链路。
+
+### 验证
+
+- 待执行：
+  - 清空题库 fixtures 后回归相关 Web E2E
+  - 回归删除当前会话用例
+
+### 下一步
+
+- 当前 Web E2E 已不再依赖本地脏数据库。如果后续还有新的面试类端到端用例依赖题库，应继续复用这层显式 fixture 初始化，而不是让测试默认假设 DB 里已有题。
+
 ## Iteration 6.10（2026-04-02）：新增 verify:full 统一入口用于全量回归
 
 ### 目标
